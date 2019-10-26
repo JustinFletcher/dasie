@@ -13,11 +13,11 @@ class DistributedapertureSystem(object):
     """docstring for DistributedapertureSystem"""
 
     def __init__(self,
-                 num_apertures=7,
+                 num_apertures=13,
                  phase_simulation_resolution=2**10,
-                 apertrue_tip_phase_error_scale=0.01,
-                 apertrue_tilt_phase_error_scale=0.01,
-                 apertrue_piston_phase_error_scale=0.01):
+                 aperture_tip_phase_error_scale=0.01,
+                 aperture_tilt_phase_error_scale=0.01,
+                 aperture_piston_phase_error_scale=0.01):
         # 2**10 == 1024
 
         super(DistributedapertureSystem, self).__init__()
@@ -84,9 +84,9 @@ class DistributedapertureSystem(object):
             aperture['index'] = aperture_index
 
             # Initialize the tip, tilt, and piston for this aperture.
-            tip = 0.0 + apertrue_tip_phase_error_scale * np.random.randn(1)
-            tilt = 0.0 + apertrue_tilt_phase_error_scale * np.random.randn(1)
-            piston = 0.5 + apertrue_piston_phase_error_scale * np.random.randn(1)
+            tip = 0.0 + aperture_tip_phase_error_scale * np.random.randn(1)
+            tilt = 0.0 + aperture_tilt_phase_error_scale * np.random.randn(1)
+            piston = 0.5 + aperture_piston_phase_error_scale * np.random.randn(1)
             aperture['tip_phase'] = tip
             aperture['tilt_phase'] = tilt
             aperture['piston_phase'] = piston
@@ -99,7 +99,7 @@ class DistributedapertureSystem(object):
 
             # Store the bounds of this aperture, relative to the global phase.
             aperture['phase_map_patch_bounds'] = [r_min, r_max, c_min, c_max]
-            # Store this apertures ciruclar mask. Eases later computations.
+            # Store this apertures circuclar mask. Eases later computations.
             aperture['phase_map_circle_patch'] = circle[r_min:r_max, c_min:c_max]
 
 
@@ -139,11 +139,29 @@ class DistributedapertureSystem(object):
             aperture['tip_phase'] += scale * np.random.randn(1)
             aperture['tilt_phase'] += scale * np.random.randn(1)
 
-    def update_system_phase_matrix(self, mode="use_matrix_addition"):
+    def update_system_phase_matrix(self, mode="use_aperture_patch"):
 
+
+        # TODO: Multithread this.
         for aperture in self.apertures:
 
-            if mode=="use_matrix_addition":
+            piston = aperture['piston_phase']
+            tip = aperture['tip_phase']
+            tilt = aperture['tilt_phase']
+
+            [r_min, r_max, c_min, c_max] = aperture['phase_map_patch_bounds']
+
+            # Get the last patch, and use it to compute a phase map delta.
+            old_patch = aperture['phase_map_patch']
+
+            # Create current patch based on the tip, tilt, piston.
+            xx, yy = np.mgrid[:(r_max - r_min),
+                     :(c_max - c_min)]
+            new_patch = (tip * xx) + (tilt * yy) + piston
+
+            aperture['phase_map_patch'] = new_patch
+
+            if mode == "use_matrix_addition":
 
                 # This meshgrid approach is extremely inefficient.
                 xx, yy = np.mgrid[:self.phase_simulation_resolution,
@@ -154,41 +172,23 @@ class DistributedapertureSystem(object):
 
                 circle = np.sqrt(circle) <= aperture['phase_map_radius']
 
-                self.system_phase_matrix += np.random.randn(1) * circle
-                self.system_phase_matrix += 1 * circle
+                patch_delta = new_patch - old_patch
+                patch_delta = patch_delta * aperture['phase_map_circle_patch']
 
-            elif mode=="use_pixel_list":
-                value = np.random.randn(1)
+                self.system_phase_matrix += patch_delta * circle
+
+            elif mode == "use_pixel_list":
 
                 for (r, c) in aperture['pixel_list']:
-                    self.system_phase_matrix[r, c] += value
+                    self.system_phase_matrix[r, c] = new_patch[r, c]
 
             elif mode == "use_aperture_patch":
 
-                piston = aperture['piston_phase']
-                tip = aperture['tip_phase']
-                tilt = aperture['tilt_phase']
-
-                [r_min, r_max, c_min, c_max] = aperture['phase_map_patch_bounds']
-
-                # Create current patch based on the tip, tilt, piston.
-                xx, yy = np.mgrid[:(r_max - r_min),
-                                  :(c_max - c_min)]
-                new_patch = (tip * xx) + (tilt * yy) + piston
-
-                # Get the last patch, and use it to compute a phase map delta.
-                old_patch = aperture['phase_map_patch']
                 patch_delta = new_patch - old_patch
-
-                # Update the local phase patch.
-                aperture['phase_map_patch'] = new_patch
-
                 patch_delta = patch_delta * aperture['phase_map_circle_patch']
                 self.system_phase_matrix[r_min:r_max, c_min:c_max] += patch_delta
 
-
     def update_system_psf_matrix(self):
-
 
         self.optical_psf_matrix = np.fft.fft2(self.system_phase_matrix,
                                               norm="ortho")
