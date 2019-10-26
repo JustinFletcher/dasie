@@ -1,7 +1,9 @@
 """
-Classic cart-pole system implemented by Rich Sutton et al.
-Copied from http://incompleteideas.net/sutton/book/code/pole.c
-permalink: https://perma.cc/C9ZM-652R
+
+Distributed Aperture System for Interferometric Exploitation control system
+simulation environment.
+
+Author: Justin Fletcher
 """
 
 import math
@@ -13,10 +15,14 @@ import numpy as np
 class DasieEnv(gym.Env):
     """
     Description:
-        A pole is attached by an un-actuated joint to a cart, which moves along a frictionless track. The pendulum starts upright, and the goal is to prevent it from falling over by increasing and reducing the cart's velocity.
+        A pole is attached by an un-actuated joint to a cart, which moves along
+        a frictionless track. The pendulum starts upright, and the goal is to
+        prevent it from falling over by increasing and reducing the cart's
+        velocity.
 
     Source:
-        This environment corresponds to the version of the cart-pole problem described by Barto, Sutton, and Anderson
+        This environment corresponds to the version of the cart-pole problem
+        described by Barto, Sutton, and Anderson
 
     Observation: 
         Type: Box(4)
@@ -32,7 +38,10 @@ class DasieEnv(gym.Env):
         0	Push cart to the left
         1	Push cart to the right
         
-        Note: The amount the velocity that is reduced or increased is not fixed; it depends on the angle the pole is pointing. This is because the center of gravity of the pole increases the amount of energy needed to move the cart underneath it
+        Note: The amount the velocity that is reduced or increased is not fixed
+              but depends on the angle the pole is pointing. This is because
+              the center of gravity of the pole increases the amount of energy
+              needed to move the cart underneath it
 
     Reward:
         Reward is 1 for every step taken, including the termination step
@@ -42,10 +51,12 @@ class DasieEnv(gym.Env):
 
     Episode Termination:
         Pole Angle is more than 12 degrees
-        Cart Position is more than 2.4 (center of the cart reaches the edge of the display)
+        Cart Position is more than 2.4 (center of the cart reaches the edge of
+        the display)
         Episode length is greater than 200
         Solved Requirements
-        Considered solved when the average reward is greater than or equal to 195.0 over 100 consecutive trials.
+        Considered solved when the average reward is greater than or equal to
+        195.0 over 100 consecutive trials.
     """
     
     metadata = {
@@ -53,7 +64,11 @@ class DasieEnv(gym.Env):
         'video.frames_per_second' : 50
     }
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+
+        print(kwargs)
+
+        # dasie = SimulatedDASIE(flags, **kwargs)
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
@@ -89,7 +104,20 @@ class DasieEnv(gym.Env):
         return [seed]
 
     def step(self, action):
+
+
+        # First, ensure the step action is valid.
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+
+        # If the action is valid, run the sim for latency time-grains.
+
+        # Now use the action to update the control state.
+
+        # Rotate the shape.
+
+        # Apply the effective PSF
+
+        # Parse the state.
         state = self.state
         x, x_dot, theta, theta_dot = state
         force = self.force_mag if action==1 else -self.force_mag

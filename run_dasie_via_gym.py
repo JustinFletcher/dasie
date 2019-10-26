@@ -70,7 +70,7 @@ if __name__ == "__main__":
                         help='Number of episodes to run.')
 
     parser.add_argument('--max_episode_steps', type=int,
-                        default=20,
+                        default=100,
                         help='Steps per episode limit.')
 
     parser.add_argument('--reward_threshold', type=float,
@@ -81,10 +81,30 @@ if __name__ == "__main__":
                         default=100,
                         help='Number of steps to run.')
 
+    parser.add_argument('--simulated_inference_latency', type=float,
+                        default=0.025,
+                        help='The latency caused by the model in secs.')
+
+    parser.add_argument('--simulated_command_transmission_latency', type=float,
+                        default=0.030,
+                        help='The latency caused by command transfer in secs.')
+
+    parser.add_argument('--simulated_actuation_latency', type=float,
+                        default=0.005,
+                        help='The latency caused by actuation in secs.')
+
+    parser.add_argument('--simulation_time_granularity', type=float,
+                        default=0.001,
+                        help='The time granularity of DASIE sim in secs.')
+
     parser.add_argument('--is_recurrent', action='store_true',
                         default=False,
                         help='Should we use a recurrent (Convolutional LSTM) '
                              'variant of the model')
+
+    parser.add_argument('--dasie_version', type=str,
+                        default="test",
+                        help='Which version of the DASIE sim do we use?')
 
     # Parse known arguments.
     parsed_flags, _ = parser.parse_known_args()

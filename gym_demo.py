@@ -1,13 +1,11 @@
 import gym
 
-# TODO: Extract dasie to it's own module.
 gym.envs.registration.register(
     id='Dasie-v0',
     entry_point='dasie_gym_env.dasie:DasieEnv',
     max_episode_steps=200,
     reward_threshold=25.0,
 )
-
 
 env = gym.make('Dasie-v0')
 for i_episode in range(20):
