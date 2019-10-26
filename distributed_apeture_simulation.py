@@ -123,6 +123,8 @@ class DistributedapertureSystem(object):
 
         num_updates = 100
         mode = "use_aperture_patch"
+        mode = "use_matrix_addition"
+        mode = "use_pixel_list"
 
         for update_number in range(num_updates):
             start_time = time.time()
@@ -156,7 +158,7 @@ class DistributedapertureSystem(object):
 
             # Create current patch based on the tip, tilt, piston.
             xx, yy = np.mgrid[:(r_max - r_min),
-                     :(c_max - c_min)]
+                              :(c_max - c_min)]
             new_patch = (tip * xx) + (tilt * yy) + piston
 
             aperture['phase_map_patch'] = new_patch
@@ -175,12 +177,12 @@ class DistributedapertureSystem(object):
                 patch_delta = new_patch - old_patch
                 patch_delta = patch_delta * aperture['phase_map_circle_patch']
 
-                self.system_phase_matrix += patch_delta * circle
+                self.system_phase_matrix[r_min:r_max, c_min:c_max] += patch_delta * circle[r_min:r_max, c_min:c_max]
 
             elif mode == "use_pixel_list":
 
                 for (r, c) in aperture['pixel_list']:
-                    self.system_phase_matrix[r, c] = new_patch[r, c]
+                    self.system_phase_matrix[r, c] = new_patch[r-r_min-1, c-c_min-1]
 
             elif mode == "use_aperture_patch":
 
