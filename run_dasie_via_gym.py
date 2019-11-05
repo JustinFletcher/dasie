@@ -14,6 +14,7 @@ import gym
 # TODO: Move this whole script down a level.
 
 def cli_main(flags):
+
     # Set the GPUs we want the script to use/see
     os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
 
@@ -26,8 +27,6 @@ def cli_main(flags):
     )
 
     # Build a gym environment; pass the CLI flags to the constructor as kwargs.
-
-    print(vars(flags))
     env = gym.make('Dasie-v0', **vars(flags))
 
     # Iterate over the number of desired episodes.
@@ -39,14 +38,15 @@ def cli_main(flags):
         # ..and iterate over the desired number of steps. In each step...
         for t in range(flags.num_steps):
 
+            if not flags.silence:
+
+                print("Running step %s." % str(t))
+
             # ...show the environment to the caller...
             env.render()
-            # print(observation)
 
             # ...get a random action...
             action = env.action_space.sample()
-
-            print(action)
 
             # ...take that action, and parse the state.
             observation, reward, done, info = env.step(action)
@@ -121,10 +121,9 @@ if __name__ == "__main__":
                         default=0.01,
                         help='The initial piston alignment std.')
 
-    parser.add_argument('--is_recurrent', action='store_true',
+    parser.add_argument('--silence', action='store_true',
                         default=False,
-                        help='Should we use a recurrent (Convolutional LSTM) '
-                             'variant of the model')
+                        help='If provided, be quiet.')
 
     parser.add_argument('--dasie_version', type=str,
                         default="test",

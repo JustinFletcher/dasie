@@ -6,17 +6,12 @@ simulation environment.
 Author: Justin Fletcher
 """
 
-import math
-import time
 import gym
+import time
+import numpy as np
+
 from gym import spaces, logger
 from gym.utils import seeding
-import numpy as np
-from PIL import Image
-
-import matplotlib.pyplot as plt
-
-from distributed_apeture_simulation import DistributedApertureSystem
 
 class DasieEnv(gym.Env):
     """
@@ -25,7 +20,7 @@ class DasieEnv(gym.Env):
         object. This object and the intervening atmosphere cause an at-aperture
         illuminance for each aperture. The joint phase state of the apertures
         create an optical point spread function with which the at-aperture
-        illumance is convolved creating a speckle image.
+        illuminance is convolved creating a speckle image.
 
     Source:
         This environment corresponds to the Markov decision process described
@@ -37,9 +32,10 @@ class DasieEnv(gym.Env):
         
     Actions:
         Type: Tuple(3 * num_apertures)
-        Num	Action
-        0	Push cart to the left
-        1	Push cart to the right
+        Each tuple corresponds to one aperture's tip, tilt, and piston command.
+        These commands will be attempted, but may be interrupted, and take time
+        steps to execute. The truth tip, tilt, and piston state are hidden. The
+        observers of the system not access them directly.
 
     Reward:
         Currently undefined. Eventually computed from SNIIRS gains.
@@ -67,29 +63,11 @@ class DasieEnv(gym.Env):
         self.aperture_tilt_phase_error_scale = kwargs['aperture_tilt_phase_error_scale']
         self.aperture_piston_phase_error_scale = kwargs['aperture_piston_phase_error_scale']
 
-
         # Create an empty phase matrix to modify.
         self.system_phase_matrix = 0.0 * np.ones((self.phase_simulation_resolution,
                                                   self.phase_simulation_resolution))
 
-        print(self.system_phase_matrix)
-
-        # Actions may include increasing or decreasing tip, tilt, and piston.
-        # TODO: Confirm this.
-        action_space_size = self.num_apertures * 3
-        self.action_space = spaces.Discrete(action_space_size)
-
-        # TODO: Figure this out.
-        # TODO: Edit this space to be variable in time length.
-
-        # self.observation_space = spaces.Box(-high, high, dtype=np.float32)
-
-        self.seed()
-        self.viewer = None
-        self.state = None
-
-        self.steps_beyond_done = None
-
+        # TODO: Compute the number of tau needed for one model inference.
 
         # Define the action space for DASIE, by setting the lower limits...
         tip_lower_limit = 0.0
@@ -123,8 +101,7 @@ class DasieEnv(gym.Env):
         # Finally, we complete the space by building it from the template list.
         self.action_space = spaces.Tuple(aperture_action_spaces)
 
-
-
+        # TODO: Build a correct observation space.
         self.observation_space = spaces.Tuple(aperture_action_spaces)
 
         self.seed()
@@ -133,63 +110,13 @@ class DasieEnv(gym.Env):
         self.steps_beyond_done = None
 
     def seed(self, seed=None):
+
         self.np_random, seed = seeding.np_random(seed)
+
         return [seed]
 
-    def step(self, action):
-
-        # First, ensure the step action is valid.
-        assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
-
-        # The action is valid. Use it to update the ttp in each aperture.
-        for (aperture, aperture_command) in zip(self.apertures, action):
-
-            aperture['tip_phase'] = aperture_command[0]
-            aperture['tilt_phase'] = aperture_command[1]
-            aperture['piston_phase'] = aperture_command[2]
-
-        # # TODO: Write main simulation loop here.
-        # for t in range(num_timesteps):
-        #
-        #     # TODO: Iterate the at-aperture irradience one timestep
-        #
-        #
-
-        # # Parse the state.
-        # state = self.state
-        # x, x_dot, theta, theta_dot = state
-        # self.state = (x,x_dot,theta,theta_dot)
-
-        self._update_phase_matrix()
-        self._update_psf_matrix()
-
-        # TODO: Figure out what this means for our problem, if anything
-
-
-        done = False
-
-        # In this implementation, reward is a function of done.
-        if not done:
-            reward = 1.0
-        elif self.steps_beyond_done is None:
-            # Just finished
-            self.steps_beyond_done = 0
-            reward = 1.0
-        else:
-            if self.steps_beyond_done == 0:
-                logger.warn("You are calling 'step()' even though this environment has already returned done = True. You should always call 'reset()' once you receive 'done = True' -- any further steps are undefined behavior.")
-            self.steps_beyond_done += 1
-            reward = 0.0
-
-        # compute_reward()
-        # compute_done()
-
-        # The first return of this function is the observation.
-
-        return np.array(self.state), reward, done, {}
-
     def reset(self):
-        # Set the inital state. This is the first thing called in an episode.
+        # Set the initial state. This is the first thing called in an episode.
 
         self.apertures = list()
         # TODO: Once refactored, parallelize this.
@@ -199,40 +126,55 @@ class DasieEnv(gym.Env):
 
             start_time = time.time()
 
+            # Compute the angular position for this aperture.
             angular_position = 2 * np.pi * aperture_index / self.num_apertures
 
+            # Compute the global midpoint for all apertures.
             phase_map_midpoint = np.floor(self.phase_simulation_resolution // 2)
 
-            aperture_scale = (np.cos(np.pi / self.num_apertures) / np.sin(np.pi / self.num_apertures)) + 1
+            # Compute a scale factor; shrink the subapertures by just enough.
+            # TODO: Determine why this works. I made it. I'm just not sure how.
+            aperture_scale = (np.cos(np.pi / self.num_apertures) / np.sin(np.pi / self.num_apertures)) + np.pi
 
+            # Scale the midpoint to get the radius.
             aperture_radius = (phase_map_midpoint / aperture_scale)
-            aperture_annulus_radius = (( aperture_radius) * 1 / np.sin(np.pi / self.num_apertures))
+            aperture_annulus_radius = (aperture_radius / np.sin(np.pi / self.num_apertures))
 
-            # aperture_radius = aperture_scale * phase_map_midpoint
+            # Compute the global-reference midpoint using position and radius.
             phase_map_x_centroid = phase_map_midpoint + (aperture_annulus_radius * np.sin(angular_position))
             phase_map_y_centroid = phase_map_midpoint + (aperture_annulus_radius * np.cos(angular_position))
 
-            # For each apeture, compute all of it's pixel coordinates.
+            # For each aperture, compute all of it's pixel coordinates.
             xx, yy = np.mgrid[:self.phase_simulation_resolution,
                               :self.phase_simulation_resolution]
 
+            # Compute the meshgrid map for the radius of this apertures circle.
             circle = (xx - phase_map_x_centroid) ** 2 + \
                      (yy - phase_map_y_centroid) ** 2
 
-            # Model the aperture as a plane.
-            # Compute a mask for the plane in the composite aperture.
-            # Update the composite mask using matrix addition.
+            # Compute the inclusive region of a circle given by this radius.
             circle = np.sqrt(circle) <= aperture_radius
 
+            # Next, we bookkeep the aperture, by computing its extent...
             r_min = self.phase_simulation_resolution
             r_max = 0
             c_min = self.phase_simulation_resolution
             c_max = 0
+
+            # ...and its pixels. Both methods are retained for comparisons.
             aperture_pixels = list()
+
+            # Iterate over each pixle in the whole phase map. This is slow.
             for r, row in enumerate(circle):
                 for c, value in enumerate(row):
+
+                    # If the pixel is in the circle of this aperture...
                     if circle[r, c]:
+
+                        # ...store the pixel...
                         aperture_pixels.append((r, c))
+
+                        # ...and use it to assess aperture pixel bounds.
                         if r < r_min:
                             r_min = r
                         if r > r_max:
@@ -242,6 +184,7 @@ class DasieEnv(gym.Env):
                         if c > c_max:
                             c_max = c
 
+            # Now, create a new dict to track this aperture through simulation.
             aperture = dict()
 
             # Store a reference index for this aperture.
@@ -263,12 +206,9 @@ class DasieEnv(gym.Env):
 
             # Store the bounds of this aperture, relative to the global phase.
             aperture['phase_map_patch_bounds'] = [r_min, r_max, c_min, c_max]
-            # Store this apertures circuclar mask. Eases later computations.
+
+            # Store this apertures circular mask. Eases later computations.
             aperture['phase_map_circle_patch'] = circle[r_min:r_max, c_min:c_max]
-
-
-
-            # aperture controid
             aperture['phase_map_radius'] = aperture_radius
             aperture['phase_map_x_centroid'] = phase_map_x_centroid
             aperture['phase_map_y_centroid'] = phase_map_y_centroid
@@ -282,11 +222,66 @@ class DasieEnv(gym.Env):
         self._update_phase_matrix()
         self._update_psf_matrix()
 
-        # OLD BELOW -----------------------------------------------------------
-
-        self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
+        # TODO: Initialize state.
+        self.state = None
         self.steps_beyond_done = None
         return np.array(self.state)
+
+    def step(self, action):
+
+        # First, ensure the step action is valid.
+        assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
+
+        # The action is valid. Use it to update the ttp in each aperture.
+        for (aperture, aperture_command) in zip(self.apertures, action):
+
+            aperture['tip_phase_command'] = aperture_command[0]
+            aperture['tilt_phase_command'] = aperture_command[1]
+            aperture['piston_phase_command'] = aperture_command[2]
+
+            # TODO: Move this and do incremental updates.
+            aperture['tip_phase'] = aperture['tip_phase_command']
+            aperture['tilt_phase'] = aperture['tilt_phase_command']
+            aperture['piston_phase'] =aperture['piston_phase_command']
+
+        # # TODO: Write main simulation loop here.
+        # # num_timesteps is probably the inference latency of the system.
+        # for t in range(num_timesteps):
+        #     # TODO: Iterate the target model state.
+        #     # TODO: Iterate the at-aperture irradiance.
+        #     # TODO: Iterate toward commanded articulations.
+
+        # # Parse the state.
+        # state = self.state
+        # x, x_dot, theta, theta_dot = state
+        # self.state = (x,x_dot,theta,theta_dot)
+
+        self._update_phase_matrix()
+        self._update_psf_matrix()
+
+        # TODO: Figure out what this means for our problem, if anything.
+        done = False
+
+        # TODO: Build a reward function.
+        # In this implementation, reward is a function of done.
+        if not done:
+            reward = 1.0
+        elif self.steps_beyond_done is None:
+            # Just finished
+            self.steps_beyond_done = 0
+            reward = 1.0
+        else:
+            if self.steps_beyond_done == 0:
+                logger.warn("You are calling 'step()' even though this environment has already returned done = True. You should always call 'reset()' once you receive 'done = True' -- any further steps are undefined behavior.")
+            self.steps_beyond_done += 1
+            reward = 0.0
+
+        # compute_reward()
+        # compute_done()
+
+        self.state = self.optical_psf_matrix
+
+        return np.array(self.state), reward, done, {}
 
     def render(self, mode='human'):
 
@@ -311,7 +306,6 @@ class DasieEnv(gym.Env):
             ret[:, :, 2] = ret[:, :, 1] = ret[:, :, 0] = im
             return ret
 
-
         log_real_optical_psf = np.log(np.abs(np.fft.fftshift(self.optical_psf_matrix)))
         log_real_optical_psf_img = to_rgb(positive_shift_norm_scale_img(log_real_optical_psf))
         system_phase_matrix_img = to_rgb(positive_shift_norm_scale_img(self.system_phase_matrix))
@@ -319,15 +313,20 @@ class DasieEnv(gym.Env):
         render_image = np.hstack([system_phase_matrix_img,
                                   log_real_optical_psf_img])
 
-
         if mode == 'rgb_array':
+
             return render_image
+
         elif mode == 'human':
+
             from gym.envs.classic_control import rendering
+
             if self.viewer is None:
+
                 self.viewer = rendering.SimpleImageViewer()
 
             self.viewer.imshow(render_image)
+
             return self.viewer.isopen
 
     def close(self):
@@ -345,8 +344,7 @@ class DasieEnv(gym.Env):
             tip = aperture['tip_phase']
             tilt = aperture['tilt_phase']
 
-            [r_min, r_max, c_min, c_max] = aperture[
-                'phase_map_patch_bounds']
+            [r_min, r_max, c_min, c_max] = aperture['phase_map_patch_bounds']
 
             # Get the last patch, and use it to compute a phase map delta.
             old_patch = aperture['phase_map_patch']
@@ -357,10 +355,8 @@ class DasieEnv(gym.Env):
             new_patch = (tip * xx) + (tilt * yy) + piston
 
             # As the number of apertures increases, pixel-wise is better.
-            # As the number of apertures decreases, matrix addition is
-            # better.
-            # Both scale with the square of the resolution,
-            # but pixel-wise scales worse.
+            # As the number of apertures decreases, matrix addition is better.
+            # Both scale with the square of the resolution,  but pixel-wise scales worse.
             aperture['phase_map_patch'] = new_patch
 
             if mode == "use_matrix_addition":
