@@ -26,6 +26,8 @@ def cli_main(flags):
     )
 
     # Build a gym environment; pass the CLI flags to the constructor as kwargs.
+
+    print(vars(flags))
     env = gym.make('Dasie-v0', **vars(flags))
 
     # Iterate over the number of desired episodes.
@@ -39,10 +41,12 @@ def cli_main(flags):
 
             # ...show the environment to the caller...
             env.render()
-            print(observation)
+            # print(observation)
 
             # ...get a random action...
             action = env.action_space.sample()
+
+            print(action)
 
             # ...take that action, and parse the state.
             observation, reward, done, info = env.step(action)
@@ -65,20 +69,28 @@ if __name__ == "__main__":
                         default="0",
                         help='GPUs to use with this model.')
 
-    parser.add_argument('--num_episodes', type=int,
-                        default=20,
-                        help='Number of episodes to run.')
+    parser.add_argument('--phase_simulation_resolution', type=int,
+                        default=2 ** 10,
+                        help='Size of simulated aperture image.')
 
     parser.add_argument('--max_episode_steps', type=int,
-                        default=100,
+                        default=10000,
                         help='Steps per episode limit.')
+
+    parser.add_argument('--num_episodes', type=int,
+                        default=1,
+                        help='Number of episodes to run.')
+
+    parser.add_argument('--num_apertures', type=int,
+                        default=8,
+                        help='Number of apertures to simulate.')
 
     parser.add_argument('--reward_threshold', type=float,
                         default=25.0,
                         help='Max reward per episode.')
 
     parser.add_argument('--num_steps', type=int,
-                        default=100,
+                        default=500,
                         help='Number of steps to run.')
 
     parser.add_argument('--simulated_inference_latency', type=float,
@@ -96,6 +108,18 @@ if __name__ == "__main__":
     parser.add_argument('--simulation_time_granularity', type=float,
                         default=0.001,
                         help='The time granularity of DASIE sim in secs.')
+
+    parser.add_argument('--aperture_tip_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tip alignment std.')
+
+    parser.add_argument('--aperture_tilt_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tilt alignment std.')
+
+    parser.add_argument('--aperture_piston_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial piston alignment std.')
 
     parser.add_argument('--is_recurrent', action='store_true',
                         default=False,
