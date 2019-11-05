@@ -21,48 +21,34 @@ from distributed_apeture_simulation import DistributedApertureSystem
 class DasieEnv(gym.Env):
     """
     Description:
-        A pole is attached by an un-actuated joint to a cart, which moves along
-        a frictionless track. The pendulum starts upright, and the goal is to
-        prevent it from falling over by increasing and reducing the cart's
-        velocity.
+        A distributed aperture telescope is tasked to observe an extended space
+        object. This object and the intervening atmosphere cause an at-aperture
+        illuminance for each aperture. The joint phase state of the apertures
+        create an optical point spread function with which the at-aperture
+        illumance is convolved creating a speckle image.
 
     Source:
-        This environment corresponds to the version of the cart-pole problem
-        described by Barto, Sutton, and Anderson
+        This environment corresponds to the Markov decision process described
+        in the forthcoming work by Fletcher et. al.
 
     Observation: 
-        Type: Box(4)
-        Num	Observation                 Min         Max
-        0	Cart Position             -4.8            4.8
-        1	Cart Velocity             -Inf            Inf
-        2	Pole Angle                 -24 deg        24 deg
-        3	Pole Velocity At Tip      -Inf            Inf
+        Type: Tuple(observation_window_size )
+        Each observation is a tuple of the last N_w (window size)
         
     Actions:
-        Type: Discrete(2)
+        Type: Tuple(3 * num_apertures)
         Num	Action
         0	Push cart to the left
         1	Push cart to the right
-        
-        Note: The amount the velocity that is reduced or increased is not fixed
-              but depends on the angle the pole is pointing. This is because
-              the center of gravity of the pole increases the amount of energy
-              needed to move the cart underneath it
 
     Reward:
-        Reward is 1 for every step taken, including the termination step
+        Currently undefined. Eventually computed from SNIIRS gains.
 
     Starting State:
-        All observations are assigned a uniform random value in [-0.05..0.05]
+        Currently undefined.
 
     Episode Termination:
-        Pole Angle is more than 12 degrees
-        Cart Position is more than 2.4 (center of the cart reaches the edge of
-        the display)
-        Episode length is greater than 200
-        Solved Requirements
-        Considered solved when the average reward is greater than or equal to
-        195.0 over 100 consecutive trials.
+        Currently undefined.
     """
     
     metadata = {
@@ -105,62 +91,41 @@ class DasieEnv(gym.Env):
         self.steps_beyond_done = None
 
 
-        # --------------------------------------------
-
-        self.gravity = 9.8
-        self.masscart = 1.0
-        self.masspole = 0.1
-        self.total_mass = (self.masspole + self.masscart)
-        self.length = 0.5 # actually half the pole's length
-        self.polemass_length = (self.masspole * self.length)
-        self.force_mag = 10.0
-        self.tau = 0.02  # seconds between state updates
-        self.kinematics_integrator = 'euler'
-
-        # Angle at which to fail the episode
-        self.theta_threshold_radians = 12 * 2 * math.pi / 360
-        self.x_threshold = 2.4
-
-        # Angle limit set to 2 * theta_threshold_radians so failing observation is still within bounds
-        high = np.array([
-            # Out of bounds
-            self.x_threshold * 2,
-            # max speed is numerically limited.
-            np.finfo(np.float32).max,
-            # Fell too far
-            self.theta_threshold_radians * 2,
-            # Max angular speed is numerically limited.
-            np.finfo(np.float32).max])
-
+        # Define the action space for DASIE, by setting the lower limits...
         tip_lower_limit = 0.0
         tilt_lower_limits = 0.0
         piston_lower_limits = 0.0
-
-        tip_upper_limit = 1.0
-        tilt_upper_limits = 1.0
-        piston_upper_limits = 1.0
-
-
         lower_limits = np.array([tip_lower_limit,
                                  tilt_lower_limits,
                                  piston_lower_limits])
 
+        # ...and upper limits for each aperture.
+        tip_upper_limit = 1.0
+        tilt_upper_limits = 1.0
+        piston_upper_limits = 1.0
         upper_limits = np.array([tip_upper_limit,
                                  tilt_upper_limits,
                                  piston_upper_limits])
 
-        aperture_action_spaces_tuple = list()
+        # We then create a list to hold the composite action spaces, and...
+        aperture_action_spaces = list()
 
+        # ...iterate over each aperture...
         for aperture_num in range(self.num_apertures):
 
+            # ...instantiating a box space using the established limits...
             aperture_space = spaces.Box(lower_limits,
                                         upper_limits, dtype=np.float32)
 
-            aperture_action_spaces_tuple.append(aperture_space)
+            # ...and adding that space to the list of spaces.
+            aperture_action_spaces.append(aperture_space)
 
-        self.action_space = spaces.Tuple(aperture_action_spaces_tuple)
+        # Finally, we complete the space by building it from the template list.
+        self.action_space = spaces.Tuple(aperture_action_spaces)
 
-        self.observation_space = spaces.Box(-high, high, dtype=np.float32)
+
+
+        self.observation_space = spaces.Tuple(aperture_action_spaces)
 
         self.seed()
         self.viewer = None
@@ -177,45 +142,29 @@ class DasieEnv(gym.Env):
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
         # The action is valid. Use it to update the ttp in each aperture.
-        for (aperture, aperture_command) in zip(self.apertures,
-                                                     action):
+        for (aperture, aperture_command) in zip(self.apertures, action):
 
             aperture['tip_phase'] = aperture_command[0]
             aperture['tilt_phase'] = aperture_command[1]
             aperture['piston_phase'] = aperture_command[2]
 
-        # TODO: Update phase update mechanism to be itertive in time.
+        # # TODO: Write main simulation loop here.
+        # for t in range(num_timesteps):
+        #
+        #     # TODO: Iterate the at-aperture irradience one timestep
+        #
+        #
+
+        # # Parse the state.
+        # state = self.state
+        # x, x_dot, theta, theta_dot = state
+        # self.state = (x,x_dot,theta,theta_dot)
 
         self._update_phase_matrix()
         self._update_psf_matrix()
 
         # TODO: Figure out what this means for our problem, if anything
 
-        # Parse the state.
-        state = self.state
-        x, x_dot, theta, theta_dot = state
-        force = self.force_mag if action==1 else -self.force_mag
-        costheta = math.cos(theta)
-        sintheta = math.sin(theta)
-        temp = (force + self.polemass_length * theta_dot * theta_dot * sintheta) / self.total_mass
-        thetaacc = (self.gravity * sintheta - costheta* temp) / (self.length * (4.0/3.0 - self.masspole * costheta * costheta / self.total_mass))
-        xacc  = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-        if self.kinematics_integrator == 'euler':
-            x  = x + self.tau * x_dot
-            x_dot = x_dot + self.tau * xacc
-            theta = theta + self.tau * theta_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-        else: # semi-implicit euler
-            x_dot = x_dot + self.tau * xacc
-            x  = x + self.tau * x_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-            theta = theta + self.tau * theta_dot
-        self.state = (x,x_dot,theta,theta_dot)
-        done =  x < -self.x_threshold \
-                or x > self.x_threshold \
-                or theta < -self.theta_threshold_radians \
-                or theta > self.theta_threshold_radians
-        done = bool(done)
 
         done = False
 
