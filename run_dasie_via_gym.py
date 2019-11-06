@@ -51,6 +51,7 @@ def cli_main(flags):
             # ...take that action, and parse the state.
             observation, reward, done, info = env.step(action)
 
+            # TODO: Model goes here. action = f(observation)
             # If the environment says we're done, stop this episode.
             if done:
                 print("Episode finished after {} timesteps".format(t + 1))
@@ -70,7 +71,7 @@ if __name__ == "__main__":
                         help='GPUs to use with this model.')
 
     parser.add_argument('--phase_simulation_resolution', type=int,
-                        default=2 ** 10,
+                        default=2 ** 11,
                         help='Size of simulated aperture image.')
 
     parser.add_argument('--max_episode_steps', type=int,
@@ -82,7 +83,7 @@ if __name__ == "__main__":
                         help='Number of episodes to run.')
 
     parser.add_argument('--num_apertures', type=int,
-                        default=8,
+                        default=9,
                         help='Number of apertures to simulate.')
 
     parser.add_argument('--reward_threshold', type=float,
@@ -109,15 +110,15 @@ if __name__ == "__main__":
                         default=0.001,
                         help='The time granularity of DASIE sim in secs.')
 
-    parser.add_argument('--aperture_tip_phase_error_scale', type=float,
+    parser.add_argument('--tip_phase_error_scale', type=float,
                         default=0.01,
                         help='The initial tip alignment std.')
 
-    parser.add_argument('--aperture_tilt_phase_error_scale', type=float,
+    parser.add_argument('--tilt_phase_error_scale', type=float,
                         default=0.01,
                         help='The initial tilt alignment std.')
 
-    parser.add_argument('--aperture_piston_phase_error_scale', type=float,
+    parser.add_argument('--piston_phase_error_scale', type=float,
                         default=0.01,
                         help='The initial piston alignment std.')
 

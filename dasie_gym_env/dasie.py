@@ -59,9 +59,9 @@ class DasieEnv(gym.Env):
         # First, parse the keyword arguments.
         self.num_apertures = kwargs['num_apertures']
         self.phase_simulation_resolution = kwargs['phase_simulation_resolution']
-        self.aperture_tip_phase_error_scale = kwargs['aperture_tip_phase_error_scale']
-        self.aperture_tilt_phase_error_scale = kwargs['aperture_tilt_phase_error_scale']
-        self.aperture_piston_phase_error_scale = kwargs['aperture_piston_phase_error_scale']
+        self.tip_phase_error_scale = kwargs['tip_phase_error_scale']
+        self.tilt_phase_error_scale = kwargs['tilt_phase_error_scale']
+        self.piston_phase_error_scale = kwargs['piston_phase_error_scale']
 
         # Create an empty phase matrix to modify.
         self.system_phase_matrix = 0.0 * np.ones((self.phase_simulation_resolution,
@@ -120,6 +120,19 @@ class DasieEnv(gym.Env):
 
         self.apertures = list()
         # TODO: Once refactored, parallelize this.
+
+        # Compute the global midpoint for all apertures.
+        phase_map_midpoint = np.floor(self.phase_simulation_resolution // 2)
+
+        # Compute a scale factor; shrink the subapertures by just enough.
+        # TODO: Determine why this works. I made it. I'm just not sure how.
+        aperture_scale = (np.cos(np.pi / self.num_apertures) / np.sin(np.pi / self.num_apertures)) + (2 * np.pi)
+
+        # Scale the midpoint to get the radius.
+        aperture_radius = (phase_map_midpoint / aperture_scale)
+        aperture_annulus_radius = (aperture_radius / np.sin(np.pi / self.num_apertures))
+
+        # Iterate over each aperture.
         for aperture_index in range(self.num_apertures):
 
             # TODO: Refactor to a build_aperture function.
@@ -128,17 +141,6 @@ class DasieEnv(gym.Env):
 
             # Compute the angular position for this aperture.
             angular_position = 2 * np.pi * aperture_index / self.num_apertures
-
-            # Compute the global midpoint for all apertures.
-            phase_map_midpoint = np.floor(self.phase_simulation_resolution // 2)
-
-            # Compute a scale factor; shrink the subapertures by just enough.
-            # TODO: Determine why this works. I made it. I'm just not sure how.
-            aperture_scale = (np.cos(np.pi / self.num_apertures) / np.sin(np.pi / self.num_apertures)) + np.pi
-
-            # Scale the midpoint to get the radius.
-            aperture_radius = (phase_map_midpoint / aperture_scale)
-            aperture_annulus_radius = (aperture_radius / np.sin(np.pi / self.num_apertures))
 
             # Compute the global-reference midpoint using position and radius.
             phase_map_x_centroid = phase_map_midpoint + (aperture_annulus_radius * np.sin(angular_position))
@@ -191,16 +193,15 @@ class DasieEnv(gym.Env):
             aperture['index'] = aperture_index
 
             # Initialize the tip, tilt, and piston for this aperture.
-            tip = 0.0 + self.aperture_tip_phase_error_scale * np.random.randn(1)
-            tilt = 0.0 + self.aperture_tilt_phase_error_scale * np.random.randn(1)
-            piston = 1.0 + self.aperture_piston_phase_error_scale * np.random.randn(1)
+            tip = 0.0 + self.tip_phase_error_scale * np.random.randn(1)
+            tilt = 0.0 + self.tilt_phase_error_scale * np.random.randn(1)
+            piston = 1.0 + self.piston_phase_error_scale * np.random.randn(1)
             aperture['tip_phase'] = tip
             aperture['tilt_phase'] = tilt
             aperture['piston_phase'] = piston
 
             # Compute a grid of phase for this aperture, and record it's value.
-            xx, yy = np.mgrid[:(r_max - r_min),
-                              :(c_max - c_min)]
+            xx, yy = np.mgrid[:(r_max - r_min), :(c_max - c_min)]
             patch = (tip * xx) + (tilt * yy) + piston
             aperture['phase_map_patch'] = patch
 
@@ -242,7 +243,7 @@ class DasieEnv(gym.Env):
             # TODO: Move this and do incremental updates.
             aperture['tip_phase'] = aperture['tip_phase_command']
             aperture['tilt_phase'] = aperture['tilt_phase_command']
-            aperture['piston_phase'] =aperture['piston_phase_command']
+            aperture['piston_phase'] = aperture['piston_phase_command']
 
         # # TODO: Write main simulation loop here.
         # # num_timesteps is probably the inference latency of the system.
