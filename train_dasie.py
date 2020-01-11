@@ -33,7 +33,22 @@ class ActorModel(tf.keras.Model):
     x = self.flatten(x)
     x = self.d1(x)
     return self.d2(x)
-model = ActorModel()
+
+
+class CriticModel(tf.keras.Model):
+  def __init__(self, env_action_space):
+    super(ActorModel, self).__init__()
+
+    self.env_action_space = env_action_space
+    self.conv1 = tf.keras.layers.Conv2D(32, 3, activation='relu')
+    self.flatten = tf.keras.layers.Flatten()
+    self.d1 = tf.keras.layers.Dense(128, activation='relu')
+    self.d2 = tf.keras.layers.Dense(env_action_space.size, activation='softmax')
+
+  def call(self, x):
+    x = self.flatten(x)
+    x = self.d1(x)
+    return self.d2(x)
 
 # with tf.GradientTape() as tape:
 #   logits = model(images)
@@ -41,30 +56,6 @@ model = ActorModel()
 # grads = tape.gradient(loss_value, model.trainable_variables)
 # optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-
-# class ActorModel(object):
-#
-#     def __init__(self, env_action_space):
-#
-#         self.env_action_space = env_action_space
-#
-#
-#     def __call__(self, *args, **kwargs):
-#
-#         # TODO Return the output node for an input placeholder, given.
-#
-#         return self.env_action_space.sample()
-
-class CriticModel(object):
-
-    def __init__(self):
-
-        parameters = list()
-
-    def __call__(self, *args, **kwargs):
-        # TODO Return the output node for an input placeholder, given.
-
-        return 0
 
 class ReplayBuffer(object):
 
@@ -186,9 +177,9 @@ def cli_main(flags):
 
 
         # Magic????
-        unnormalized_actor_gradients = tf.gradients(actor_model(observation_batch_placeholder), actor_model.parameters, -critic_action_gradient)
+        unnormalized_actor_gradients = tf.gradients(actor_model(observation_batch_placeholder), actor_model.trainable_variables, -critic_action_gradient)
         policy_gradients = list(map(lambda x: tf.div(x, flags.batch_size), unnormalized_actor_gradients))
-        optimize_actor = tf.train.AdamOptimizer().apply_gradients(zip(policy_gradients, actor_model.parameters))
+        optimize_actor = tf.train.AdamOptimizer().apply_gradients(zip(policy_gradients, actor_model.trainable_variables))
         #######################################################################
         # End: Build the actor optimizer.                                    #
         #######################################################################
