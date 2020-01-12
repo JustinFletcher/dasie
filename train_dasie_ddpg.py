@@ -1,10 +1,9 @@
 """
-Implementation of DDPG - Deep Deterministic Policy Gradient
-Algorithm and hyperparameter details can be found here:
-    http://arxiv.org/pdf/1509.02971v2.pdf
-The algorithm is tested on the Pendulum-v0 OpenAI gym task
-and developed with tflearn + Tensorflow
-Author: Patrick Emami
+A pure TensorFlow implementation of DDPG.
+
+http://arxiv.org/pdf/1509.02971v2.pdf
+
+Author: Justin Fletcher
 """
 import tensorflow as tf
 import numpy as np
@@ -82,6 +81,20 @@ class ActorNetwork(object):
 
     def __init__(self, sess, state_dim, action_dim, action_bound,
                  learning_rate, tau, batch_size):
+
+        """
+        This constructor builds a graph corresponding to an actor model in the
+        DDPG actor-critic framework. This model is coupled to the OpenAi gym
+        environment provided.
+
+        :param sess: a tf.Session, in which the graph will be built.
+        :param state_dim: an int, specifying the size of the action space.
+        :param action_dim:
+        :param action_bound:
+        :param learning_rate:
+        :param tau:
+        :param batch_size:
+        """
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
@@ -90,73 +103,92 @@ class ActorNetwork(object):
         self.tau = tau
         self.batch_size = batch_size
 
+
         # Actor Network
-        self.inputs, self.out, self.scaled_out = self.create_actor_network()
+        with tf.name_scope("actor"):
 
-        self.network_params = tf.compat.v1.trainable_variables()
+            with tf.name_scope("actor_model"):
+                self.inputs, self.out, self.scaled_out = self._create_actor_network()
 
-        # Target Network
-        self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network()
+            self.network_params = tf.compat.v1.trainable_variables()
+
+            # Target Network
+            with tf.name_scope("actor_model_target"):
+                self.target_inputs, self.target_out, self.target_scaled_out = self._create_actor_network()
 
 
-        with tf.name_scope("actor_target"):
             self.target_network_params = tf.compat.v1.trainable_variables()[
                                          len(self.network_params):]
 
-        # Op for periodically updating target network with online network
-        # weights
+            # Op for periodically updating target network with online network
+            # weights
+            #
+            # with tf.name_scope("actor_target_update"):
+            #     self.update_target_network_params = \
+            #         [self.target_network_params[i].assign(
+            #             tf.multiply(self.network_params[i], self.tau) +
+            #             tf.multiply(self.target_network_params[i], 1. - self.tau))
+            #          for i in range(len(self.target_network_params))]
 
-        with tf.name_scope("actor_target_update"):
-            self.update_target_network_params = \
-                [self.target_network_params[i].assign(
-                    tf.multiply(self.network_params[i], self.tau) +
-                    tf.multiply(self.target_network_params[i], 1. - self.tau))
-                 for i in range(len(self.target_network_params))]
+            self.update_target_network_params_ops =  list()
+            for i in range(len(self.target_network_params)):
 
-        # This gradient will be provided by the critic network
-        self.action_gradient = tf.compat.v1.placeholder(tf.float32, [None, self.a_dim])
+                scaled_param = tf.multiply(self.network_params[i],
+                                         self.tau)
 
-        # Combine the gradients here
-        self.unnormalized_actor_gradients = tf.gradients(
-                self.scaled_out, self.network_params, -self.action_gradient)
-        self.actor_gradients = list(map(lambda x: tf.math.divide(x, self.batch_size),
-                                        self.unnormalized_actor_gradients))
+                scaled_target = tf.multiply(self.target_network_params[i],
+                                            1. - self.tau)
 
-        # Optimization Op
-        self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate). \
-            apply_gradients(zip(self.actor_gradients, self.network_params))
+                target_param = scaled_param + scaled_target
 
-        self.num_trainable_vars = len(
-                self.network_params) + len(self.target_network_params)
+                update_op = self.target_network_params[i].assign(target_param)
 
-    def create_actor_network(self):
+                self.update_target_network_params_ops.append(update_op)
+
+            # This gradient will be provided by the critic network
+            self.action_gradient = tf.compat.v1.placeholder(tf.float32, [None, self.a_dim])
+
+            # Combine the gradients here
+            self.unnormalized_actor_gradients = tf.gradients(self.scaled_out,
+                                                             self.network_params,
+                                                             -self.action_gradient)
+            self.actor_gradients = list(map(lambda x: tf.math.divide(x, self.batch_size),
+                                            self.unnormalized_actor_gradients))
+
+            # Optimization Op
+            self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate). \
+                apply_gradients(zip(self.actor_gradients, self.network_params))
+
+            self.num_trainable_vars = len(
+                    self.network_params) + len(self.target_network_params)
+
+    def _create_actor_network(self):
         observation_batch_placeholder = tf.compat.v1.placeholder(tf.float32,
                                                                  shape=(None, self.s_dim),
                                                                  name="observation")
 
 
-        with tf.name_scope("actor"):
-            with tf.name_scope("hidden_layer_400"):
-                n_hidden = 400
-                W = tf.Variable(tf.random.normal((self.s_dim, n_hidden)))
-                b = tf.Variable(tf.random.normal((n_hidden,)))
-                x = tf.matmul(observation_batch_placeholder, W) + b
-                # net = tflearn.layers.normalization.batch_normalization(net)
-                x = tf.nn.relu(x)
-            with tf.name_scope("hidden_layer_300"):
-                n_hidden = 300
-                W = tf.Variable(tf.random.normal((400, n_hidden)))
-                b = tf.Variable(tf.random.normal((n_hidden,)))
-                x = tf.matmul(x, W) + b
-                # net = tflearn.layers.normalization.batch_normalization(net)
-                x = tf.nn.relu(x)
-            with tf.name_scope("hidden_layer_1"):
-                n_hidden = 1
-                W = tf.Variable(tf.random.uniform((300, n_hidden), minval=-0.003, maxval=0.003))
-                b = tf.Variable(tf.random.uniform((n_hidden,)))
-                x = tf.matmul(x, W) + b
-                # net = tflearn.layers.normalization.batch_normalization(net)
-                output_batch = tf.nn.tanh(x)
+        with tf.name_scope("hidden_layer_400"):
+            n_hidden = 400
+            W = tf.Variable(tf.random.normal((self.s_dim, n_hidden)))
+            b = tf.Variable(tf.random.normal((n_hidden,)))
+            x = tf.matmul(observation_batch_placeholder, W) + b
+            # net = tflearn.layers.normalization.batch_normalization(net)
+            x = tf.nn.relu(x)
+        with tf.name_scope("hidden_layer_300"):
+            n_hidden = 300
+            W = tf.Variable(tf.random.normal((400, n_hidden)))
+            b = tf.Variable(tf.random.normal((n_hidden,)))
+            x = tf.matmul(x, W) + b
+            # net = tflearn.layers.normalization.batch_normalization(net)
+            x = tf.nn.relu(x)
+        with tf.name_scope("hidden_layer_1"):
+            n_hidden = 1
+            W = tf.Variable(tf.random.uniform((300, n_hidden), minval=-0.003, maxval=0.003))
+            b = tf.Variable(tf.random.uniform((n_hidden,)))
+            x = tf.matmul(x, W) + b
+            # net = tflearn.layers.normalization.batch_normalization(net)
+            output_batch = tf.nn.tanh(x)
 
         # Scale output to -action_bound to action_bound
         scaled_output_batch = tf.multiply(output_batch, self.action_bound)
@@ -201,41 +233,59 @@ class CriticNetwork(object):
         self.gamma = gamma
 
         # Create the critic network
-        self.inputs, self.action, self.out = self.create_critic_network()
 
-        self.network_params = tf.compat.v1.trainable_variables()[num_actor_vars:]
+        with tf.name_scope("critic"):
+            with tf.name_scope("critic_model"):
+                self.inputs, self.action, self.out = self.create_critic_network()
 
-        # Target Network
-        self.target_inputs, self.target_action, self.target_out = self.create_critic_network()
+            self.network_params = tf.compat.v1.trainable_variables()[num_actor_vars:]
 
-        with tf.name_scope("critic_target"):
-            self.target_network_params = tf.compat.v1.trainable_variables()[(len(
-                self.network_params) + num_actor_vars):]
+            with tf.name_scope("critic_target"):
+                # Target Network
+                self.target_inputs, self.target_action, self.target_out = self.create_critic_network()
 
-        # Op for periodically updating target network with online network
-        # weights with regularization
+                self.target_network_params = tf.compat.v1.trainable_variables()[(len(
+                    self.network_params) + num_actor_vars):]
 
-        with tf.name_scope("actor_target_update"):
-            self.update_target_network_params = \
-                [self.target_network_params[i].assign(
-                    tf.multiply(self.network_params[i], self.tau) \
-                    + tf.multiply(self.target_network_params[i], 1. - self.tau))
-                 for i in range(len(self.target_network_params))]
+            # Op for periodically updating target network with online network
+            # weights with regularization
 
-        # Network target (y_i)
-        self.predicted_q_value = tf.compat.v1.placeholder(tf.float32, [None, 1])
+            with tf.name_scope("critic_target_update"):
+                # self.update_target_network_params = \
+                #     [self.target_network_params[i].assign(
+                #         tf.multiply(self.network_params[i], self.tau) \
+                #         + tf.multiply(self.target_network_params[i], 1. - self.tau))
+                #      for i in range(len(self.target_network_params))]
 
-        # Define loss and optimization Op
-        # self.loss = tflearn.mean_square(self.predicted_q_value, self.out)
-        self.loss = tf.math.reduce_mean(tf.pow((self.predicted_q_value - self.out), 2))
-        self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+                self.update_target_network_params_ops =  list()
+                for i in range(len(self.target_network_params)):
 
-        # Get the gradient of the net w.r.t. the action.
-        # For each action in the minibatch (i.e., for each x in xs),
-        # this will sum up the gradients of each critic output in the minibatch
-        # w.r.t. that action. Each output is independent of all
-        # actions except for one.
-        self.action_grads = tf.gradients(self.out, self.action)
+                    scaled_param = tf.multiply(self.network_params[i],
+                                             self.tau)
+
+                    scaled_target = tf.multiply(self.target_network_params[i],
+                                                1. - self.tau)
+
+                    target_param = scaled_param + scaled_target
+
+                    update_op = self.target_network_params[i].assign(target_param)
+
+                    self.update_target_network_params_ops.append(update_op)
+
+            # Network target (y_i)
+            self.predicted_q_value = tf.compat.v1.placeholder(tf.float32, [None, 1])
+
+            # Define loss and optimization Op
+            # self.loss = tflearn.mean_square(self.predicted_q_value, self.out)
+            self.loss = tf.math.reduce_mean(tf.pow((self.predicted_q_value - self.out), 2))
+            self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+
+            # Get the gradient of the net w.r.t. the action.
+            # For each action in the minibatch (i.e., for each x in xs),
+            # this will sum up the gradients of each critic output in the minibatch
+            # w.r.t. that action. Each output is independent of all
+            # actions except for one.
+            self.action_grads = tf.gradients(self.out, self.action)
 
     def create_critic_network(self):
 
