@@ -7,11 +7,14 @@ Author: Justin Fletcher
 """
 
 import gym
+import glob
 import time
 import numpy as np
 
 from gym import spaces, logger
 from gym.utils import seeding
+
+from matplotlib import pyplot as plt
 
 class DasieEnv(gym.Env):
     """
@@ -261,9 +264,11 @@ class DasieEnv(gym.Env):
         self._update_psf_matrix()
 
         # TODO: Figure out what this means for our problem, if anything.
+        
+        
         done = False
 
-        # TODO: Build a reward function.
+        # TODO: Build a reward function
         # In this implementation, reward is a function of done.
         if not done:
             reward = 1.0
@@ -294,7 +299,7 @@ class DasieEnv(gym.Env):
 
             normalized_img = shifted_img / np.max(shifted_img)
 
-            scaled_img = (scale) * normalized_img
+            scaled_img = scale * normalized_img
 
             return(scaled_img)
 
@@ -307,12 +312,39 @@ class DasieEnv(gym.Env):
             ret[:, :, 2] = ret[:, :, 1] = ret[:, :, 0] = im
             return ret
 
+
         log_real_optical_psf = np.log(np.abs(np.fft.fftshift(self.optical_psf_matrix)))
+
         log_real_optical_psf_img = to_rgb(positive_shift_norm_scale_img(log_real_optical_psf))
         system_phase_matrix_img = to_rgb(positive_shift_norm_scale_img(self.system_phase_matrix))
-
         render_image = np.hstack([system_phase_matrix_img,
                                   log_real_optical_psf_img])
+
+        # Uncomment to zoom
+        # psf_shape = log_real_optical_psf.shape
+        # x_length = psf_shape[0]
+        # y_length = psf_shape[1]
+        # x_center = int(x_length / 2)
+        # y_center = int(y_length / 2)
+        #
+        # patch_fraction = 0.1
+        # patch_x_half_width = int(patch_fraction * x_center)
+        # patch_y_half_width = int(patch_fraction * x_center)
+        #
+        # patch = log_real_optical_psf[x_center-patch_x_half_width:x_center+patch_x_half_width,
+        #                              y_center-patch_y_half_width:y_center+patch_y_half_width]
+        #
+        # from skimage.transform import resize
+        # patch_resized = resize(patch, (x_length, y_length))
+
+        # log_real_optical_psf = patch_resize
+
+        # render_image = np.hstack([system_phase_matrix_img,
+        #                           patch_resized])
+        # file_id = str(len(glob.glob('.\\temp\\*.png')))
+        # plt.imsave('.\\temp\\' + file_id + '.png', render_image)
+
+        # Save render image
 
         if mode == 'rgb_array':
 

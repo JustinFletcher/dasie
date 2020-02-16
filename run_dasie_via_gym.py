@@ -43,7 +43,7 @@ def cli_main(flags):
                 print("Running step %s." % str(t))
 
             # ...show the environment to the caller...
-            env.render()
+            # env.render()
 
             # ...get a random action...
             action = env.action_space.sample()
