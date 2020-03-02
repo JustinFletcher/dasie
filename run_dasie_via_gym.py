@@ -2,7 +2,7 @@
 This script runs a simulated Distributed Aperture System for Interferometric
 Exploitation via the OpenAI gym interface.
 
-Author: Justin Fletcher
+Author: Justin Fletcher, Ian Cunnyngham
 Date: 20 October 2019
 """
 
@@ -69,11 +69,94 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_list', type=str,
                         default="0",
                         help='GPUs to use with this model.')
+    
+    ### Extended object setup ###
+    parser.add_argument('--extended_object_image_file', type=str,
+                        default="none",
+                        help='Filename of image to convolve PSF with (if none, PSF returned)')
+    
+    ### Telescope / pupil-plane setup ###
+    parser.add_argument('--num_apertures', type=int,
+                        default=15,
+                        help='Number of apertures in ELF annulus')
+    
+    parser.add_argument('--telescope_radius', type=float,
+                        default=1.25,
+                        help='Distance from telescope center to aperture centers (meters)')
 
-    parser.add_argument('--phase_simulation_resolution', type=int,
-                        default=2 ** 11,
-                        help='Size of simulated aperture image.')
+    parser.add_argument('--pupil_plane_resolution', type=int,
+                        default=2 ** 8,
+                        help='Resolution of pupil plane simulation')
+    
+    parser.add_argument('--piston_actuate_scale', type=float,
+                        default=1e-6,
+                        help='Sub-aperture piston actuation scale (meters)')
+    
+    parser.add_argument('--tip_tilt_actuate_scale', type=float,
+                        default=1e-6,
+                        help='Sub-aperture tip and tilt actuation scale (microns/meter)~=(radians)')
+    
+    ### Focal-plane setup ###
+    parser.add_argument('--filter_central_wavelength', type=float,
+                        default=1e-6,
+                        help='Central wavelength of focal-plane observation (meters)')
+    
+    parser.add_argument('--filter_psf_extent', type=float,
+                        default=4.0,
+                        help='Angular extent of simulated PSF (arcsec)')
+    
+    parser.add_argument('--filter_psf_resolution', type=int,
+                        default=2**8,
+                        help='Resolution of simulated PSF (this and extent set pixel scale for extended image convolution)')
+    
+    parser.add_argument('--filter_fractional_bandwidth', type=float,
+                        default=0.05,
+                        help='Fractional bandwidth of filter')
+    
+    parser.add_argument('--filter_bandwidth_samples', type=int,
+                        default=3,
+                        help='Number of pupil-planes used to simulate bandwidth (1 = monochromatic)')
 
+    ### Atmosphere setup ###
+    parser.add_argument('--atmosphere_type', type=str,
+                        default="none",
+                        help='Atmosphere type: "none" (default), "single" layer, or "multi" layer')
+    
+    parser.add_argument('--atmosphere_fried_paramater', type=float,
+                        default=.25,
+                        help='Fried paramater, r0 @ 550nm (maters)')
+    
+    parser.add_argument('--atmosphere_outer_scale', type=float,
+                        default=200,
+                        help='Atmosphere outer-scale (maters)')
+    
+    # !!! Note: Doesn't currentoly work with multi-layer atmospheres, stuck at 10m/s
+    parser.add_argument('--atmosphere_velocity', type=float,
+                        default=10,
+                        help='Atmosphere velocity (maters/second)')
+    
+    # !!! Breaks render right now, but should work for simulation...
+    parser.add_argument('--enable_atmosphere_scintilation', action='store_true',
+                        default=False,
+                        help='Simulate atmospheric scintilation in multi-layer atmosphere')
+    
+    ### Simulation setup ###
+    parser.add_argument('--step_time_granularity', type=float,
+                        default=0.01,
+                        help='The time granularity of DASIE step (seconds)')
+
+    parser.add_argument('--tip_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tip alignment std.')
+
+    parser.add_argument('--tilt_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tilt alignment std.')
+
+    parser.add_argument('--piston_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial piston alignment std.')
+    
     parser.add_argument('--max_episode_steps', type=int,
                         default=10000,
                         help='Steps per episode limit.')
@@ -81,10 +164,6 @@ if __name__ == "__main__":
     parser.add_argument('--num_episodes', type=int,
                         default=1,
                         help='Number of episodes to run.')
-
-    parser.add_argument('--num_apertures', type=int,
-                        default=9,
-                        help='Number of apertures to simulate.')
 
     parser.add_argument('--reward_threshold', type=float,
                         default=25.0,
@@ -105,22 +184,6 @@ if __name__ == "__main__":
     parser.add_argument('--simulated_actuation_latency', type=float,
                         default=0.005,
                         help='The latency caused by actuation in secs.')
-
-    parser.add_argument('--simulation_time_granularity', type=float,
-                        default=0.001,
-                        help='The time granularity of DASIE sim in secs.')
-
-    parser.add_argument('--tip_phase_error_scale', type=float,
-                        default=0.01,
-                        help='The initial tip alignment std.')
-
-    parser.add_argument('--tilt_phase_error_scale', type=float,
-                        default=0.01,
-                        help='The initial tilt alignment std.')
-
-    parser.add_argument('--piston_phase_error_scale', type=float,
-                        default=0.01,
-                        help='The initial piston alignment std.')
 
     parser.add_argument('--silence', action='store_true',
                         default=False,
