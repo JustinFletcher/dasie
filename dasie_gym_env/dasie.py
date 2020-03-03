@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 # Load HCIPy and Ian's sample generator built on top of it
 import hcipy 
 from multi_aperture_psf import MultiAperturePSFSampler
-import joblib
+
 
 class DasieEnv(gym.Env):
     """
@@ -78,7 +78,7 @@ class DasieEnv(gym.Env):
         else:
             self.ext_im = plt.imread( self.extended_object_image_file )
         
-        ### Genereate ELF-like telescope geometry
+        ### Generate ELF-like telescope geometry
         ###  annulus of sub-apertures with centers at telescope_radius
         self.num_apertures = kwargs['num_apertures']
         self.telescope_radius = kwargs['telescope_radius'] # meters
@@ -100,8 +100,8 @@ class DasieEnv(gym.Env):
         # Add a little extra for edges, not convinced not cutting them off
         self.pupil_plane_diamater *= 1.05  
         
-        print(f'Sub-aperture diamater {self.aperture_diamater :.02f}m')
-        print(f'Pupil-plane extent {self.pupil_plane_diamater :.02f}m')
+        print('Sub-aperture diamater %.02f m' % self.aperture_diamater)
+        print('Pupil-plane extent %.02f m'% self.pupil_plane_diamater)
         
         
         ### Build up rest of sampler configuration dictionary from kwargs

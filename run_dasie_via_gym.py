@@ -79,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_apertures', type=int,
                         default=15,
                         help='Number of apertures in ELF annulus')
-    
+
     parser.add_argument('--telescope_radius', type=float,
                         default=1.25,
                         help='Distance from telescope center to aperture centers (meters)')
@@ -87,13 +87,15 @@ if __name__ == "__main__":
     parser.add_argument('--pupil_plane_resolution', type=int,
                         default=2 ** 8,
                         help='Resolution of pupil plane simulation')
-    
+
+    # TODO: Bug. If this value is 1e-6, discontinuities appear.
     parser.add_argument('--piston_actuate_scale', type=float,
-                        default=1e-6,
+                        default=1e-7,
                         help='Sub-aperture piston actuation scale (meters)')
-    
+
+    # TODO: Bug. If this value is 1e-6, discontinuities appear.
     parser.add_argument('--tip_tilt_actuate_scale', type=float,
-                        default=1e-6,
+                        default=1e-7,
                         help='Sub-aperture tip and tilt actuation scale (microns/meter)~=(radians)')
     
     ### Focal-plane setup ###
@@ -106,7 +108,7 @@ if __name__ == "__main__":
                         help='Angular extent of simulated PSF (arcsec)')
     
     parser.add_argument('--filter_psf_resolution', type=int,
-                        default=2**8,
+                        default=2 ** 8,
                         help='Resolution of simulated PSF (this and extent set pixel scale for extended image convolution)')
     
     parser.add_argument('--filter_fractional_bandwidth', type=float,
