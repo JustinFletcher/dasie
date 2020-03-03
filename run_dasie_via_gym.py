@@ -122,7 +122,8 @@ if __name__ == "__main__":
                         default=0.01,
                         help='The initial piston alignment std.')
 
-    parser.add_argument('--silence', action='store_true',
+    parser.add_argument('--silence',
+                        action='store_true',
                         default=False,
                         help='If provided, be quiet.')
 

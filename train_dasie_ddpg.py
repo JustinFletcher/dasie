@@ -7,6 +7,7 @@ Author: Justin Fletcher
 """
 
 import os
+import time
 import random
 import argparse
 from datetime import datetime
@@ -67,6 +68,22 @@ class ReplayBuffer(object):
         self.buffer.clear()
         self.count = 0
 
+
+
+def variable_summaries(var):
+    """
+    Attach a lot of summaries to a Tensor (for TensorBoard visualization).
+    """
+    with tf.compat.v1.name_scope('summaries'):
+        mean = tf.reduce_mean(input_tensor=var)
+        tf.compat.v1.summary.scalar('mean', mean)
+        with tf.compat.v1.name_scope('stddev'):
+            stddev = tf.sqrt(tf.reduce_mean(input_tensor=tf.square(var - mean)))
+        tf.compat.v1.summary.scalar('stddev', stddev)
+        tf.compat.v1.summary.scalar('max', tf.reduce_max(input_tensor=var))
+        tf.compat.v1.summary.scalar('min', tf.reduce_min(input_tensor=var))
+        tf.compat.v1.summary.histogram('histogram', var)
+
 class ActorNetwork(object):
     """
 
@@ -125,6 +142,7 @@ class ActorNetwork(object):
                 # TODO: Make this a zip over main, target param pairs. ID w/ scope.
                 # Then iterate over each target network parameter, and...
                 for i in range(len(self.target_network_params)):
+
                     # ...scale the corresponding main parameter and...
                     scaled_param = tf.multiply(self.network_params[i],
                                                self.tau)
@@ -136,16 +154,18 @@ class ActorNetwork(object):
                     # ...blend the parameters by adding them, and...
                     target_param = scaled_param + scaled_target
 
-                    # ...add an assign that overwrites the prior target parameter.
+                    # ...add an assign overwriting the prior target parameter.
                     update_op = self.target_network_params[i].assign(
                         target_param)
 
                     # Finally, add the update op to a list to be run later.
                     self.update_target_network_params_ops.append(update_op)
 
-            # This gradient will be provided by the critic network
-            self.action_gradient = tf.compat.v1.placeholder(tf.float32,
-                                                            [None, self.a_dim])
+        # This gradient will be provided by the critic network
+        self.action_gradient = tf.compat.v1.placeholder(tf.float32,
+                                                        [None, self.a_dim])
+
+        with tf.name_scope("policy_gradients"):
 
             # Compute the gradient of the actor output (action) wrt parameters.
             # Scale the gradient my the gradient of value (Q) wrt actions.
@@ -158,14 +178,18 @@ class ActorNetwork(object):
             self.actor_gradients = list(map(lambda x: tf.math.divide(x, self.batch_size),
                                             self.unnormalized_actor_gradients))
 
+        with tf.name_scope("actor_optimizer"):
+
             # Build an op that applies the policy gradients to the model.
             self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate). \
                 apply_gradients(zip(self.actor_gradients, self.network_params))
 
-            # And store the total number of parameters.
-            # TODO: Remove this.
-            self.num_trainable_vars = len(
-                    self.network_params) + len(self.target_network_params)
+
+        self.summaries = tf.compat.v1.summary.merge_all()
+        # And store the total number of parameters.
+        # TODO: Remove this.
+        self.num_trainable_vars = len(
+                self.network_params) + len(self.target_network_params)
 
     def _create_actor_network(self):
         observation_batch_placeholder = tf.compat.v1.placeholder(tf.float32,
@@ -183,8 +207,12 @@ class ActorNetwork(object):
 
         with tf.name_scope("hidden_layer_300"):
             n_hidden = 300
+
+
             W = tf.Variable(tf.random.normal((400, n_hidden)))
+            variable_summaries(W)
             b = tf.Variable(tf.random.normal((n_hidden,)))
+            variable_summaries(b)
             x = tf.matmul(x, W) + b
             # net = tflearn.layers.normalization.batch_normalization(net)
             x = tf.nn.relu(x)
@@ -202,7 +230,7 @@ class ActorNetwork(object):
         return observation_batch_placeholder, output_batch, scaled_output_batch
 
     def train(self, inputs, a_gradient):
-        self.sess.run(self.optimize, feed_dict={
+        return self.sess.run([self.optimize, self.summaries], feed_dict={
                 self.inputs: inputs,
                 self.action_gradient: a_gradient
         })
@@ -242,18 +270,20 @@ class CriticNetwork(object):
         # Create the critic network
 
         with tf.name_scope("critic"):
+
             with tf.name_scope("critic_model"):
+
                 self.inputs, self.action, self.out = self.create_critic_network()
 
             self.network_params = tf.compat.v1.trainable_variables()[num_actor_vars:]
 
             with tf.name_scope("critic_target"):
+
                 # Target Network
                 self.target_inputs, self.target_action, self.target_out = self.create_critic_network()
 
                 self.target_network_params = tf.compat.v1.trainable_variables()[(len(
                     self.network_params) + num_actor_vars):]
-
 
             # Next, build the graph for updating the target parameters.
             with tf.name_scope("critic_target_update_ops"):
@@ -282,12 +312,19 @@ class CriticNetwork(object):
                     # Finally, add the update op to a list to be run later.
                     self.update_target_network_params_ops.append(update_op)
 
-            # Create a placeholder to accept the Q value estimate a runtime.
-            self.predicted_q_value = tf.compat.v1.placeholder(tf.float32, [None, 1])
+        # Create a placeholder to accept the Q value estimate a runtime.
+        self.predicted_q_value = tf.compat.v1.placeholder(tf.float32, [None, 1])
+
+        with tf.name_scope("mean_squared_bellman_error_loss"):
 
             # Now, define a loss op computing batch MSE between target and Q.
             self.loss = tf.math.reduce_mean(tf.pow((self.predicted_q_value - self.out), 2))
+
+        with tf.name_scope("critic_optimizer"):
+
             self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+
+        with tf.name_scope("action_gradients"):
 
             # Get the gradient of the net w.r.t. the action.
             # For each action in the minibatch (i.e., for each x in xs),
@@ -350,15 +387,16 @@ class CriticNetwork(object):
         #     W = tf.Variable(tf.random.uniform((300, n_hidden), minval=-0.003, maxval=0.003))
         #     b = tf.Variable(tf.random.uniform((n_hidden,)))
         #     x = tf.matmul(x, W) + b
+
         x = tf.nn.relu(x)
+
         with tf.name_scope("hidden_layer_merged_1"):
+
             n_hidden = 1
             W = tf.Variable(tf.random.uniform((300, n_hidden), minval=-0.003, maxval=0.003))
             b = tf.Variable(tf.random.uniform((n_hidden,)))
             output_batch = tf.matmul(x, W) + b
-            # net = tflearn.layers.normalization.batch_normalization(net)
-            # output_batch = tf.nn.tanh(x)
-            # output_batch = tf.nn.tanh(x)
+
         return observation_batch_placeholder, action_batch_placeholder, output_batch
 
     def train(self, inputs, action, predicted_q_value):
@@ -393,7 +431,7 @@ class CriticNetwork(object):
 # Taken from https://github.com/openai/baselines/blob/master/baselines/ddpg/noise.py, which is
 # based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
 class OrnsteinUhlenbeckActionNoise:
-    def __init__(self, mu, sigma=0.3, theta=.15, dt=1e-2, x0=None):
+    def __init__(self, mu, sigma=0.6, theta=.15, dt=1e-2, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
@@ -422,12 +460,17 @@ class OrnsteinUhlenbeckActionNoise:
 # ===========================
 
 def build_summaries():
+
+    summary_vars = list()
+
     episode_reward = tf.Variable(0.)
+    summary_vars.append(episode_reward)
     tf.summary.scalar("Reward", episode_reward)
+
     episode_ave_max_q = tf.Variable(0.)
+    summary_vars.append(episode_ave_max_q)
     tf.summary.scalar("Qmax Value", episode_ave_max_q)
 
-    summary_vars = [episode_reward, episode_ave_max_q]
     summary_ops = tf.compat.v1.summary.merge_all()
 
     return summary_ops, summary_vars
@@ -437,7 +480,7 @@ def build_summaries():
 #   Agent Training
 # ===========================
 
-def train(sess, env, flags, actor, critic, actor_noise):
+def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
     """
     This function realizes the DDPG training loop against an OpenAI Gym
     environment, using an ActorModel and CriticModel.
@@ -462,14 +505,16 @@ def train(sess, env, flags, actor, critic, actor_noise):
         logdir_path = os.path.join(flags.logdir, flags.run_name)
 
     # TODO: Either use or deprecate this.
-    summary_ops, summary_vars = build_summaries()
+    # summary_ops, summary_vars = build_summaries()
 
     # Begin training by intializing the graph.
     sess.run(tf.compat.v1.global_variables_initializer())
 
     # Create a summary writer, and flush it to write the inital graph.
     writer = tf.compat.v1.summary.FileWriter(logdir_path, sess.graph)
-    writer.flush()
+
+    # writer.flush()
+    # writer = tf.summary.create_file_writer(logdir_path)
 
     # Run the target network update ops, since everything's initialized.
     actor.update_target_network()
@@ -486,7 +531,6 @@ def train(sess, env, flags, actor, critic, actor_noise):
         action = env.action_space.sample()
         new_observation, reward, terminal, info = env.step(action)
 
-
         # TODO: Consider random tree search to get high-value trajectories.
 
         # Add that random interaction to the buffer.
@@ -496,15 +540,12 @@ def train(sess, env, flags, actor, critic, actor_noise):
                           terminal,
                           np.reshape(new_observation, (actor.s_dim,)))
 
-    # Idea: Search a big environment space using bounded tree search on Q.
-    # Build up a distribution of Qmax for a tree breadth and depth limit
-    # measure the variance in the distributions aafo tree size
-    # Once the variance converges, stop deepening and broadening, then sample.
-    # Measure the Qmax distribuion of your sample.
-    # Train the critic to estimate qmax before training.
+    episode_running_times = list()
 
     # Enter the main training loop.
     for i in range(flags.num_episodes):
+
+        episode_start_time = time.time()
 
         # Refresh all episode bookkeeping variables.
         ep_reward = 0
@@ -513,8 +554,13 @@ def train(sess, env, flags, actor, critic, actor_noise):
         # Reset the state.
         observation = env.reset()
 
+        train_step_run_times = list()
+        step_run_times = list()
+
         # For the user-specified number of steps...
         for j in range(flags.max_episode_steps):
+
+            step_start_time = time.time()
 
             if flags.render_env:
                 env.render()
@@ -522,13 +568,15 @@ def train(sess, env, flags, actor, critic, actor_noise):
             # Consult the actor model for an action.
             a = actor.predict(np.reshape(observation, (1, actor.s_dim))) + actor_noise()
 
-            s2, r, terminal, info = env.step(a[0])
+            new_observation, reward, terminal, info = env.step(a[0])
 
             # print(terminal)
 
             replay_buffer.add(np.reshape(observation, (actor.s_dim,)),
-                              np.reshape(a, (actor.a_dim,)), r,
-                              terminal, np.reshape(s2, (actor.s_dim,)))
+                              np.reshape(a, (actor.a_dim,)), reward,
+                              terminal, np.reshape(new_observation, (actor.s_dim,)))
+
+            train_step_start_time = time.time()
 
             # If we've stored at least the required number of batches.
             if replay_buffer.size() > (flags.min_batches * flags.batch_size):
@@ -547,12 +595,12 @@ def train(sess, env, flags, actor, critic, actor_noise):
                 # ...discount the Q value, and compute the target Q-value.
                 terminal_vector = [1. - float(t) for t in terminal_batch]
                 # y_i = reward_batch + (terminal_vector * target_q) * flags.discount_factor
-                #
+
                 target_q_value_batch = list()
-                for reward, terminal_i, target_q_i in zip(reward_batch,
-                                                        terminal_vector,
-                                                        target_q):
-                    y_i = reward + (terminal_i * target_q_i * flags.discount_factor)
+                for reward_i, terminal_i, target_q_i in zip(reward_batch,
+                                                            terminal_vector,
+                                                            target_q):
+                    y_i = reward_i + (terminal_i * target_q_i * flags.discount_factor)
 
                     target_q_value_batch.append(y_i)
 
@@ -571,40 +619,70 @@ def train(sess, env, flags, actor, critic, actor_noise):
                                                 policy_action_batch)
 
 
-                actor.train(observation_batch, grads[0])
+                _, actor_summaries = actor.train(observation_batch, grads[0])
 
                 # Update target networks
                 actor.update_target_network()
                 critic.update_target_network()
 
-            observation = s2
-            ep_reward += r
+            observation = new_observation
+            ep_reward += reward
+
+            # TODO: compute observation-action covariance for episode traj.
+            # TODO: compute action variance across episode traj.
+
+            episode_end_time = time.time() - episode_start_time
+            episode_running_times.append(episode_end_time)
+
+            step_end_time = time.time() - step_start_time
+            step_run_times.append(step_end_time)
+
+            train_step_end_time = time.time() - train_step_start_time
+            train_step_run_times.append(train_step_end_time)
 
             if terminal:
-
-                tf.summary.scalar("ep_reward",
-                                  ep_reward,
-                                  step=i)
-                tf.summary.scalar("ep_ave_max_q",
-                                  ep_ave_max_q / float(j),
-                                  step=i)
-                tf.summary.scalar("ep_max_q",
-                                  ep_ave_max_q,
-                                  step=i)
+                writer.add_summary(actor_summaries, i)
+                #
+                # with writer.as_default():
+                #     tf.summary.scalar("ep_reward",
+                #                       ep_reward,
+                #                       step=i)
+                #     tf.summary.scalar("ep_ave_max_q",
+                #                       ep_ave_max_q / float(j),
+                #                       step=i)
+                #     tf.summary.scalar("ep_max_q",
+                #                       ep_ave_max_q,
+                #                       step=i)
+                #     tf.summary.scalar("ep_run_time",
+                #                       episode_end_time,
+                #                       step=i)
+                #     tf.summary.scalar("step_run_time",
+                #                       np.mean(step_run_times),
+                #                       step=i)
+                #     tf.summary.scalar("train_step_run_time",
+                #                       np.mean(train_step_run_times),
+                #                       step=i)
 
                 # writer.write()
 
-                print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f}'.format(
-                    int(ep_reward), i, (ep_ave_max_q / float(j))))
+                print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f} | Episode Time: {:.4f} | Step Time: {:.5f} | Train Step Time: {:.5f}'.format(
+                        int(ep_reward),
+                        i,
+                        (ep_ave_max_q / float(j)),
+                        episode_end_time,
+                        np.mean(step_run_times),
+                        np.mean(train_step_run_times)))
                 break
 
 
 def main(flags):
+
+    # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
 
         env = gym.make(flags.env)
         np.random.seed(flags.random_seed)
-        # tf.set_random_seed(int(args['random_seed']))
+        tf.compat.v1.set_random_seed(flags.random_seed)
         env.seed(flags.random_seed)
 
         state_dim = env.observation_space.shape[0]
@@ -634,8 +712,9 @@ def main(flags):
 
         actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
+        summary_ops = tf.compat.v1.summary.merge_all()
 
-        train(sess, env, flags, actor, critic, actor_noise)
+        train(sess, env, flags, actor, critic, actor_noise, summary_ops)
 
 
 
