@@ -294,7 +294,7 @@ class DasieEnv(gym.Env):
 
         # Update observaables
         self._update_sampler()
-        
+
         done = False
 
         # TODO: Build a reward function
@@ -347,8 +347,35 @@ class DasieEnv(gym.Env):
         log_real_focal_plane = to_rgb(positive_shift_norm_scale_img(log_real_focal_plane))
         
         system_phase_matrix_img = to_rgb(positive_shift_norm_scale_img(self.pupil_plane_phase_screen))
+
         render_image = np.hstack([system_phase_matrix_img,
                                   log_real_focal_plane])
+
+        # Uncomment to zoom
+        # psf_shape = log_real_optical_psf.shape
+        # x_length = psf_shape[0]
+        # y_length = psf_shape[1]
+        # x_center = int(x_length / 2)
+        # y_center = int(y_length / 2)
+        #
+        # patch_fraction = 0.1
+        # patch_x_half_width = int(patch_fraction * x_center)
+        # patch_y_half_width = int(patch_fraction * x_center)
+        #
+        # patch = log_real_optical_psf[x_center-patch_x_half_width:x_center+patch_x_half_width,
+        #                              y_center-patch_y_half_width:y_center+patch_y_half_width]
+        #
+        # from skimage.transform import resize
+        # patch_resized = resize(patch, (x_length, y_length))
+
+        # log_real_optical_psf = patch_resize
+
+        # render_image = np.hstack([system_phase_matrix_img,
+        #                           patch_resized])
+        # file_id = str(len(glob.glob('.\\temp\\*.png')))
+        # plt.imsave('.\\temp\\' + file_id + '.png', render_image)
+
+        # Save render image
 
         # Uncomment to zoom
         # psf_shape = log_real_optical_psf.shape
