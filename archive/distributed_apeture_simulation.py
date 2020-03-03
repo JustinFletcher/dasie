@@ -9,25 +9,29 @@ from matplotlib import pyplot as plt
 # Integrate sim w/ openAI Gym - pull request
 # Build a control model - paper
 # Build a real system and transfer - paper
-class DistributedapertureSystem(object):
-    """docstring for DistributedapertureSystem"""
+class DistributedApertureSystem(object):
+    """docstring for DistributedApertureSystem"""
 
     def __init__(self,
-                 num_apertures=13,
+                 num_apertures=6,
                  phase_simulation_resolution=2**10,
                  aperture_tip_phase_error_scale=0.01,
                  aperture_tilt_phase_error_scale=0.01,
-                 aperture_piston_phase_error_scale=0.01):
+                 aperture_piston_phase_error_scale=0.01,
+                 **kwargs):
         # 2**10 == 1024
 
-        super(DistributedapertureSystem, self).__init__()
+        super(DistributedApertureSystem, self).__init__()
 
         self.num_apertures = num_apertures
         self.phase_simulation_resolution = phase_simulation_resolution
 
         self.apertures = list()
 
+        # TODO: Once refactored, parallelize this.
         for aperture_index in range(num_apertures):
+
+            # TODO: Refactor to a build_aperture function.
 
             start_time = time.time()
 
@@ -121,10 +125,10 @@ class DistributedapertureSystem(object):
 
         print(self.system_phase_matrix)
 
-        num_updates = 100
+        num_updates = 10
         mode = "use_aperture_patch"
-        mode = "use_matrix_addition"
-        mode = "use_pixel_list"
+        # mode = "use_matrix_addition"
+        # mode = "use_pixel_list"
 
         for update_number in range(num_updates):
             start_time = time.time()
@@ -142,7 +146,6 @@ class DistributedapertureSystem(object):
             aperture['tilt_phase'] += scale * np.random.randn(1)
 
     def update_system_phase_matrix(self, mode="use_aperture_patch"):
-
 
         # TODO: Multithread this.
         for aperture in self.apertures:
@@ -210,7 +213,7 @@ class DistributedapertureSystem(object):
 
 if __name__ == '__main__':
 
-    da_system = DistributedapertureSystem()
+    da_system = DistributedApertureSystem()
 
     da_system.show_phase_matrix()
 
