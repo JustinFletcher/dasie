@@ -82,6 +82,22 @@ class DasieEnv(gym.Env):
         ###  annulus of sub-apertures with centers at telescope_radius
         self.num_apertures = kwargs['num_apertures']
         self.telescope_radius = kwargs['telescope_radius'] # meters
+        
+        # Get spider details. 
+        self.spider_width = kwargs['spider_width']
+        self.spider_angle = kwargs['spider_angle']
+        if self.spider_width is not None:
+            self.spider_config = {
+                'width': self.spider_width,
+            }
+            # If spider angle is not defined, set it randomly
+            if self.spider_angle is None:
+                self.spider_config['random_angle'] = True
+            else:
+                self.spider_config['angle'] = self.spider_angle
+        else:
+            #  If spider_width is None, pass an empty config (no spider)
+            self.spider_config = None
 
         # Linear space of angular coordinates for mirror centers
         thetas = np.linspace(0, 2*np.pi, self.num_apertures+1)[:-1]
@@ -90,16 +106,21 @@ class DasieEnv(gym.Env):
         aper_coords = hcipy.SeparatedCoords((np.array([self.telescope_radius]), thetas))
         # Create an HCIPy "CartesianGrid" by creating PolarGrid and converting
         m_cens = self.aperture_centers = hcipy.PolarGrid(aper_coords).as_('cartesian')
-        
-        # Calculate sub-aperture diamater from the distance between centers 
-        # (Assuming dense packing of apertures for now, could simulate gaps later)
-        self.aperture_diamater = np.sqrt((m_cens.x[1]-m_cens.x[0])**2 + (m_cens.y[1]-m_cens.y[0])**2)
+
+        # Get sub-aperture radius, or calculate if None
+        self.subaperture_radius = kwargs['subaperture_radius'] # meters
+        if self.subaperture_radius is not None:
+            self.aperture_diamater = 2*self.subaperture_radius
+        else:
+            # Calculate sub-aperture diamater from the distance between centers 
+            # (Assuming dense packing of apertures for now, could simulate gaps later)
+            self.aperture_diamater = np.sqrt((m_cens.x[1]-m_cens.x[0])**2 + (m_cens.y[1]-m_cens.y[0])**2)
         
         # Calculate extent of pupil-plane simulation (meters)
         self.pupil_plane_diamater = max(m_cens.x.max() - m_cens.x.min(), m_cens.y.max() - m_cens.y.min()) + self.aperture_diamater
         # Add a little extra for edges, not convinced not cutting them off
         self.pupil_plane_diamater *= 1.05  
-        
+
         print('Sub-aperture diamater %.02f m' % self.aperture_diamater)
         print('Pupil-plane extent %.02f m'% self.pupil_plane_diamater)
         
@@ -109,6 +130,7 @@ class DasieEnv(gym.Env):
             'mirror_config': {
                 'positions': self.aperture_centers,
                 'aperture_config': ['circular', self.aperture_diamater],
+                'spider_config': self.spider_config,
                 'pupil_extent': self.pupil_plane_diamater ,
                 'pupil_res': kwargs['pupil_plane_resolution'],
                 'piston_scale': kwargs['piston_actuate_scale'],   # meters

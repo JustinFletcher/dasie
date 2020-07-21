@@ -43,7 +43,7 @@ def cli_main(flags):
                 print("Running step %s." % str(t))
 
             # ...show the environment to the caller...
-            # env.render()
+            env.render()
 
             # ...get a random action...
             action = env.action_space.sample()
@@ -83,6 +83,18 @@ if __name__ == "__main__":
     parser.add_argument('--telescope_radius', type=float,
                         default=1.25,
                         help='Distance from telescope center to aperture centers (meters)')
+
+    parser.add_argument('--subaperture_radius', type=float,
+                        default=None,
+                        help='Radius of each sub-aperture (default is maximal filling) (meters)')
+
+    parser.add_argument('--spider_width', type=float,
+                        default=None,
+                        help='Width of spider (default is no spider) (meters)')
+
+    parser.add_argument('--spider_angle', type=float,
+                        default=None,
+                        help='Spider orientation angle (0-90) (default is random) (degrees)')
 
     parser.add_argument('--pupil_plane_resolution', type=int,
                         default=2 ** 8,

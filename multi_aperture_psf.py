@@ -38,6 +38,12 @@ class MultiAperturePSFSampler:
             'aperture_config': ...,  # Paramters for HCIPy aperture function
                                      # e.g. ['circular', mir_diamater] 
                                    #   e.g.: hcipy.circular_aperture(diameter)  (meters)
+            'spider_config': None (no spider) or dict of spider wiidth and orientation angle
+            {  
+                'width':           # (float) width of spider in pupil plane (meters)
+                'angle':           # (float) angle of spider orientation (degrees)
+                'random_angle':    # (bool) If True, randomize spider angle each initialization
+            }
             'pupil_extent':, ...,  # (float) Spatial extent of pupil plane (meters)
             'pupil_res': ...,      # (int) Resolution of pupil plane
             'piston_scale', ...,   # (float) Scale piston actuation (meters)
@@ -100,11 +106,35 @@ class MultiAperturePSFSampler:
         if aper_cfg[0] == 'hexagonal':
             aper_shape = hcipy.hexagonal_aperture(*aper_cfg[1:])
         
+        # Generate spider if not None
+        spider_cfg = mirror_config.get('spider_config', None)
+        if spider_cfg:
+            s_width = spider_cfg['width']
+            s_angle = spider_cfg.get('angle', 0)
+            if spider_cfg.get('random_angle', False):
+                s_angle = np.random.uniform(0, 90)
+            p_ext = mirror_config['pupil_extent']
+            
+            # Convert to radians
+            s_angle *= np.pi/180
+            
+            # Generate spider coordinates for ends
+            spider1_start = p_ext*np.cos(s_angle), p_ext*np.sin(s_angle)
+            spider1_end = p_ext*np.cos(s_angle+np.pi), p_ext*np.sin(s_angle+np.pi)
+            spider2_start = p_ext*np.cos(s_angle + np.pi/2), p_ext*np.sin(s_angle + np.pi/2)
+            spider2_end = p_ext*np.cos(s_angle+np.pi + np.pi/2), p_ext*np.sin(s_angle+np.pi + np.pi/2)
+            
+            # Generate HCIPy spiders
+            spider1 = hcipy.aperture.generic.make_spider(spider1_start, spider1_end, s_width)
+            spider2 = hcipy.aperture.generic.make_spider(spider2_start, spider2_end, s_width)
+        
         aper, segments = hcipy.make_segmented_aperture( 
                             aper_shape,  
                             mPos, 
                             return_segments=True)
-        self.aper = hcipy.evaluate_supersampled(aper, self.pupil_grid, 1)
+        self.aper = aper(self.pupil_grid)
+        if spider_cfg:
+            self.aper *= spider1(self.pupil_grid) * spider2(self.pupil_grid)
         self.segments = hcipy.evaluate_supersampled(segments, self.pupil_grid, 1)
         self.sm = hcipy.SegmentedDeformableMirror(self.segments)
 
@@ -309,6 +339,7 @@ class MultiAperturePSFSampler:
         # Grab the phase of the wavefront
         phase = pp.phase
         
+
         if np_array:    # If we want a raw numpy array
             # Zero out all values outside the aperture
             phase = phase*self.aper
