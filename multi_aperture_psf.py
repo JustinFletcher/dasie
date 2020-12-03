@@ -145,6 +145,9 @@ class MultiAperturePSFSampler:
             # If random_angle set to True, generate random orientation
             if spider_cfg.get('random_angle', False):
                 s_angle = np.random.uniform(0, 90)
+                
+            # Store for retreival 
+            self.spider_angle = float(s_angle)
             
             # Convert to radians
             s_angle *= np.pi/180
