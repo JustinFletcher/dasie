@@ -19,6 +19,7 @@ from matplotlib import pyplot as plt
 # Load HCIPy and Ian's sample generator built on top of it
 import hcipy 
 from multi_aperture_psf import MultiAperturePSFSampler
+import joblib  # Good .pkl handling
 
 
 class DasieEnv(gym.Env):
@@ -72,80 +73,97 @@ class DasieEnv(gym.Env):
         # - In current code, if render is enabled, pupil-plane res and image
         #   resolution must match.  This is of course extremely arbitrary
         #   as they absolutely don't need to be related. 
+        # - (New: 2020-12): Image and focal plane res need to match when adding
+        #                   noise for now.  I should probably fix this later 
+        #                   (though it does help keep things explicit)
         self.extended_object_image_file = kwargs['extended_object_image_file']
-        if self.extended_object_image_file == "none":
-            self.ext_im = None
-        else:
+        if self.extended_object_image_file is not None:
             self.ext_im = plt.imread( self.extended_object_image_file )
+        else:
+            self.ext_im = None
         
-        ### Generate ELF-like telescope geometry
-        ###  annulus of sub-apertures with centers at telescope_radius
-        self.num_apertures = kwargs['num_apertures']
-        self.telescope_radius = kwargs['telescope_radius'] # meters
-        
-        # Get spider details. 
-        self.spider_width = kwargs['spider_width']
-        self.spider_angle = kwargs['spider_angle']
-        if self.spider_width is not None:
-            self.spider_config = {
-                'width': self.spider_width,
-            }
-            # If spider angle is not defined, set it randomly
-            if self.spider_angle is None:
-                self.spider_config['random_angle'] = True
+        # Load a complete telescope configuration dict if provided (Overides CLI args for these params)
+        # Or build from CLI args
+        self.telescope_setup_pkl = kwargs['telescope_setup_pkl']
+        if self.telescope_setup_pkl is not None:
+            self.sampler_setup = joblib.load(self.telescope_setup_pkl)
+            
+            self.num_apertures = self.sampler_setup['mirror_config']['positions'].x.shape[0]
+            self.aperture_diamater = self.sampler_setup['mirror_config']['aperture_config'][1]
+            self.pupil_plane_diamater = self.sampler_setup['mirror_config']['pupil_extent']
+            # CTRL+F'd all the other self. declarations below, and they aren't used anywhere... 
+            # Letting it lie for now...
+            
+        else:
+            ### Generate ELF-like telescope geometry
+            ###  annulus of sub-apertures with centers at telescope_radius
+            self.num_apertures = kwargs['num_apertures']
+            self.telescope_radius = kwargs['telescope_radius'] # meters
+
+            # Get spider details. 
+            self.spider_width = kwargs['spider_width']
+            self.spider_angle = kwargs['spider_angle']
+            if self.spider_width is not None:
+                self.spider_config = {
+                    'width': self.spider_width,
+                }
+                # If spider angle is not defined, set it randomly
+                if self.spider_angle is None:
+                    self.spider_config['random_angle'] = True
+                else:
+                    self.spider_config['angle'] = self.spider_angle
             else:
-                self.spider_config['angle'] = self.spider_angle
-        else:
-            #  If spider_width is None, pass an empty config (no spider)
-            self.spider_config = None
+                #  If spider_width is None, pass an empty config (no spider)
+                self.spider_config = None
 
-        # Linear space of angular coordinates for mirror centers
-        thetas = np.linspace(0, 2*np.pi, self.num_apertures+1)[:-1]
-        
-        # Use HCIPy coordinate generation to quickly generate mirror centers
-        aper_coords = hcipy.SeparatedCoords((np.array([self.telescope_radius]), thetas))
-        # Create an HCIPy "CartesianGrid" by creating PolarGrid and converting
-        m_cens = self.aperture_centers = hcipy.PolarGrid(aper_coords).as_('cartesian')
+            # Linear space of angular coordinates for mirror centers
+            thetas = np.linspace(0, 2*np.pi, self.num_apertures+1)[:-1]
 
-        # Get sub-aperture radius, or calculate if None
-        self.subaperture_radius = kwargs['subaperture_radius'] # meters
-        if self.subaperture_radius is not None:
-            self.aperture_diamater = 2*self.subaperture_radius
-        else:
-            # Calculate sub-aperture diamater from the distance between centers 
-            # (Assuming dense packing of apertures for now, could simulate gaps later)
-            self.aperture_diamater = np.sqrt((m_cens.x[1]-m_cens.x[0])**2 + (m_cens.y[1]-m_cens.y[0])**2)
-        
-        # Calculate extent of pupil-plane simulation (meters)
-        self.pupil_plane_diamater = max(m_cens.x.max() - m_cens.x.min(), m_cens.y.max() - m_cens.y.min()) + self.aperture_diamater
-        # Add a little extra for edges, not convinced not cutting them off
-        self.pupil_plane_diamater *= 1.05  
+            # Use HCIPy coordinate generation to quickly generate mirror centers
+            aper_coords = hcipy.SeparatedCoords((np.array([self.telescope_radius]), thetas))
+            # Create an HCIPy "CartesianGrid" by creating PolarGrid and converting
+            m_cens = self.aperture_centers = hcipy.PolarGrid(aper_coords).as_('cartesian')
 
+            # Get sub-aperture radius, or calculate if None
+            self.subaperture_radius = kwargs['subaperture_radius'] # meters
+            if self.subaperture_radius is not None:
+                self.aperture_diamater = 2*self.subaperture_radius
+            else:
+                # Calculate sub-aperture diamater from the distance between centers 
+                # (Assuming dense packing of apertures for now, could simulate gaps later)
+                self.aperture_diamater = np.sqrt((m_cens.x[1]-m_cens.x[0])**2 + (m_cens.y[1]-m_cens.y[0])**2)
+
+            # Calculate extent of pupil-plane simulation (meters)
+            self.pupil_plane_diamater = max(m_cens.x.max() - m_cens.x.min(), m_cens.y.max() - m_cens.y.min()) + self.aperture_diamater
+            # Add a little extra for edges, not convinced not cutting them off
+            self.pupil_plane_diamater *= 1.05  
+
+
+            ### Build up rest of sampler configuration dictionary from kwargs
+            self.sampler_setup = {
+                'mirror_config': {
+                    'positions': self.aperture_centers,
+                    'aperture_config': ['circular', self.aperture_diamater],
+                    'spider_config': self.spider_config,
+                    'pupil_extent': self.pupil_plane_diamater ,
+                    'pupil_res': kwargs['pupil_plane_resolution'],
+                    'piston_scale': kwargs['piston_actuate_scale'],   # meters
+                    'tip_tilt_scale': kwargs['tip_tilt_actuate_scale']  # meters
+                },
+                # Single filter for now, sampler designed for with multiple in mind
+                'filter_configs': [ 
+                {
+                    'central_lam': kwargs['filter_central_wavelength'],    # meters
+                    'focal_extent': kwargs['filter_psf_extent'],      # arcsec
+                    'focal_res': kwargs['filter_psf_resolution'],
+                    'frac_bandwidth': kwargs['filter_fractional_bandwidth'],
+                    'num_samples': kwargs['filter_bandwidth_samples']
+                } ] 
+            }
+            
         print('Sub-aperture diamater %.02f m' % self.aperture_diamater)
         print('Pupil-plane extent %.02f m'% self.pupil_plane_diamater)
-        
-        
-        ### Build up rest of sampler configuration dictionary from kwargs
-        self.sampler_setup = {
-            'mirror_config': {
-                'positions': self.aperture_centers,
-                'aperture_config': ['circular', self.aperture_diamater],
-                'spider_config': self.spider_config,
-                'pupil_extent': self.pupil_plane_diamater ,
-                'pupil_res': kwargs['pupil_plane_resolution'],
-                'piston_scale': kwargs['piston_actuate_scale'],   # meters
-                'tip_tilt_scale': kwargs['tip_tilt_actuate_scale']  # meters
-            },
-            # Single filter for now, sampler designed for with multiple in mind
-            'filter_configs': [ 
-            {
-                'central_lam': kwargs['filter_central_wavelength'],    # meters
-                'focal_extent': kwargs['filter_psf_extent'],      # arcsec
-                'focal_res': kwargs['filter_psf_resolution'],
-                'frac_bandwidth': kwargs['filter_fractional_bandwidth'],
-                'num_samples': kwargs['filter_bandwidth_samples']
-            } ] 
-        }
+
         # Initialize sampler with above setup
         self.mas_psf_sampler = MultiAperturePSFSampler(**self.sampler_setup)
 

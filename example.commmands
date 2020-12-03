@@ -5,7 +5,10 @@ python run_dasie_via_gym.py --num_steps=20 --piston_actuate_scale=1e-7 --tip_til
 python run_dasie_via_gym.py --num_steps=20 --piston_actuate_scale=1e-8 --tip_tilt_actuate_scale=1e-8 --atmosphere_type "multi"
 
 # Convolve with an extended object image
-python run_dasie_via_gym.py --num_steps=20 --piston_actuate_scale=1e-8 --tip_tilt_actuate_scale=1e-8 --atmosphere_type "multi" --extended_object_image_file unnamed_256.png --filter_psf_extent 6
+python run_dasie_via_gym.py --num_steps=20 --piston_actuate_scale=1e-8 --tip_tilt_actuate_scale=1e-8 --atmosphere_type "multi" --extended_object_image_file sample_image.png --filter_psf_extent 6
 
 # AEOS mask and spider with random orientation
 python run_dasie_via_gym.py --num_steps=20 --piston_actuate_scale=1e-8 --tip_tilt_actuate_scale=1e-8 --atmosphere_type "multi" --subaperture_radius 0.24875 --spider_width .03175
+
+# Load complete telescope config and do extended object with atmosphere
+python run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --atmosphere_type "multi" 

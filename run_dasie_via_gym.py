@@ -43,7 +43,8 @@ def cli_main(flags):
                 print("Running step %s." % str(t))
 
             # ...show the environment to the caller...
-            env.render()
+            if not flags.no_render:
+                env.render()
 
             # ...get a random action...
             action = env.action_space.sample()
@@ -70,12 +71,26 @@ if __name__ == "__main__":
                         default="0",
                         help='GPUs to use with this model.')
     
+    # Wasn't sure if defaulting to rendering or not made more sense
+    # Keeps my example commands ismpler this way...
+    parser.add_argument('--no_render', type=str,
+                    default=False,
+                    help='Disable environment render function')
+    
     ### Extended object setup ###
+    # Must match focal-plane resolution if noise is provided
     parser.add_argument('--extended_object_image_file', type=str,
-                        default="none",
                         help='Filename of image to convolve PSF with (if none, PSF returned)')
     
     ### Telescope / pupil-plane setup ###
+    
+    # For now, passing in telescope setup pkl overrides any CLI arguments relating to 
+    # telescope setup.  I tried a bunch of strategies to make it possible to have the best
+    # of both worlds: with a loadable setup where CLI args would override specific values,
+    # but it was ugly not matter what strategy I tried based on current code structure
+    parser.add_argument('--telescope_setup_pkl', type=str,
+                        help='.pkl file containing dict passed into MultiAperturePSFSampler (overrides CLI telescope arguments)')
+    
     parser.add_argument('--num_apertures', type=int,
                         default=15,
                         help='Number of apertures in ELF annulus')
@@ -100,12 +115,10 @@ if __name__ == "__main__":
                         default=2 ** 8,
                         help='Resolution of pupil plane simulation')
 
-    # TODO: Bug. If this value is 1e-6, discontinuities appear.
     parser.add_argument('--piston_actuate_scale', type=float,
                         default=1e-7,
                         help='Sub-aperture piston actuation scale (meters)')
 
-    # TODO: Bug. If this value is 1e-6, discontinuities appear.
     parser.add_argument('--tip_tilt_actuate_scale', type=float,
                         default=1e-7,
                         help='Sub-aperture tip and tilt actuation scale (microns/meter)~=(radians)')
