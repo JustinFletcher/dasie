@@ -193,10 +193,10 @@ class MultiAperturePSFSampler:
             # when you mask out the usable aperture
             aper_actuate_infl = dm_influence_matrix.sum(axis=0)
             
-            # Select actuators which contribute at least 10% of the most influential ones 
+            # Select actuators which contribute at least 2% of the most influential ones 
             # (Experimentally determined number, but the more of the tail end you allow, the more
             #  a least squares fit overfits those actuators at the expense of other ones)
-            self.act_sel = aper_actuate_infl > aper_actuate_infl.max()/10
+            self.act_sel = aper_actuate_infl > aper_actuate_infl.max()/50
             
             # Apply actuator selection to our influence matrix
             self.dm_influence_matrix = dm_influence_matrix[:, self.act_sel]
