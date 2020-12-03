@@ -428,9 +428,11 @@ class MultiAperturePSFSampler:
             if self.extra_processing['gauss_noise'] is not False:
                 out_samp += np.abs(np.random.normal(0, self.extra_processing['gauss_noise'], psf.shape))
                 
-            # Create detector noise
+            ### Create detector noise
+            # If integrated photon flux isn't provided, not sure how much sense
+            # read and other noise sources make, so only apply detector when it is provided
             detector = lam_setup['detector']
-            if detector is not None:
+            if (detector is not None) and (int_phot_flux is not None):
                 # Create a dummy wavefront electric field propogated from pupil plane to focal plane
                 # (This seems to be necessary for reasons I couldn't figure out)
                 wf = lam_setup['prop'](lam_setup['wfs'][0])
@@ -438,14 +440,11 @@ class MultiAperturePSFSampler:
                 # Theoretically, this should be set to sqrt() of the intensity, but results didn't look right
                 wf.electric_field = hcipy.Field(out_samp.flatten(), lam_setup['f_grid'])
                 
-                # If integrated photon flux is provided
-                ## Note: Not sure how read and other noise would work if 
-                ##       photon flux isn't passed in here
-                ## Note 2: It appears when this is passed in, the scaling of
-                ##         the PSF is irrelevant.
-                if int_phot_flux is not None:
-                    # num_photons/m^2 -> num_photons
-                    wf.total_power = ip_flux[i_filter] * self.aper_area
+
+                ## Note: It appears when this is passed in, the scaling of
+                ##       the PSF is irrelevant.
+                # num_photons/m^2 -> num_photons
+                wf.total_power = ip_flux[i_filter] * self.aper_area
                     
                 # Because we're dealing with static atmospheres, integrations above a certain amount
                 # of time don't make any sense, so instead of passing additional "integration time" param into this 
