@@ -77,10 +77,12 @@ if __name__ == "__main__":
                     default=False,
                     help='Disable environment render function')
     
+    
     ### Extended object setup ###
     # Must match focal-plane resolution if noise is provided
     parser.add_argument('--extended_object_image_file', type=str,
                         help='Filename of image to convolve PSF with (if none, PSF returned)')
+    
     
     ### Telescope / pupil-plane setup ###
     
@@ -123,6 +125,7 @@ if __name__ == "__main__":
                         default=1e-7,
                         help='Sub-aperture tip and tilt actuation scale (microns/meter)~=(radians)')
     
+    
     ### Focal-plane setup ###
     parser.add_argument('--filter_central_wavelength', type=float,
                         default=1e-6,
@@ -144,6 +147,7 @@ if __name__ == "__main__":
                         default=3,
                         help='Number of pupil-planes used to simulate bandwidth (1 = monochromatic)')
 
+    
     ### Atmosphere setup ###
     parser.add_argument('--atmosphere_type', type=str,
                         default="none",
@@ -166,6 +170,23 @@ if __name__ == "__main__":
     parser.add_argument('--enable_atmosphere_scintilation', action='store_true',
                         default=False,
                         help='Simulate atmospheric scintilation in multi-layer atmosphere')
+    
+    
+    ### Object flux and detector noise ###
+    
+    # In order to get photon noise (and have read noise make sense)
+    # we need to specify photon flux integrated over the length of our exposures
+    # (photons/m^2).  
+    # This can map onto observable magnitudes latter with less assumptions up front
+    parser.add_argument('--integrated_photon_flux', type=float,
+                        help='Total number of photons/m^2 from FOV (Default: None = no noise)')
+    
+    # This dpeneds on integrated_photon_flux being specified
+    # Not sure that a reasonable default for this is, but there should be *some*
+    parser.add_argument('--read_noise', type=float,
+                        default=10,
+                        help='Scaler giving the rms read noise (counts) (Only used when integrated_photon_flux specified)')
+    
     
     ### Simulation setup ###
     parser.add_argument('--step_time_granularity', type=float,

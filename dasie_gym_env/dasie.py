@@ -163,6 +163,18 @@ class DasieEnv(gym.Env):
             
         print('Sub-aperture diamater %.02f m' % self.aperture_diamater)
         print('Pupil-plane extent %.02f m'% self.pupil_plane_diamater)
+        
+        ### If integrated photon flux is set, make sure a detector is setup
+        self.int_phot_flux = kwargs['integrated_photon_flux']
+        if self.int_phot_flux is not None:
+            for i_f, filter_config in enumerate(self.sampler_setup['filter_configs']):
+                if 'detector_config' not in filter_config:
+                    detector_config = {
+                        'read_noise': kwargs['read_noise'],
+                        'include_photon_noise': True,
+                    }
+                    self.sampler_setup['filter_configs'][i_f]['detector_config'] = detector_config
+                    
 
         # Initialize sampler with above setup
         self.mas_psf_sampler = MultiAperturePSFSampler(**self.sampler_setup)
@@ -487,6 +499,7 @@ class DasieEnv(gym.Env):
             atmos=self.atmos,    # Pass in HCIPy atmosphere, applied to each pupil-plane (or None is fine)
             convolve_im=self.ext_im, # Image to convolve PSF with 
                                  # (Note: assuemd matches sampler filters angular extent/pixel scale)
+            int_phot_flux=self.int_phot_flux,  # Photons/m^2 for the entire FOV
             meas_strehl=True     # If True, returns third output which is the measured strehl for each filter 
         )
         
