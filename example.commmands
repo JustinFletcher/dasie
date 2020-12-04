@@ -16,3 +16,5 @@ python run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 
 # Add image noise by setting FOVs total integrated_photon_flux (photons/m^2)
 python run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --atmosphere_type "multi" --extended_object_image_file=sample_image.png --integrated_photon_flux=1e5
 
+# Approximate PTT actuation with a DM
+python run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --dm_actuator_num=35

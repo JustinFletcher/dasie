@@ -138,7 +138,6 @@ class DasieEnv(gym.Env):
             # Add a little extra for edges, not convinced not cutting them off
             self.pupil_plane_diamater *= 1.05  
 
-
             ### Build up rest of sampler configuration dictionary from kwargs
             self.sampler_setup = {
                 'mirror_config': {
@@ -174,7 +173,17 @@ class DasieEnv(gym.Env):
                         'include_photon_noise': True,
                     }
                     self.sampler_setup['filter_configs'][i_f]['detector_config'] = detector_config
-                    
+               
+        # IF DM config is set, setup for DM approximation of Piston, tip, tilt actuation
+        # This is slow, but might be important for fine-tuning the model for bench demo
+        self.dm_actuator_num  = kwargs['dm_actuator_num']
+        if self.dm_actuator_num is not None:
+            self.dm_actuator_spacing  = kwargs['dm_actuator_spacing']
+            # arguments passed directly into HCIPY DM construtor
+            # [ num_actuators, actuator_pupil_plane_spacing]
+            dm_config=[self.dm_actuator_num, self.dm_actuator_spacing]
+            self.sampler_setup['mirror_config']['dm_config'] = dm_config
+            self.sampler_setup['mirror_config']['aprox_ptt_wih_dm'] = True
 
         # Initialize sampler with above setup
         self.mas_psf_sampler = MultiAperturePSFSampler(**self.sampler_setup)

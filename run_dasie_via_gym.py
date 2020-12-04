@@ -154,16 +154,16 @@ if __name__ == "__main__":
                         help='Atmosphere type: "none" (default), "single" layer, or "multi" layer')
     
     parser.add_argument('--atmosphere_fried_paramater', type=float,
-                        default=.25,
+                        default=0.25,
                         help='Fried paramater, r0 @ 550nm (maters)')
     
     parser.add_argument('--atmosphere_outer_scale', type=float,
-                        default=200,
+                        default=200.0,
                         help='Atmosphere outer-scale (maters)')
     
     # !!! Note: Doesn't currentoly work with multi-layer atmospheres, stuck at 10m/s
     parser.add_argument('--atmosphere_velocity', type=float,
-                        default=10,
+                        default=10.0,
                         help='Atmosphere velocity (maters/second)')
     
     # !!! Breaks render right now, but should work for simulation...
@@ -184,8 +184,17 @@ if __name__ == "__main__":
     # This dpeneds on integrated_photon_flux being specified
     # Not sure that a reasonable default for this is, but there should be *some*
     parser.add_argument('--read_noise', type=float,
-                        default=10,
+                        default=10.0,
                         help='Scaler giving the rms read noise (counts) (Only used when integrated_photon_flux specified)')
+    
+    
+    ### Deformable mirror approximation of PTT actuation ###
+    parser.add_argument('--dm_actuator_num', type=int,
+                        help='Number of DM actuators on a side (Default: None = no DM approximation of PTT)')
+    
+    parser.add_argument('--dm_actuator_spacing', type=float,
+                        default=0.1125,
+                        help='pupil-plane spacing of actuators in meters')
     
     
     ### Simulation setup ###
