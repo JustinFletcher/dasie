@@ -3,21 +3,70 @@ Helper class for building and running multi-aperture telescope simulations with 
 
 Author: Ian Cunnyngham (Institute for Astronomy, University of Hawai'i) 2021
 
+Description
+- - - - - -
 
+    This package wraps MultiAperturePSFSampler, providing reasonable defaults, building telescope configs,
+holding simulation variables like atmosphere, current image (if any), current photon flux, etc. as well
+as providing helper functions for running the simulation as well as rendering pretty plots.
+
+This code can be run via any of the following methods:
+- Calling this script directly from the CLI, mostly as a way to demo and unit test configurations (see examples below)
+- Adding all simulator kwargs to another CLI (see run_dasie_via_gym.py) and then passing the kwargs to the sim builder
+- Importing SimulateMultiApertureTelescope class and passing kwargs directly.  (See "equivilant" comments bellow)
+  - __init__ kwargs match argparse exactly.  Any missing keywords get their defaults from the argoparse definitions.
+
+
+Example CLI commands:
+- - - - - - - - - - - 
+
+# Default ELF config, accumlate piston, tip, tilt errors each step (Try with --mirror_layout monolithic or keck)
+# - Equivilant to telescope_sim = SimulateMultiApertureTelescope()
+python simulate_multi_aperture.py --add_ptt_perturbations_sigma .05
+
+# Monolithic 3.6m primary with spiders in a random orientation
+# - SimulateMultiApertureTelescope(mirror_layout="monolithic", telescope_radius=1.8, spider_width=.03175)
+python simulate_multi_aperture.py --add_ptt_perturbations_sigma .05 --mirror_layout "monolithic" --telescope_radius 1.8 --spider_width .03175
+
+# ELF, default atmosphere, no correction (strehls < .02 typically)
+# - SimulateMultiApertureTelescope(atmosphere_type="multi")
+python simulate_multi_aperture.py --atmosphere_type "multi"
+
+# Apply instantaneous, best PTT corrections for atmosphere (strehls roughly .4-.7 range)
+python simulate_multi_aperture.py --atmosphere_type "multi" --apply_optimal_actuator_corrections
+
+# Same as above, but use DM to simulate PTT (bench demo) (Similar range as above, but slightly less)
+# - SimulateMultiApertureTelescope(atmosphere_type="multi", dm_actuator_num=35) 
+python simulate_multi_aperture.py --atmosphere_type "multi" --apply_optimal_actuator_corrections --dm_actuator_num=35
+
+# Use direct DM actuation to correct atmosphere as well as best case scenario for AO (Strehls > .9)
+# - SimulateMultiApertureTelescope(atmosphere_type="multi", dm_actuator_num=35, directly_actuate_dm=True) 
+python simulate_multi_aperture.py --atmosphere_type "multi" --apply_optimal_actuator_corrections --dm_actuator_num=35 --directly_actuate_dm
+
+# Extended object with uncorrected atmosphere, change focal-plane extent to 6 arcsec
+# - SimulateMultiApertureTelescope(atmosphere_type="multi", extended_object_image_file="sample_image.png")
+python simulate_multi_aperture.py --atmosphere_type "multi" --extended_object_image_file sample_image.png --filter_psf_extent 6
+
+# Load complete MultiAperturePSF setup pkl
+python simulate_multi_aperture.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --atmosphere_type "multi" --extended_object_image_file=sample_image.png
+
+# Simulate noise by setting the brightness of the object in photons/m^2 (per observation)
+python simulate_multi_aperture.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --atmosphere_type "multi" --extended_object_image_file=sample_image.png --integrated_photon_flux=1e5
 
 """
+
 
 import argparse
 import numpy as np
 import joblib  # Good .pkl handling
 from matplotlib import pyplot as plt
 
-# Load HCIPy and Ian's sample generator built on top of it
+# Load HCIPy and MultiAperturePSFSampler built on top of it
 import hcipy 
 from multi_aperture_psf import MultiAperturePSFSampler
 
 
-### This is my attempt at not having to redefine and describe every variable many times in the codebase (~Ian C)
+### Below is my attempt at not having to redefine and describe every variable many times in the codebase (~Ian C)
 
 def add_multi_aperture_telescope_args(parser):
     """
@@ -33,44 +82,6 @@ def add_multi_aperture_telescope_args(parser):
       - 'keck' A hardcoded pseudo-Keck like setup
     - Added "--directly_actuate_dm" which defaults to False, because there's now the ability to directly send
       DM actuations instead of just using it to approximate PTT actuation.  Can't actuate PTT and DM simultaneously.
-      
-      Example CLI commands:
-      - - - - - - - - - - - 
-      
-      # Default ELF config, accumlate piston, tip, tilt errors each step (Try with --mirror_layout monolithic or keck)
-      # - Equivilant to telescope_sim = SimulateMultiApertureTelescope()
-      python simulate_multi_aperture.py --add_ptt_perturbations_sigma .05
-      
-      # Monolithic 3.6m primary with spiders in a random orientation
-      # - SimulateMultiApertureTelescope(mirror_layout="monolithic", telescope_radius=1.8, spider_width=.03175)
-      python simulate_multi_aperture.py --add_ptt_perturbations_sigma .05 --mirror_layout "monolithic" --telescope_radius 1.8 --spider_width .03175
-
-      
-      # ELF, default atmosphere, no correction (strehls < .02 typically)
-      # - SimulateMultiApertureTelescope(atmosphere_type="multi") 
-      python simulate_multi_aperture.py --atmosphere_type "multi"
-      
-      # Apply instantaneous, best PTT corrections for atmosphere (strehls roughly .4-.7 range)
-      python simulate_multi_aperture.py --atmosphere_type "multi" --apply_optimal_actuator_corrections
-      
-      # Same as above, but use DM to simulate PTT (bench demo) (Similar range as above, slightly less side-by-side)
-      # - SimulateMultiApertureTelescope(atmosphere_type="multi", dm_actuator_num=35) 
-      python simulate_multi_aperture.py --atmosphere_type "multi" --apply_optimal_actuator_corrections --dm_actuator_num=35
-      
-      # Use direct DM actuation to correct atmosphere as well as best case scenario for AO (Strehls > .9)
-      # - SimulateMultiApertureTelescope(atmosphere_type="multi", dm_actuator_num=35, directly_actuate_dm=True) 
-      python simulate_multi_aperture.py --atmosphere_type "multi" --apply_optimal_actuator_corrections --dm_actuator_num=35 --directly_actuate_dm
-      
-      # Extended object with uncorrected atmosphere, change focal-plane extent to 6 arcsec
-      # - SimulateMultiApertureTelescope(atmosphere_type="multi", extended_object_image_file="sample_image.png")
-      python simulate_multi_aperture.py --atmosphere_type "multi" --extended_object_image_file sample_image.png --filter_psf_extent 6
-      
-      # Load complete setup
-      python simulate_multi_aperture.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --atmosphere_type "multi" --extended_object_image_file=sample_image.png
-
-      # Simulate noise by setting the brightness of the object in photons/m^2 (per observation)
-      python simulate_multi_aperture.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --atmosphere_type "multi" --extended_object_image_file=sample_image.png --integrated_photon_flux=1e5
-
 
     """
     
@@ -374,7 +385,7 @@ class SimulateMultiApertureTelescope():
                 self.direct_dm_actuation = True
             
             
-        print(self.sampler_setup)
+        #print(self.sampler_setup)
             
         ### Initialize sampler with above setup
         self.mas_psf_sampler = MultiAperturePSFSampler(**self.sampler_setup)
@@ -475,29 +486,54 @@ class SimulateMultiApertureTelescope():
         if self.atmos != None:
             self.atmos.evolve_until( self.simulation_time )
     
+    def reset(self):
+        """Reset simulation (practically speaking, just the atmosphere)"""
+        self.simulation_time = 0
+        if self.atmos != None:
+            self.atmos.reset()
+    
     def get_observation(self,
         piston_tip_tilt = None,  
         dm_actuate = None,
         int_phot_flux = None
     ):
+        """
+        Return an observation from the telescope simulator given the current state (atmosphere, ext. image if any, photon flux if any)
+        
+        Inputs
+        ------
+          piston_tip_tilt : (float) (n_apertures, 3): Piston, tip, and tilt actuation for each sub-aperture as multiplied by the 
+                                                      corresponding scales setup during initialization
+          dm_actuate : (float) (n_active_actuators) : If DM is setup and direct actuation enable, accepts piston actuation for all active actuators
+          int_phot_flux : (float) : (optional) Set a new photon flux for this observation (photons/m^2)
+          
+        Outputs
+        -------
+        
+        X: Stack of focal plane observations.  PSF by default, extended image convolved with PSF if provided
+        Y: Returns the optimal P/T/T (n_aper, 3) phases to get optimal strehl (measured vs atmosphere)
+        strehls: If meas_strehls set, returns strehl vs perfectly phase mirror
+        
+        """
         if int_phot_flux is not None:
             self.int_phot_flux = int_phot_flux
         
-        # X: Stack of focal plane observations
-        #    PSF by default, extended image convolved with PSF if provided
-        # Y: Returns the optimal P/T/T (n_aper, 3) phases to get optimal strehl (measured vs atmosphere)
-        # strehls: If meas_strehls set, returns strehl vs perfectly phase mirror
+
         X, Y, strehls  = self.mas_psf_sampler.sample(
             piston_tip_tilt,  # (n_aper, 3) piston, tip, tilts to set telescope to
             dm_actuate=dm_actuate,
             atmos=self.atmos,    # Pass in HCIPy atmosphere, applied to each pupil-plane (or None is fine)
             convolve_im=self.ext_im, # Image to convolve PSF with 
-                                 # (Note: assuemd matches sampler filters angular extent/pixel scale)
+                                     # (Note: assuemd matches sampler filters angular extent/pixel scale)
             int_phot_flux=self.int_phot_flux,  # Photons/m^2 for the entire FOV
             meas_strehl=True     # If True, returns third output which is the measured strehl for each filter 
         )
         
         return X, Y, strehls
+    
+    def pupil_plane_phase_screen(self, np_array=False):
+        """Returns the pupil-plane phase screen"""
+        return self.mas_psf_sampler.getPhaseScreen(self.atmos, np_array=np_array)
         
     def render(self, X, strehls):
         """Plots the current observation"""
@@ -505,7 +541,7 @@ class SimulateMultiApertureTelescope():
         plt.clf()
 
         ### Getting the phase screens to plot isn't as pretty as I'd like
-        awf1 = self.mas_psf_sampler.getPhaseScreen(self.atmos)
+        awf1 = self.pupil_plane_phase_screen()
         
         plt.subplot(121)
         hcipy.imshow_field(awf1, mask=self.mas_psf_sampler.aper, cmap="twilight_shifted", vmin=-np.pi, vmax=np.pi)
