@@ -116,7 +116,7 @@ class MultiAperturePSFSampler:
         self.pupil_grid = hcipy.make_pupil_grid(mirror_config['pupil_res'], mirror_config['pupil_extent'])
         
         # Center points for each mirror as hcipy.CartesianGrid
-        mPos = mirror_config['positions']
+        self.mir_centers = mPos = mirror_config['positions']
         # Count number of mirrors
         self.nMir = mPos.x.shape[0]
         
@@ -420,7 +420,7 @@ class MultiAperturePSFSampler:
         
         # Aproximate above actuation with DM if set
         if self.aprox_ptt_wih_dm:
-            dm_actuate = self._aprox_via_dm(self.sm.surface)
+            dm_actuate = self.dm_act_scale * self._aprox_via_dm(self.sm.surface)
         
         if self.dm is not None:
             # Apply to relevant actuators in dm
@@ -502,13 +502,13 @@ class MultiAperturePSFSampler:
         
         # Return PTT that best phases sub-apertures
         if (self.dm is not None) and (not self.aprox_ptt_wih_dm):
-            out_actuate = dm_actuate
+            out_actuate = np.copy(dm_actuate)
             if atmos is not None:
                 atmos_surface = atmos.phase_for(1)/(4*np.pi)
                 atmos_surface -= atmos_surface.mean()
                 out_actuate += self.dm_act_scale * self._aprox_via_dm(atmos_surface)
         else:
-            out_actuate = ptt_actuate
+            out_actuate = np.copy(ptt_actuate)
             if atmos is not None:
                 # If atmosphere is provided, compute the best fit piston, tip, and tilts in addition
                 out_actuate += self._measure_atmos_ptt(atmos)
@@ -581,3 +581,4 @@ class MultiAperturePSFSampler:
         """Generate randomly oriented vector. Given a scaler (float) generate a random direction"""
         th = np.random.uniform(0, 2*np.pi)
         return mag*np.cos(th), mag*np.sin(th)
+    
