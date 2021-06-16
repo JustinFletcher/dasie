@@ -11,6 +11,10 @@ import argparse
 
 import gym
 
+# Function which adds all the arugments for running a multi-aperture simulation to argparser instance
+from simulate_multi_aperture import add_multi_aperture_telescope_args
+
+
 # TODO: Move this whole script down a level.
 
 def cli_main(flags):
@@ -72,132 +76,17 @@ if __name__ == "__main__":
                         help='GPUs to use with this model.')
     
     # Wasn't sure if defaulting to rendering or not made more sense
-    # Keeps my example commands ismpler this way...
+    # Keeps my example commands simpler  this way...
     parser.add_argument('--no_render', type=str,
                     default=False,
                     help='Disable environment render function')
     
     
-    ### Extended object setup ###
-    # Must match focal-plane resolution if noise is provided
-    parser.add_argument('--extended_object_image_file', type=str,
-                        help='Filename of image to convolve PSF with (if none, PSF returned)')
+    ### Add all the arguments for Multi-Aperture Telescope simulator
+    parser = add_multi_aperture_telescope_args(parser)
     
     
-    ### Telescope / pupil-plane setup ###
-    
-    # For now, passing in telescope setup pkl overrides any CLI arguments relating to 
-    # telescope setup.  I tried a bunch of strategies to make it possible to have the best
-    # of both worlds: with a loadable setup where CLI args would override specific values,
-    # but it was ugly not matter what strategy I tried based on current code structure
-    parser.add_argument('--telescope_setup_pkl', type=str,
-                        help='.pkl file containing dict passed into MultiAperturePSFSampler (overrides CLI telescope arguments)')
-    
-    parser.add_argument('--num_apertures', type=int,
-                        default=15,
-                        help='Number of apertures in ELF annulus')
-
-    parser.add_argument('--telescope_radius', type=float,
-                        default=1.25,
-                        help='Distance from telescope center to aperture centers (meters)')
-
-    parser.add_argument('--subaperture_radius', type=float,
-                        default=None,
-                        help='Radius of each sub-aperture (default is maximal filling) (meters)')
-
-    parser.add_argument('--spider_width', type=float,
-                        default=None,
-                        help='Width of spider (default is no spider) (meters)')
-
-    parser.add_argument('--spider_angle', type=float,
-                        default=None,
-                        help='Spider orientation angle (0-90) (default is random) (degrees)')
-
-    parser.add_argument('--pupil_plane_resolution', type=int,
-                        default=2 ** 8,
-                        help='Resolution of pupil plane simulation')
-
-    parser.add_argument('--piston_actuate_scale', type=float,
-                        default=1e-7,
-                        help='Sub-aperture piston actuation scale (meters)')
-
-    parser.add_argument('--tip_tilt_actuate_scale', type=float,
-                        default=1e-7,
-                        help='Sub-aperture tip and tilt actuation scale (microns/meter)~=(radians)')
-    
-    
-    ### Focal-plane setup ###
-    parser.add_argument('--filter_central_wavelength', type=float,
-                        default=1e-6,
-                        help='Central wavelength of focal-plane observation (meters)')
-    
-    parser.add_argument('--filter_psf_extent', type=float,
-                        default=4.0,
-                        help='Angular extent of simulated PSF (arcsec)')
-    
-    parser.add_argument('--filter_psf_resolution', type=int,
-                        default=2 ** 8,
-                        help='Resolution of simulated PSF (this and extent set pixel scale for extended image convolution)')
-    
-    parser.add_argument('--filter_fractional_bandwidth', type=float,
-                        default=0.05,
-                        help='Fractional bandwidth of filter')
-    
-    parser.add_argument('--filter_bandwidth_samples', type=int,
-                        default=3,
-                        help='Number of pupil-planes used to simulate bandwidth (1 = monochromatic)')
-
-    
-    ### Atmosphere setup ###
-    parser.add_argument('--atmosphere_type', type=str,
-                        default="none",
-                        help='Atmosphere type: "none" (default), "single" layer, or "multi" layer')
-    
-    parser.add_argument('--atmosphere_fried_paramater', type=float,
-                        default=0.25,
-                        help='Fried paramater, r0 @ 550nm (maters)')
-    
-    parser.add_argument('--atmosphere_outer_scale', type=float,
-                        default=200.0,
-                        help='Atmosphere outer-scale (maters)')
-    
-    # !!! Note: Doesn't currentoly work with multi-layer atmospheres, stuck at 10m/s
-    parser.add_argument('--atmosphere_velocity', type=float,
-                        default=10.0,
-                        help='Atmosphere velocity (maters/second)')
-    
-    # !!! Breaks render right now, but should work for simulation...
-    parser.add_argument('--enable_atmosphere_scintilation', action='store_true',
-                        default=False,
-                        help='Simulate atmospheric scintilation in multi-layer atmosphere')
-    
-    
-    ### Object flux and detector noise ###
-    
-    # In order to get photon noise (and have read noise make sense)
-    # we need to specify photon flux integrated over the length of our exposures
-    # (photons/m^2).  
-    # This can map onto observable magnitudes latter with less assumptions up front
-    parser.add_argument('--integrated_photon_flux', type=float,
-                        help='Total number of photons/m^2 from FOV (Default: None = no noise)')
-    
-    # This dpeneds on integrated_photon_flux being specified
-    # Not sure that a reasonable default for this is, but there should be *some*
-    parser.add_argument('--read_noise', type=float,
-                        default=10.0,
-                        help='Scaler giving the rms read noise (counts) (Only used when integrated_photon_flux specified)')
-    
-    
-    ### Deformable mirror approximation of PTT actuation ###
-    parser.add_argument('--dm_actuator_num', type=int,
-                        help='Number of DM actuators on a side (Default: None = no DM approximation of PTT)')
-    
-    parser.add_argument('--dm_actuator_spacing', type=float,
-                        default=0.1125,
-                        help='pupil-plane spacing of actuators in meters')
-    
-    
-    ### Simulation setup ###
+    ### Gym simulation setup ###
     parser.add_argument('--step_time_granularity', type=float,
                         default=0.01,
                         help='The time granularity of DASIE step (seconds)')

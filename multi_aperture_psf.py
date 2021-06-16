@@ -25,6 +25,10 @@ Features:
    - (TODO) Interface for imposing custom DM actuation and propogating
  - Central obsctruction aperture
  
+ 2021-03
+ - Deformable mirror can now be directly used for actuation instead of PTT actuation, or PTT aproximation via the DM
+   (i.e. the DM can be set instead of ptt when generating samples and residual fits of the DM to atmospheres returned)
+ 
  .sample() returns data structured for ML (more details in function): 
      X: (res,res,samples) tensor of PSFs (or convolved images) + (optionally) FFTs
      Y: (nMir, 3) matrix of piston, tip, tilt (measured if atmosphere passed in)
@@ -54,6 +58,9 @@ class MultiAperturePSFSampler:
             'tip_tilt_scale', ...  # (float) Scale of tip-tilt actuation (meters)
                                    #   Note: meausred pupil-plane errors will be 2x larger than segment actuation 
             'dm_config':           # None (no deformable mirror) or list of params passed to DM constructor
+            'dm_act_selection'     # (bool array) (Kinda hacky) My DM aperature selection seems to be somewhat 
+                                                  non-deterministic, so pass in the DM actuator selection mask
+                                                  in order to make sure the same ones are always used. (Optional)
             'aprox_ptt_wih_dm':    # (bool) If True, uses DM to approximate segment piston tip and tilt
             'spider_config':       # None (no spider) or dict of spider wiidth and orientation angle
             {  
@@ -109,7 +116,7 @@ class MultiAperturePSFSampler:
         self.pupil_grid = hcipy.make_pupil_grid(mirror_config['pupil_res'], mirror_config['pupil_extent'])
         
         # Center points for each mirror as hcipy.CartesianGrid
-        mPos = mirror_config['positions']
+        self.mir_centers = mPos = mirror_config['positions']
         # Count number of mirrors
         self.nMir = mPos.x.shape[0]
         
@@ -132,11 +139,63 @@ class MultiAperturePSFSampler:
             aper_shape = hcipy.hexagonal_aperture(*aper_cfg[1:])
             D = aper_cfg[1]  # Circumdiamater
             self.aper_area = self.nMir * (3*np.sqrt(3)/8) * (D**2)
-            
         
-        # Generate spider if not None
-        # There are apertures with spiders, but this is more flexible
-        # (I don't believe you can control the spider orientations in others)
+        # Setup pupil-plane aperture and segments
+        aper, segments = hcipy.make_segmented_aperture( 
+                            aper_shape,  
+                            mPos, 
+                            return_segments=True)
+        self.aper = aper(self.pupil_grid)
+        self.segments = hcipy.evaluate_supersampled(segments, self.pupil_grid, 1)
+        # Add piston, tip, tilt control to each sub-aperture
+        self.sm = hcipy.SegmentedDeformableMirror(self.segments)
+        
+        ## Setup Deformable Mirror if dm_config is not None
+        dm_config = mirror_config.get('dm_config', None)
+        # Obviously this will fail if dm_config is not set properly
+        self.aprox_ptt_wih_dm = mirror_config.get('aprox_ptt_wih_dm', False)
+        if dm_config is not None:
+            # Scale input and output DM actuators by this for ML purposes
+            # Maybe this should be configurable, but hard coded for now
+            self.dm_act_scale = 1e6
+            
+            # (TODO) Figure out how accurate is model of xinetics influence functions
+            self.dm_influence_basis = hcipy.make_xinetics_influence_functions(self.pupil_grid, *dm_config)
+            self.dm = hcipy.DeformableMirror(self.dm_influence_basis)
+            
+            # Create selection mask for pupil-plane pixels that actually contribute
+            self.aper_sel = self.aper != 0
+            
+            # Extract the masked part of each influence funciton
+            # Turn into a numpy matrix and transpose (for use in least squares fitting)
+            dm_influence_matrix = np.array([basis[self.aper_sel] for basis in self.dm_influence_basis ]).T
+            
+            # The process of thresholding "active" actuators below is apparently somewhat
+            # non-deterministic, to the point I was getting different actuator selections
+            # between runs.  So, for now, I am providing the hack of directly saving and loading
+            # the actuator selection mask.
+            dm_act_selection = mirror_config.get('dm_act_selection', None)
+            if dm_act_selection is not None:
+                self.act_sel = dm_act_selection
+            else:
+                # Create a "meta influence function", how much each actuator actually contributes
+                # when you mask out the usable aperture
+                aper_actuate_infl = dm_influence_matrix.sum(axis=0)
+
+                # Select actuators which contribute at least 2% of the most influential ones 
+                # (Experimentally determined number, but the more of the tail end you allow, the more
+                #  a least squares fit overfits those actuators at the expense of other ones)
+                self.act_sel = aper_actuate_infl > aper_actuate_infl.max()/50
+            
+            # Apply actuator selection to our influence matrix
+            self.dm_influence_matrix = dm_influence_matrix[:, self.act_sel]
+        else:
+            self.dm = None
+        
+        ## Generate spiders if not None
+        # NOTE: Add Spiders to aperture *AFTER* Deformable mirror, otherwise it influences DM actuator functions     
+        # There are HCIPy apertures which implemnt spiders more cleanly, but this is more flexible
+        # (I don't believe you can control the spider orientations in the native ones at the moment)
         spider_cfg = mirror_config.get('spider_config', None)
         if spider_cfg is not None:
             s_width = spider_cfg['width']
@@ -162,47 +221,8 @@ class MultiAperturePSFSampler:
             # Generate HCIPy spiders
             spider1 = hcipy.aperture.generic.make_spider(spider1_start, spider1_end, s_width)
             spider2 = hcipy.aperture.generic.make_spider(spider2_start, spider2_end, s_width)
-        
-        
-        # Setup pupil-plane aperture and segments
-        aper, segments = hcipy.make_segmented_aperture( 
-                            aper_shape,  
-                            mPos, 
-                            return_segments=True)
-        self.aper = aper(self.pupil_grid)
         if spider_cfg:
             self.aper *= spider1(self.pupil_grid) * spider2(self.pupil_grid)
-        self.segments = hcipy.evaluate_supersampled(segments, self.pupil_grid, 1)
-        # Add piston, tip, tilt control to each sub-aperture
-        self.sm = hcipy.SegmentedDeformableMirror(self.segments)
-        
-        ## Setup Deformable Mirror if dm_config is not None
-        dm_config = mirror_config.get('dm_config', None)
-        # Obviously this will fail if dm_config is not set properly
-        self.aprox_ptt_wih_dm = mirror_config.get('aprox_ptt_wih_dm', False)
-        if dm_config is not None:
-            # (TODO) Figure out how accurate is model of xinetics influence functions
-            self.dm_influence_basis = hcipy.make_xinetics_influence_functions(self.pupil_grid, *dm_config)
-            self.dm = hcipy.DeformableMirror(self.dm_influence_basis)
-            
-            # Create selection mask for pupil-plane pixels that actually contribute
-            self.aper_sel = self.aper != 0
-            
-            # Extract the masked part of each influence funciton
-            # Turn into a numpy matrix and transpose (for use in least squares fitting)
-            dm_influence_matrix = np.array([basis[self.aper_sel] for basis in self.dm_influence_basis ]).T
-            
-            # Create a "meta influence function", how much each actuator actually contributes
-            # when you mask out the usable aperture
-            aper_actuate_infl = dm_influence_matrix.sum(axis=0)
-            
-            # Select actuators which contribute at least 2% of the most influential ones 
-            # (Experimentally determined number, but the more of the tail end you allow, the more
-            #  a least squares fit overfits those actuators at the expense of other ones)
-            self.act_sel = aper_actuate_infl > aper_actuate_infl.max()/50
-            
-            # Apply actuator selection to our influence matrix
-            self.dm_influence_matrix = dm_influence_matrix[:, self.act_sel]
 
         # Setup each virtual filter
         # e.g. dichroic splits light into a narrow and wide filter with two detectors
@@ -290,9 +310,10 @@ class MultiAperturePSFSampler:
         prop = lam_setup['prop']
         wfs = lam_setup['wfs']
         
-        # If DM is setup and this config is set, use DM for actuation
+        # If DM is setup, use DM for actuation
         # Otherwise use sub-aperture PTT control
-        if self.aprox_ptt_wih_dm:
+        # TODO: We will eventually want to simulate both
+        if self.dm is not None:
             actuators = self.dm
         else:
             actuators = self.sm
@@ -339,21 +360,23 @@ class MultiAperturePSFSampler:
         fits[:, 1:] *= (1e-6)/self.mirror_config['tip_tilt_scale']/2
         return fits
     
-    def aprox_sm_via_dm(self):
-        """ Assuming PTT has been set in sub-apertures (sm) try to approximate with DM """
-        # Get surface of all sub-apertures (on pupil-plane coords)
-        sm_surf = self.sm.surface
+    def _aprox_via_dm(self, surface):
+        """ 
+        Approximate an HCIPy pupil-plane surface (assumed to have the right structure and units)
+        - Pass in the segmented mirror (self.sm.surface) and the DM makes an approximation
+        - Pass in an atmosphere layer surface and the DM will fit that
+        """
         # Cast as numpy array and apply aperture selection mask
-        sm_surf = np.array(sm_surf)[self.aper_sel]
+        surface = np.array(surface)[self.aper_sel]
         
         # Simply do a least squares of all the influence functions (as masked out in init)
-        x, _, _, _ = np.linalg.lstsq(self.dm_influence_matrix, sm_surf, rcond=None)
+        x, _, _, _ = np.linalg.lstsq(self.dm_influence_matrix, surface, rcond=None)
         
-        # Apply to relevant actuators in dm
-        self.dm.actuators[self.act_sel] = x
+        return x
     
     def sample(self, 
                ptt_actuate=None, 
+               dm_actuate=None,
                atmos=None,
                convolve_im=None,
                int_phot_flux=None,
@@ -367,6 +390,7 @@ class MultiAperturePSFSampler:
         ptt_actuate: (ndarray) (optional) (nMir x 3), piston, tip, tilt actuation to impose scaled by 
                      factors set up in mirror_config.  Note: Pupil plane errors are 2x these!
                      If none given, set to zero errors (could be set to differential instead...)
+        dm_actuate:  (ndarray) (optional) (entry for each active actuator) dm segment actuation
         atmos:       (HCIPy atmosphere) (optional) Applies atmosphere, output PTT measured
         convolve_im: (ndarray) (optional) the image you want to convolve with the PSF or False return PSF
                      Note: Assumes the pixel scale of the filter PSFs is set for image's angular extent 
@@ -383,12 +407,11 @@ class MultiAperturePSFSampler:
         
         """
         
-        # Build up stack of samples to stack into tensor for prediction
-        Xs = []
-        
-        # If no PTT sent in, assume that means zero actuation, reset SM
+        ## If no PTT sent in, assume that means zero actuation, reset SM
         if ptt_actuate is None:
             ptt_actuate = np.zeros((self.nMir, 3))
+        if (self.dm is not None) and (dm_actuate is None):
+            dm_actuate = np.zeros((self.act_sel.sum(), ))
         
         # Set sub-aperture piston, tip, and tilts
         pist = ptt_actuate[:, 0] * self.mirror_config['piston_scale']
@@ -397,7 +420,11 @@ class MultiAperturePSFSampler:
         
         # Aproximate above actuation with DM if set
         if self.aprox_ptt_wih_dm:
-            self.aprox_sm_via_dm()
+            dm_actuate = self.dm_act_scale * self._aprox_via_dm(self.sm.surface)
+        
+        if self.dm is not None:
+            # Apply to relevant actuators in dm
+            self.dm.actuators[self.act_sel] = dm_actuate / self.dm_act_scale
             
         if int_phot_flux is not None:
             # Tile to all filters if only one value supplied
@@ -405,7 +432,12 @@ class MultiAperturePSFSampler:
             if ip_flux.shape[0] == 1:
                 ip_flux = np.tile(ip_flux, len(self.lam_setups))
 
+        # Build up samples (if multiple filters) to stack into tensor for prediction
+        Xs = []
+        
+        # And measured strehls if requested
         strehls = []
+        
         # For each filter...
         for i_filter, lam_setup in enumerate(self.lam_setups):
             
@@ -469,17 +501,24 @@ class MultiAperturePSFSampler:
                 Xs += [ self._fft_sample(out_samp) ]
         
         # Return PTT that best phases sub-apertures
-        out_ptt = ptt_actuate
-        if atmos is not None:
-            # If atmosphere is provided, compute the best fit piston, tip, and tilts in addition
-            out_ptt += self._measure_atmos_ptt(atmos)
+        if (self.dm is not None) and (not self.aprox_ptt_wih_dm):
+            out_actuate = np.copy(dm_actuate)
+            if atmos is not None:
+                atmos_surface = atmos.phase_for(1)/(4*np.pi)
+                atmos_surface -= atmos_surface.mean()
+                out_actuate += self.dm_act_scale * self._aprox_via_dm(atmos_surface)
+        else:
+            out_actuate = np.copy(ptt_actuate)
+            if atmos is not None:
+                # If atmosphere is provided, compute the best fit piston, tip, and tilts in addition
+                out_actuate += self._measure_atmos_ptt(atmos)
         
         # Combine list of X samples into tensor
         Xs = np.concatenate(Xs, axis=2)
         if meas_strehl:
-            return Xs, out_ptt, strehls
+            return Xs, out_actuate, strehls
         else:
-            return Xs, out_ptt
+            return Xs, out_actuate
 
     def getPhaseScreen(self, 
                        atmos=None, 
@@ -515,7 +554,7 @@ class MultiAperturePSFSampler:
         wf = self.lam_setups[filter_id]['wfs'][0]
         
         # Apply current actuation to wavefront
-        if self.aprox_ptt_wih_dm:
+        if self.dm is not None:
             actuators = self.dm
         else:
             actuators = self.sm
@@ -542,3 +581,4 @@ class MultiAperturePSFSampler:
         """Generate randomly oriented vector. Given a scaler (float) generate a random direction"""
         th = np.random.uniform(0, 2*np.pi)
         return mag*np.cos(th), mag*np.sin(th)
+    
