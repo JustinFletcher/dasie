@@ -18,7 +18,7 @@ import numpy as np
 import tensorflow as tf
 
 
-# First, prevent TensorFlow form foisting filthy eager execution upon us.
+# First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
 
 class ReplayBuffer(object):
@@ -677,25 +677,46 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
 
 def main(flags):
 
+    # Set the GPUs we want the script to use/see
+    os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
+
+    # Register our custom DASIE environment.
+    gym.envs.registration.register(
+        id='Dasie-v0',
+        entry_point='dasie_gym_env.dasie:DasieEnv',
+        max_episode_steps=flags.max_episode_steps,
+        reward_threshold=flags.reward_threshold,
+    )
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
 
-        env = gym.make(flags.env)
+        # Build a gym environment; pass the CLI flags to the constructor as kwargs.
+        if flags.env == 'Dasie-v0':
+            env = gym.make(flags.env, **vars(flags))
+        else:
+            env = gym.make(flags.env)
         np.random.seed(flags.random_seed)
         tf.compat.v1.set_random_seed(flags.random_seed)
         env.seed(flags.random_seed)
 
-        state_dim = env.observation_space.shape[0]
-        action_dim = env.action_space.shape[0]
-        action_bound = env.action_space.high
+        # Next, build the models. First, get the action shape.
+        action_shape = np.stack(env.action_space.sample()).shape
+
+        print(action_shape)
+
+        action_bound = env.action_space[0].high
+
+        state_shape = np.stack(env.observation_space.sample()).shape
+        print(state_shape)
 
         # Ensure action bound is symmetric
-        assert (env.action_space.high == -env.action_space.low)
+        # assert (env.action_space[0].high == -env.action_space[0].low)
 
         # Build an actor model in this sess for this env.
+        print("Building Models in main.")
         actor = ActorNetwork(sess,
-                             state_dim,
-                             action_dim,
+                             state_shape,
+                             action_shape,
                              action_bound,
                              flags.actor_learning_rate,
                              flags.target_mixing_factor,
@@ -703,14 +724,14 @@ def main(flags):
 
         # Build an critic model in this sess for this env.
         critic = CriticNetwork(sess,
-                               state_dim,
-                               action_dim,
+                               state_shape,
+                               action_shape,
                                flags.critic_learning_rate,
                                flags.target_mixing_factor,
                                flags.discount_factor,
                                actor.get_num_trainable_vars())
 
-        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
+        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_shape))
 
         summary_ops = tf.compat.v1.summary.merge_all()
 
@@ -721,6 +742,15 @@ def main(flags):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='provide arguments for training.')
+
+    # Set arguments and their default values
+    parser.add_argument('--gpu_list', type=str,
+                        default="0",
+                        help='GPUs to use with this model.')
+
+    parser.add_argument('--reward_threshold', type=float,
+                        default=25.0,
+                        help='Max reward per episode.')
 
     parser.add_argument('--random_seed',
                         type=int,
@@ -801,6 +831,162 @@ if __name__ == '__main__':
                         action='store_true',
                         default=False,
                         help='If provided, do not train the model.')
+
+
+    ############################ DASIE FLAGS ##################################
+    parser.add_argument('--extended_object_image_file', type=str,
+                        help='Filename of image to convolve PSF with (if none, PSF returned)')
+
+    ### Telescope / pupil-plane setup ###
+
+    # For now, passing in telescope setup pkl overrides any CLI arguments relating to
+    # telescope setup.  I tried a bunch of strategies to make it possible to have the best
+    # of both worlds: with a loadable setup where CLI args would override specific values,
+    # but it was ugly not matter what strategy I tried based on current code structure
+    parser.add_argument('--telescope_setup_pkl', type=str,
+                        help='.pkl file containing dict passed into MultiAperturePSFSampler (overrides CLI telescope arguments)')
+
+    parser.add_argument('--num_apertures', type=int,
+                        default=15,
+                        help='Number of apertures in ELF annulus')
+
+    parser.add_argument('--telescope_radius', type=float,
+                        default=1.25,
+                        help='Distance from telescope center to aperture centers (meters)')
+
+    parser.add_argument('--subaperture_radius', type=float,
+                        default=None,
+                        help='Radius of each sub-aperture (default is maximal filling) (meters)')
+
+    parser.add_argument('--spider_width', type=float,
+                        default=None,
+                        help='Width of spider (default is no spider) (meters)')
+
+    parser.add_argument('--spider_angle', type=float,
+                        default=None,
+                        help='Spider orientation angle (0-90) (default is random) (degrees)')
+
+    parser.add_argument('--pupil_plane_resolution', type=int,
+                        default=2 ** 8,
+                        help='Resolution of pupil plane simulation')
+
+    parser.add_argument('--piston_actuate_scale', type=float,
+                        default=1e-7,
+                        help='Sub-aperture piston actuation scale (meters)')
+
+    parser.add_argument('--tip_tilt_actuate_scale', type=float,
+                        default=1e-7,
+                        help='Sub-aperture tip and tilt actuation scale (microns/meter)~=(radians)')
+
+    ### Focal-plane setup ###
+    parser.add_argument('--filter_central_wavelength', type=float,
+                        default=1e-6,
+                        help='Central wavelength of focal-plane observation (meters)')
+
+    parser.add_argument('--filter_psf_extent', type=float,
+                        default=4.0,
+                        help='Angular extent of simulated PSF (arcsec)')
+
+    parser.add_argument('--filter_psf_resolution', type=int,
+                        default=2 ** 8,
+                        help='Resolution of simulated PSF (this and extent set pixel scale for extended image convolution)')
+
+    parser.add_argument('--filter_fractional_bandwidth', type=float,
+                        default=0.05,
+                        help='Fractional bandwidth of filter')
+
+    parser.add_argument('--filter_bandwidth_samples', type=int,
+                        default=3,
+                        help='Number of pupil-planes used to simulate bandwidth (1 = monochromatic)')
+
+    ### Atmosphere setup ###
+    parser.add_argument('--atmosphere_type', type=str,
+                        default="none",
+                        help='Atmosphere type: "none" (default), "single" layer, or "multi" layer')
+
+    parser.add_argument('--atmosphere_fried_paramater', type=float,
+                        default=0.25,
+                        help='Fried paramater, r0 @ 550nm (maters)')
+
+    parser.add_argument('--atmosphere_outer_scale', type=float,
+                        default=200.0,
+                        help='Atmosphere outer-scale (maters)')
+
+    # !!! Note: Doesn't currentoly work with multi-layer atmospheres, stuck at 10m/s
+    parser.add_argument('--atmosphere_velocity', type=float,
+                        default=10.0,
+                        help='Atmosphere velocity (maters/second)')
+
+    # !!! Breaks render right now, but should work for simulation...
+    parser.add_argument('--enable_atmosphere_scintilation', action='store_true',
+                        default=False,
+                        help='Simulate atmospheric scintilation in multi-layer atmosphere')
+
+    ### Object flux and detector noise ###
+
+    # In order to get photon noise (and have read noise make sense)
+    # we need to specify photon flux integrated over the length of our exposures
+    # (photons/m^2).
+    # This can map onto observable magnitudes latter with less assumptions up front
+    parser.add_argument('--integrated_photon_flux', type=float,
+                        help='Total number of photons/m^2 from FOV (Default: None = no noise)')
+
+    # This dpeneds on integrated_photon_flux being specified
+    # Not sure that a reasonable default for this is, but there should be *some*
+    parser.add_argument('--read_noise', type=float,
+                        default=10.0,
+                        help='Scaler giving the rms read noise (counts) (Only used when integrated_photon_flux specified)')
+
+    ### Deformable mirror approximation of PTT actuation ###
+    parser.add_argument('--dm_actuator_num', type=int,
+                        help='Number of DM actuators on a side (Default: None = no DM approximation of PTT)')
+
+    parser.add_argument('--dm_actuator_spacing', type=float,
+                        default=0.1125,
+                        help='pupil-plane spacing of actuators in meters')
+
+    ### Simulation setup ###
+    parser.add_argument('--step_time_granularity', type=float,
+                        default=0.01,
+                        help='The time granularity of DASIE step (seconds)')
+
+    parser.add_argument('--tip_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tip alignment std.')
+
+    parser.add_argument('--tilt_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tilt alignment std.')
+
+    parser.add_argument('--piston_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial piston alignment std.')
+
+
+    parser.add_argument('--num_steps', type=int,
+                        default=500,
+                        help='Number of steps to run.')
+
+    parser.add_argument('--simulated_inference_latency', type=float,
+                        default=0.025,
+                        help='The latency caused by the model in secs.')
+
+    parser.add_argument('--simulated_command_transmission_latency', type=float,
+                        default=0.030,
+                        help='The latency caused by command transfer in secs.')
+
+    parser.add_argument('--simulated_actuation_latency', type=float,
+                        default=0.005,
+                        help='The latency caused by actuation in secs.')
+
+    parser.add_argument('--silence', action='store_true',
+                        default=False,
+                        help='If provided, be quiet.')
+
+    parser.add_argument('--dasie_version', type=str,
+                        default="test",
+                        help='Which version of the DASIE sim do we use?')
+    ###########################################################################
 
     # Parse known arguments.
     parsed_flags, _ = parser.parse_known_args()
