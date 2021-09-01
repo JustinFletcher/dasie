@@ -691,7 +691,10 @@ def main(flags):
     with tf.compat.v1.Session() as sess:
 
         # Build a gym environment; pass the CLI flags to the constructor as kwargs.
-        env = gym.make(flags.env, **vars(flags))
+        if flags.env == 'Dasie-v0':
+            env = gym.make(flags.env, **vars(flags))
+        else:
+            env = gym.make(flags.env)
         np.random.seed(flags.random_seed)
         tf.compat.v1.set_random_seed(flags.random_seed)
         env.seed(flags.random_seed)
