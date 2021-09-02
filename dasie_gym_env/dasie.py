@@ -11,6 +11,8 @@ import glob
 import time
 import numpy as np
 
+from collections import deque
+
 from gym import spaces, logger
 from gym.utils import seeding
 
@@ -62,6 +64,8 @@ class DasieEnv(gym.Env):
 
     def __init__(self, **kwargs):
 
+
+
         print(kwargs)
         
         ### Inialize multi-aperture telescope simulator
@@ -100,24 +104,43 @@ class DasieEnv(gym.Env):
                                  tilt_upper_limits,
                                  piston_upper_limits])
 
-        # We then create a list to hold the composite action spaces, and...
-        aperture_action_spaces = list()
+        # # We then create a list to hold the composite action spaces, and...
+        # aperture_action_spaces = list()
+        #
+        # # ...iterate over each aperture...
+        # for aperture_num in range(self.num_apertures):
+        #
+        #     # ...instantiating a box space using the established limits...
+        #     aperture_space = spaces.Box(lower_limits,
+        #                                 upper_limits, dtype=np.float32)
+        #     # ...and adding that space to the list of spaces.
+        #     aperture_action_spaces.append(aperture_space)
+        #
+        # # Finally, we complete the space by building it from the template list.
+        # self.action_space = spaces.Tuple(aperture_action_spaces)
 
-        # ...iterate over each aperture...
-        for aperture_num in range(self.num_apertures):
+        # Define a symmetric action space.
+        self.action_shape = (self.num_apertures, 3)
+        self.action_space = spaces.Box(low=(-1.0 * np.ones(self.action_shape)),
+                                       high=np.ones(self.action_shape),
+                                       dtype=np.float32)
 
-            # ...instantiating a box space using the established limits...
-            aperture_space = spaces.Box(lower_limits,
-                                        upper_limits, dtype=np.float32)
+        # TODO: Refactor action space to allow Box-based asymmetric spaces.
 
-            # ...and adding that space to the list of spaces.
-            aperture_action_spaces.append(aperture_space)
-
-        # Finally, we complete the space by building it from the template list.
-        self.action_space = spaces.Tuple(aperture_action_spaces)
 
         # TODO: Build a correct observation space.
-        self.observation_space = spaces.Tuple(aperture_action_spaces)
+        # Get image shape.
+        self.image_shape = kwargs['filter_psf_resolution']
+        # Get window depth.
+        self.observation_window_size = kwargs['observation_window_size']
+
+        # Define a 2-D observation space
+        self.observation_shape = (self.image_shape,
+                                  self.image_shape,
+                                  self.observation_window_size)
+        self.observation_space = spaces.Box(low = np.zeros(self.observation_shape),
+                                            high = np.ones(self.observation_shape),
+                                            dtype = np.float16)
 
         self.seed()
         self.viewer = None
@@ -162,12 +185,31 @@ class DasieEnv(gym.Env):
         self._update_sampler()
         
         # TODO: Initialize state.
-        self.state = None
+
+        # Construct the observation queue (FIFO) using blank frames.
+        state_shape = np.stack(self.observation_space.sample()).shape
+        blank_frame = np.zeros(state_shape[:-1] + (1,))
+        self.observation_stack = deque()
+
+        for _ in range(self.observation_window_size):
+
+            self.observation_stack.append(blank_frame)
+
+        # Let the system run uncontrolled to populate the frame buffer.
+        initial_state = self.observation_stack
+
+        for _ in range(self.observation_window_size):
+
+            no_action = np.zeros_like(self.action_space.sample())
+
+            (initial_state, _, _, _) = self.step(action=no_action)
+
+        self.state = initial_state
         self.steps_beyond_done = None
         return np.array(self.state)
 
     def step(self, action):
-        
+
         # First, ensure the step action is valid.
         assert self.action_space.contains(action), "%r (%s) invalid"%(action, type(action))
 
@@ -194,14 +236,14 @@ class DasieEnv(gym.Env):
         # state = self.state
         # x, x_dot, theta, theta_dot = state
         # self.state = (x,x_dot,theta,theta_dot)
-        
+
         # Move time forward by one time-step
         self.simulation_time += self.step_time_granularity
-        
+
         # Evolve telescope simulation (atmosphere)
         self.telescope_sim.evolve_to( self.simulation_time )
 
-        # Update observaables
+        # Update observables.
         self._update_sampler()
 
         done = False
@@ -220,10 +262,15 @@ class DasieEnv(gym.Env):
             self.steps_beyond_done += 1
             reward = 0.0
 
-        # compute_reward()
-        # compute_done()
+        # TODO: compute_reward()
+        # TODO: compute_done()
 
-        self.state = self.focal_plane_obs
+        # Build the state by popping the oldest frame and appending the newest.
+        self.observation_stack.popleft()
+        self.observation_stack.append(self.focal_plane_obs)
+
+        # Set the state to the updated queue.
+        self.state = self.observation_stack
 
         return np.array(self.state), reward, done, {}
 
