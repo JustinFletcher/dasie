@@ -192,8 +192,10 @@ class ActorNetwork(object):
                 self.network_params) + len(self.target_network_params)
 
     def _create_actor_network(self):
+
+        batch_shape = (None,) + self.s_dim
         observation_batch_placeholder = tf.compat.v1.placeholder(tf.float32,
-                                                                 shape=(None, self.s_dim),
+                                                                 shape=batch_shape,
                                                                  name="observation")
 
 
@@ -677,6 +679,8 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
 
 def main(flags):
 
+    print("\n\n\n\n\n\n\n\n\n Entering Main \n\n\n")
+
     # Set the GPUs we want the script to use/see
     os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
 
@@ -690,6 +694,8 @@ def main(flags):
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
 
+        print("\n\n\n\n\n\n\n\n\n Session Created \n\n\n")
+
         # Build a gym environment; pass the CLI flags to the constructor as kwargs.
         if flags.env == 'Dasie-v0':
             env = gym.make(flags.env, **vars(flags))
@@ -702,12 +708,11 @@ def main(flags):
         # Next, build the models. First, get the action shape.
         action_shape = np.stack(env.action_space.sample()).shape
 
-        print(action_shape)
-
-        action_bound = env.action_space[0].high
+        print("Action shape: " + str(action_shape))
+        action_bound = env.action_space.high
 
         state_shape = np.stack(env.observation_space.sample()).shape
-        print(state_shape)
+        print("State shape: " + str(state_shape))
 
         # Ensure action bound is symmetric
         # assert (env.action_space[0].high == -env.action_space[0].low)
@@ -766,6 +771,11 @@ if __name__ == '__main__':
                         type=int,
                         default=1000,
                         help='Steps per episode limit.')
+
+    parser.add_argument('--observation_window_size',
+                        type=int,
+                        default=2**1,
+                        help='Number of frames input to the model.')
 
     parser.add_argument('--logdir',
                         type=str,
@@ -946,6 +956,7 @@ if __name__ == '__main__':
                         help='pupil-plane spacing of actuators in meters')
 
     ### Simulation setup ###
+
     parser.add_argument('--step_time_granularity', type=float,
                         default=0.01,
                         help='The time granularity of DASIE step (seconds)')
@@ -961,7 +972,6 @@ if __name__ == '__main__':
     parser.add_argument('--piston_phase_error_scale', type=float,
                         default=0.01,
                         help='The initial piston alignment std.')
-
 
     parser.add_argument('--num_steps', type=int,
                         default=500,
