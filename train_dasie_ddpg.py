@@ -18,6 +18,7 @@ import numpy as np
 import tensorflow as tf
 
 
+
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
 
@@ -120,14 +121,15 @@ class ActorNetwork(object):
             # TODO: Replace with function-as-interface structure.
             # Next, build the model using the local model creation function.
             with tf.name_scope("actor_model"):
-                self.inputs, self.out, self.scaled_out = self._create_actor_network()
+                self.inputs, self.out, self.scaled_out = self._create_actor_network_ddpg_cnn()
+
 
             # Parse the trainable variables in the main model.
             self.network_params = tf.compat.v1.trainable_variables()
 
             # Target Network
             with tf.name_scope("actor_model_target"):
-                self.target_inputs, self.target_out, self.target_scaled_out = self._create_actor_network()
+                self.target_inputs, self.target_out, self.target_scaled_out = self._create_actor_network_ddpg_cnn()
 
 
             self.target_network_params = tf.compat.v1.trainable_variables()[
@@ -162,8 +164,10 @@ class ActorNetwork(object):
                     self.update_target_network_params_ops.append(update_op)
 
         # This gradient will be provided by the critic network
+        # TODO: Not optimal. Here, I'm flattening the AG, creating a coupling.
         self.action_gradient = tf.compat.v1.placeholder(tf.float32,
-                                                        [None, self.a_dim])
+                                                        [None,
+                                                         np.prod(self.a_dim)])
 
         with tf.name_scope("policy_gradients"):
 
@@ -190,6 +194,88 @@ class ActorNetwork(object):
         # TODO: Remove this.
         self.num_trainable_vars = len(
                 self.network_params) + len(self.target_network_params)
+
+    def _create_actor_network_ddpg_cnn(self):
+
+        batch_shape = (None,) + self.s_dim
+        observation_batch_placeholder = tf.compat.v1.placeholder(tf.float32,
+                                                                 shape=batch_shape,
+                                                                 name="observation")
+
+        # Three conv layers (32 filters, no pooling, relu activations)
+        with tf.name_scope("conv_block_1"):
+            # TODO: Make a 3x3x2x32 kernel.
+            kernel_in = tf.random.normal((3, 3, 2, 32))
+            print(kernel_in.shape)
+            kernel = tf.Variable(kernel_in, dtype=tf.float32)
+            x = tf.nn.conv2d(observation_batch_placeholder,
+                             kernel,
+                             strides=[1, 1, 1, 1],
+                             padding='VALID',
+                             data_format='NHWC',
+                             dilations=None,
+                             name=None)
+
+            x = tf.nn.relu(x)
+
+        with tf.name_scope("conv_block_2"):
+            # TODO: Make a 3x3x32x32 kernel.
+            kernel_in = tf.random.normal((3, 3, 32, 32))
+            kernel = tf.Variable(kernel_in, dtype=tf.float32)
+            x = tf.nn.conv2d(x,
+                             kernel,
+                             strides=[1, 1, 1, 1],
+                             padding='VALID',
+                             data_format='NHWC',
+                             dilations=None,
+                             name=None)
+
+            x = tf.nn.relu(x)
+
+
+        with tf.name_scope("conv_block_3"):
+            # TODO: Make a 3x3x32x32 kernel.
+            kernel_in = tf.random.normal((3, 3, 32, 32))
+            kernel = tf.Variable(kernel_in, dtype=tf.float32)
+            x = tf.nn.conv2d(x,
+                             kernel,
+                             strides=[1, 1, 1, 1],
+                             padding='VALID',
+                             data_format='NHWC',
+                             dilations=None,
+                             name=None)
+            x = tf.nn.relu(x)
+
+        x = tf.compat.v1.layers.flatten(x)
+        n_conv_features = 250 * 250 * 32
+
+        with tf.name_scope("hidden_layer_1_200"):
+            n_hidden = 200
+            W = tf.Variable(tf.random.normal((n_conv_features, n_hidden)))
+            b = tf.Variable(tf.random.normal((n_hidden,)))
+            x = tf.matmul(x, W) + b
+            # net = tflearn.layers.normalization.batch_normalization(net)
+            x = tf.nn.relu(x)
+
+        with tf.name_scope("hidden_layer_2_200"):
+
+            # TODO: make these flat, then reshape them.
+            n_output = np.prod(self.a_dim)
+
+            W = tf.Variable(tf.random.normal((n_hidden, n_output)))
+            b = tf.Variable(tf.random.normal((n_output,)))
+            x = tf.matmul(x, W) + b
+
+            output_batch = tf.nn.tanh(x)
+
+        output_batch = tf.reshape(output_batch, self.a_dim)
+
+        # Scale output to -action_bound to action_bound
+        # TODO: use np.ones_like on the output batch and multiply by bound.
+        # scaled_output_batch = tf.multiply(output_batch, self.action_bound)
+        scaled_output_batch = output_batch
+
+        return observation_batch_placeholder, output_batch, scaled_output_batch
 
     def _create_actor_network(self):
 
@@ -726,6 +812,9 @@ def main(flags):
                              flags.actor_learning_rate,
                              flags.target_mixing_factor,
                              flags.batch_size)
+
+        # TODO: pickup here!
+        die
 
         # Build an critic model in this sess for this env.
         critic = CriticNetwork(sess,
