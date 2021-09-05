@@ -121,8 +121,10 @@ class DasieEnv(gym.Env):
 
         # Define a symmetric action space.
         self.action_shape = (self.num_apertures, 3)
-        self.action_space = spaces.Box(low=(-1.0 * np.ones(self.action_shape)),
-                                       high=np.ones(self.action_shape),
+        action_bound_low = -1.0 * np.ones(self.action_shape)
+        action_bound_high = np.ones(self.action_shape)
+        self.action_space = spaces.Box(low=action_bound_low,
+                                       high=action_bound_high,
                                        dtype=np.float32)
 
         # TODO: Refactor action space to allow Box-based asymmetric spaces.
@@ -271,6 +273,7 @@ class DasieEnv(gym.Env):
 
         # Set the state to the updated queue.
         self.state = self.observation_stack
+        reward = self.strehl_scalar
 
         return np.array(self.state), reward, done, {}
 
@@ -401,7 +404,9 @@ class DasieEnv(gym.Env):
         X, Y, strehls  = self.telescope_sim.get_observation(
             piston_tip_tilt = sampler_ptt_phases,  # (n_aper, 3) piston, tip, tilts to set telescope to
         )
-        
+        print(strehls)
+        # suprise
+        self.strehl_scalar = strehls[0]
         self.focal_plane_obs = X
         
         # Maybe only fetch the phase screen if render is set to True?
