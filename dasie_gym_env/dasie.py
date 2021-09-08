@@ -158,6 +158,8 @@ class DasieEnv(gym.Env):
 
     def reset(self):
         # Set the initial state. This is the first thing called in an episode.
+
+        print("Resetting Environment")
         
         self.apertures = list()
         
@@ -200,6 +202,8 @@ class DasieEnv(gym.Env):
         # Let the system run uncontrolled to populate the frame buffer.
         initial_state = self.observation_stack
 
+        print("Resetting Environment: Populating Initial State")
+
         for _ in range(self.observation_window_size):
 
             no_action = np.zeros_like(self.action_space.sample())
@@ -208,6 +212,9 @@ class DasieEnv(gym.Env):
 
         self.state = initial_state
         self.steps_beyond_done = None
+
+
+        print("Resetting Environment: Complete")
         return np.array(self.state)
 
     def step(self, action):
