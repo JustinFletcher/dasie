@@ -886,7 +886,7 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
             train_step_run_times.append(train_step_end_time)
 
             if terminal:
-                writer.add_summary(actor_summaries, i)
+                # writer.add_summary(actor_summaries, i)
                 #
                 # with writer.as_default():
                 #     tf.summary.scalar("ep_reward",
