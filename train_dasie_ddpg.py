@@ -872,7 +872,7 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
 
             else:
 
-                print("Filling replay buffer: %d / %d" % replay_buffer.size(), min_replay_buffer_size)
+                print("Filling replay buffer: %d / %d" % (replay_buffer.size(), min_replay_buffer_size))
             observation = new_observation
             ep_reward += reward
 
