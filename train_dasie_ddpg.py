@@ -913,8 +913,8 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
 
                 # writer.write()
 
-                print('| Reward: {:d} | Episode: {:d} | Qmax: {:.4f} | Episode Time: {:.4f} | Step Time: {:.5f} | Train Step Time: {:.5f}'.format(
-                        int(ep_reward),
+                print('| Reward: {:.4f} | Episode: {:d} | Qmax: {:.4f} | Episode Time: {:.4f} | Step Time: {:.5f} | Train Step Time: {:.5f}'.format(
+                        ep_reward,
                         i,
                         (ep_ave_max_q / float(j)),
                         episode_end_time,
