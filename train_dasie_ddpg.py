@@ -518,7 +518,6 @@ class CriticNetwork(object):
         with tf.name_scope("conv_block_1"):
             # Make a 3x3x2x32 kernel.
             kernel_in = tf.random.normal((3, 3, 2, 32))
-            print(kernel_in.shape)
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(observation_batch_placeholder,
                              kernel,
@@ -768,6 +767,7 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
                           np.reshape(new_observation, (actor.s_dim,)))
 
     episode_running_times = list()
+    min_replay_buffer_size = (flags.min_batches * flags.batch_size)
 
     # Enter the main training loop.
     for i in range(flags.num_episodes):
@@ -823,7 +823,7 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
             train_step_start_time = time.time()
 
             # If we've stored at least the required number of batches.
-            if replay_buffer.size() > (flags.min_batches * flags.batch_size):
+            if replay_buffer.size() > min_replay_buffer_size:
 
                 # Sample a random batch of experience.
                 (observation_batch,
@@ -870,6 +870,9 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
                 actor.update_target_network()
                 critic.update_target_network()
 
+            else:
+
+                print("Filling replay buffer: %d / %d" % replay_buffer.size(), min_replay_buffer_size)
             observation = new_observation
             ep_reward += reward
 

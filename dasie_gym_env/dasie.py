@@ -229,11 +229,11 @@ class DasieEnv(gym.Env):
             aperture['tilt_phase_command'] = aperture_command[1]
             aperture['piston_phase_command'] = aperture_command[2]
 
-            print("Start Aperture Commands")
-            print(aperture['tip_phase_command'])
-            print(aperture['tilt_phase_command'])
-            print(aperture['piston_phase_command'])
-            print("Stop Aperture Commands")
+            # print("Start Aperture Commands")
+            # print(aperture['tip_phase_command'])
+            # print(aperture['tilt_phase_command'])
+            # print(aperture['piston_phase_command'])
+            # print("Stop Aperture Commands")
 
             # TODO: Move this and do incremental updates.
             aperture['tip_phase'] = aperture['tip_phase_command']
