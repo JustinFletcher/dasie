@@ -6,12 +6,16 @@ simulation environment.
 Author: Justin Fletcher, Ian Cunnyngham
 """
 
+import os
+
 import gym
 import glob
 import time
 import numpy as np
 
 from collections import deque
+
+from PIL import Image, ImageSequence
 
 from gym import spaces, logger
 from gym.utils import seeding
@@ -21,6 +25,18 @@ from matplotlib import pyplot as plt
 # Simulation of multi aperture telescope built on top of MutiPSFSampler built on top of HCIPy
 from simulate_multi_aperture import SimulateMultiApertureTelescope
 
+
+def cosine_similarity(u, v):
+    """
+
+    :param u: Any np.array matching u in shape (and semantics probably)
+    :param v: Any np.array matching v in shape (and semantics probably)
+    :return: np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v))
+    """
+    u = u.flatten()
+    v = v.flatten()
+
+    return (np.dot(v, u) / (np.linalg.norm(u) * np.linalg.norm(v)))
 
 
 class DasieEnv(gym.Env):
@@ -37,7 +53,7 @@ class DasieEnv(gym.Env):
         in the forthcoming work by Fletcher et. al.
 
     Observation: 
-        Type: Tuple(observation_window_size )
+        Type: Box(observation_window_size, height, width)
         Each observation is a tuple of the last N_w (window size)
         
     Actions:
@@ -64,8 +80,6 @@ class DasieEnv(gym.Env):
 
     def __init__(self, **kwargs):
 
-
-
         print(kwargs)
         
         ### Inialize multi-aperture telescope simulator
@@ -74,6 +88,13 @@ class DasieEnv(gym.Env):
         
         # Copy this locally
         self.num_apertures = self.telescope_sim.num_apertures
+
+        # If an extended object image is provided, load it only once.
+        # TODO: generalize to accomodate changing images.
+        self.extended_object_image_file = kwargs['extended_object_image_file']
+        if self.extended_object_image_file:
+            perfect_image = plt.imread('sample_image.png')
+            self.perfect_image = perfect_image / np.max(perfect_image)
         
         
         # Keep track of simulation time for atmosphere evolution at least (probably more later)
@@ -129,14 +150,14 @@ class DasieEnv(gym.Env):
 
         # TODO: Refactor action space to allow Box-based asymmetric spaces.
 
-
         # TODO: Build a correct observation space.
         # Get image shape.
         self.image_shape = kwargs['filter_psf_resolution']
+
         # Get window depth.
         self.observation_window_size = kwargs['observation_window_size']
 
-        # Define a 2-D observation space
+        # Define a 3D observation space
         self.observation_shape = (self.image_shape,
                                   self.image_shape,
                                   self.observation_window_size)
@@ -148,6 +169,8 @@ class DasieEnv(gym.Env):
         self.viewer = None
         self.state = None
         self.steps_beyond_done = None
+
+        self.render_frequency = kwargs['render_frequency']
         
 
     def seed(self, seed=None):
@@ -188,7 +211,7 @@ class DasieEnv(gym.Env):
         # ( Since state is set to None, is this important? )
         self._update_sampler()
         
-        # TODO: Initialize state.
+        # Initialize state.
 
         # Construct the observation queue (FIFO) using blank frames.
         state_shape = np.stack(self.observation_space.sample()).shape
@@ -240,30 +263,24 @@ class DasieEnv(gym.Env):
             aperture['tilt_phase'] = aperture['tilt_phase_command']
             aperture['piston_phase'] = aperture['piston_phase_command']
 
-        # # TODO: Write main simulation loop here.
+        # # TODO: Write actuation simulation loop here.
         # # num_timesteps is probably the inference latency of the system.
         # for t in range(num_timesteps):
         #     # TODO: Iterate the target model state.
         #     # TODO: Iterate the at-aperture irradiance.
         #     # TODO: Iterate toward commanded articulations.
 
-        # # Parse the state.
-        # state = self.state
-        # x, x_dot, theta, theta_dot = state
-        # self.state = (x,x_dot,theta,theta_dot)
-
         # Move time forward by one time-step
         self.simulation_time += self.step_time_granularity
 
         # Evolve telescope simulation (atmosphere)
-        self.telescope_sim.evolve_to( self.simulation_time )
+        self.telescope_sim.evolve_to(self.simulation_time)
 
         # Update observables.
         self._update_sampler()
 
         done = False
 
-        # TODO: Build a reward function
         # In this implementation, reward is a function of done.
         if not done:
             reward = 1.0
@@ -286,11 +303,42 @@ class DasieEnv(gym.Env):
 
         # Set the state to the updated queue.
         self.state = self.observation_stack
-        reward = self.strehl_scalar
+
+        self.reward_function = "strehl"
+        self.reward_function = "truth_cosine_similarity"
+
+        if self.reward_function == "strehl":
+
+            reward = self.strehl_scalar
+
+        if self.reward_function == "truth_cosine_similarity":
+
+            truth_image = self.telescope_sim.get_extended_object_image()
+
+            if truth_image is None:
+
+                print("No extended_object_image_file was provided.")
+
+            recovered_image = np.mean(np.stack(self.observation_stack), axis=(0, -1))
+
+            reward = cosine_similarity(truth_image, recovered_image)
+
+        print(reward)
 
         return np.array(self.state), reward, done, {}
 
-    def render(self, mode='human'):
+    def render(self,
+               render_mode,
+               logdir=None,
+               run_name=None,
+               episode=None,
+               step=None):
+
+        if not logdir:
+            logdir = "."
+
+        if not run_name:
+            run_name = str(datetime.timestamp(datetime.now()))
 
         if self.state is None: return None
 
@@ -313,73 +361,90 @@ class DasieEnv(gym.Env):
             ret[:, :, 2] = ret[:, :, 1] = ret[:, :, 0] = im
             return ret
 
-        # (Ian) The output of sampler is (res, res, num_wavelengths), so need to select just one
-        log_real_focal_plane = np.log(np.abs(self.focal_plane_obs[..., 0]))
-
-        log_real_focal_plane = to_rgb(positive_shift_norm_scale_img(log_real_focal_plane))
-        
+        perfect_image = to_rgb(positive_shift_norm_scale_img(self.perfect_image))
         system_phase_matrix_img = to_rgb(positive_shift_norm_scale_img(self.pupil_plane_phase_screen))
+        # (Ian) The output of sampler is (res, res, num_wavelengths), so need to select just one
+        log_real_focal_plane = np.abs(self.focal_plane_obs[..., 0])
+        log_real_focal_plane = to_rgb(positive_shift_norm_scale_img(log_real_focal_plane))
+        restored_image = np.mean(np.stack(self.observation_stack), axis=(0, -1))
+        restored_image = to_rgb(positive_shift_norm_scale_img(restored_image))
 
-        render_image = np.hstack([system_phase_matrix_img,
-                                  log_real_focal_plane])
+        # Compose the component images into a single view.
+        if self.extended_object_image_file:
 
-        # Uncomment to zoom
-        # psf_shape = log_real_optical_psf.shape
-        # x_length = psf_shape[0]
-        # y_length = psf_shape[1]
-        # x_center = int(x_length / 2)
-        # y_center = int(y_length / 2)
-        #
-        # patch_fraction = 0.1
-        # patch_x_half_width = int(patch_fraction * x_center)
-        # patch_y_half_width = int(patch_fraction * x_center)
-        #
-        # patch = log_real_optical_psf[x_center-patch_x_half_width:x_center+patch_x_half_width,
-        #                              y_center-patch_y_half_width:y_center+patch_y_half_width]
-        #
-        # from skimage.transform import resize
-        # patch_resized = resize(patch, (x_length, y_length))
+            render_image = np.hstack([perfect_image,
+                                      system_phase_matrix_img,
+                                      log_real_focal_plane,
+                                      restored_image])
 
-        # log_real_optical_psf = patch_resize
+        else:
 
-        # render_image = np.hstack([system_phase_matrix_img,
-        #                           patch_resized])
-        # file_id = str(len(glob.glob('.\\temp\\*.png')))
-        # plt.imsave('.\\temp\\' + file_id + '.png', render_image)
+            render_image = np.hstack([system_phase_matrix_img,
+                                      log_real_focal_plane])
 
-        # Save render image
+        # TODO: Make render gifs work here.
 
-        # Uncomment to zoom
-        # psf_shape = log_real_optical_psf.shape
-        # x_length = psf_shape[0]
-        # y_length = psf_shape[1]
-        # x_center = int(x_length / 2)
-        # y_center = int(y_length / 2)
-        #
-        # patch_fraction = 0.1
-        # patch_x_half_width = int(patch_fraction * x_center)
-        # patch_y_half_width = int(patch_fraction * x_center)
-        #
-        # patch = log_real_optical_psf[x_center-patch_x_half_width:x_center+patch_x_half_width,
-        #                              y_center-patch_y_half_width:y_center+patch_y_half_width]
-        #
-        # from skimage.transform import resize
-        # patch_resized = resize(patch, (x_length, y_length))
+        if render_mode == 'gif':
 
-        # log_real_optical_psf = patch_resize
+            if step % self.render_frequency == 0:
 
-        # render_image = np.hstack([system_phase_matrix_img,
-        #                           patch_resized])
-        # file_id = str(len(glob.glob('.\\temp\\*.png')))
-        # plt.imsave('.\\temp\\' + file_id + '.png', render_image)
+                render_output_path = os.path.join(logdir,
+                                                  run_name,
+                                                  str(episode))
+                if not os.path.exists(render_output_path):
+                    os.makedirs(render_output_path)
 
-        # Save render image
+                im = Image.fromarray(render_image)
+                im.save(os.path.join(render_output_path, str(step) + ".jpeg"))
 
-        if mode == 'rgb_array':
+            # self.render_images.append(render_image)
+            #
+            # print(self.steps_until_render)
 
+            # if self.steps_until_render == 0:
+                #
+                # print("Rendering")
+                #
+                # # First, load prior frame from disk.
+                # prior_images = list()
+                #
+                # # if os.path.isfile("render.gif"):
+                # #
+                # #     for im in ImageSequence.Iterator(Image.open("render.gif")):
+                # #
+                # #         prior_images.append(im)
+                # #     # prior_images = list(ImageSequence.Iterator(Image.open("render.gif")))
+                # #
+                # #     print(len(prior_images))
+                #
+                # render_images = prior_images + self.render_images
+                #
+                # print(len(render_images))
+                # render_images[0].save("render.gif",
+                #                       save_all=True,
+                #                       append_images=render_images[1:],
+                #                       duration=50,
+                #                       loop=0)
+                #
+                # self.steps_until_render = self.render_frequency
+                # self.render_images = list()
+
+
+            # render_stack.append(render_image)
+            # imgs = [Image.fromarray(img) for img in render_stack]
+            # # duration is the number of milliseconds between frames; this is 40 frames per second
+            # imgs[0].save("render.gif",
+            #              save_all=True,
+            #              append_images=imgs[1:],
+            #              duration=50,
+            #              loop=0)
+            #
+            # render_stack.append(render_image)
+
+            # Count down the steps until render.
             return render_image
 
-        elif mode == 'human':
+        elif render_mode == 'human':
 
             from gym.envs.classic_control import rendering
 
@@ -417,10 +482,11 @@ class DasieEnv(gym.Env):
         X, Y, strehls  = self.telescope_sim.get_observation(
             piston_tip_tilt = sampler_ptt_phases,  # (n_aper, 3) piston, tip, tilts to set telescope to
         )
-        print(strehls)
-        # suprise
+
         self.strehl_scalar = strehls[0]
         self.focal_plane_obs = X
+
+        # self.truth_image = self.telescope_sim.get_extended_object_image()
         
         # Maybe only fetch the phase screen if render is set to True?
         # Get a numpy matrix instead of an HCIPy "Field"

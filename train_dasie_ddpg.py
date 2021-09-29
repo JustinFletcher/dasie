@@ -9,6 +9,7 @@ Author: Justin Fletcher
 import os
 import time
 import random
+import datetime
 import argparse
 from datetime import datetime
 from collections import deque
@@ -91,7 +92,7 @@ class ActorNetwork(object):
     """
 
     def __init__(self, sess, state_dim, action_dim, action_bound,
-                 learning_rate, tau, batch_size):
+                 learning_rate, tau, batch_size, num_filters=32):
 
         """
         This constructor builds a graph corresponding to an actor model in the
@@ -113,6 +114,7 @@ class ActorNetwork(object):
         self.learning_rate = learning_rate
         self.tau = tau
         self.batch_size = batch_size
+        self.num_filters = num_filters
 
 
         # First, define a top level scope to hold all actor ops.
@@ -202,12 +204,12 @@ class ActorNetwork(object):
         observation_batch_placeholder = tf.compat.v1.placeholder(tf.float32,
                                                                  shape=batch_shape,
                                                                  name="observation")
+        input_data_depth = batch_shape[-1]
 
         # Three conv layers (32 filters, no pooling, relu activations)
         with tf.name_scope("conv_block_1"):
             # Make a 3x3x2x32 kernel.
-            kernel_in = tf.random.normal((3, 3, 2, 32))
-            print(kernel_in.shape)
+            kernel_in = tf.random.normal((3, 3, input_data_depth, self.num_filters))
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(observation_batch_placeholder,
                              kernel,
@@ -221,7 +223,7 @@ class ActorNetwork(object):
 
         with tf.name_scope("conv_block_2"):
             # Make a 3x3x32x32 kernel.
-            kernel_in = tf.random.normal((3, 3, 32, 32))
+            kernel_in = tf.random.normal((3, 3, self.num_filters, self.num_filters))
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(x,
                              kernel,
@@ -236,7 +238,7 @@ class ActorNetwork(object):
 
         with tf.name_scope("conv_block_3"):
             # Make a 3x3x32x32 kernel.
-            kernel_in = tf.random.normal((3, 3, 32, 32))
+            kernel_in = tf.random.normal((3, 3, self.num_filters, self.num_filters))
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(x,
                              kernel,
@@ -248,7 +250,7 @@ class ActorNetwork(object):
             x = tf.nn.relu(x)
 
         x = tf.compat.v1.layers.flatten(x)
-        n_conv_features = self.s_dim[0] * self.s_dim[1]  * 32
+        n_conv_features = self.s_dim[0] * self.s_dim[1]  * self.num_filters
 
         with tf.name_scope("hidden_layer_1_200"):
             n_hidden = 200
@@ -347,13 +349,14 @@ class CriticNetwork(object):
     """
 
     def __init__(self, sess, state_dim, action_dim, learning_rate, tau, gamma,
-                 num_actor_vars):
+                 num_actor_vars, num_filters=32):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
         self.learning_rate = learning_rate
         self.tau = tau
         self.gamma = gamma
+        self.num_filters = num_filters
 
         # Create the critic network
 
@@ -514,10 +517,12 @@ class CriticNetwork(object):
                                                                  shape=observation_shape,
                                                                  name="observation")
 
+        input_data_depth = observation_shape[-1]
+
         # Three conv layers (32 filters, no pooling, relu activations)
         with tf.name_scope("conv_block_1"):
             # Make a 3x3x2x32 kernel.
-            kernel_in = tf.random.normal((3, 3, 2, 32))
+            kernel_in = tf.random.normal((3, 3, input_data_depth, self.num_filters))
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(observation_batch_placeholder,
                              kernel,
@@ -531,7 +536,7 @@ class CriticNetwork(object):
 
         with tf.name_scope("conv_block_2"):
             # Make a 3x3x32x32 kernel.
-            kernel_in = tf.random.normal((3, 3, 32, 32))
+            kernel_in = tf.random.normal((3, 3, self.num_filters, self.num_filters))
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(x,
                              kernel,
@@ -545,7 +550,7 @@ class CriticNetwork(object):
 
         with tf.name_scope("conv_block_3"):
             # Make a 3x3x32x32 kernel.
-            kernel_in = tf.random.normal((3, 3, 32, 32))
+            kernel_in = tf.random.normal((3, 3, self.num_filters, self.num_filters))
             kernel = tf.Variable(kernel_in, dtype=tf.float32)
             x = tf.nn.conv2d(x,
                              kernel,
@@ -559,7 +564,7 @@ class CriticNetwork(object):
         x = tf.compat.v1.layers.flatten(x)
         # TODO: This number only works for 256-sized input. Generalize.
 
-        n_conv_features = self.s_dim[0] * self.s_dim[1]  * 32
+        n_conv_features = self.s_dim[0] * self.s_dim[1]  * self.num_filters
 
         with tf.name_scope("hidden_layer_1_200"):
             n_hidden = 200
@@ -791,8 +796,14 @@ def train(sess, env, flags, actor, critic, actor_noise, summary_ops):
 
             step_start_time = time.time()
 
+            # Render, if requested.
             if flags.render_env:
-                env.render()
+
+                env.render(flags.render_mode,
+                           logdir=flags.logdir,
+                           run_name=flags.run_name,
+                           episode=i,
+                           step=j)
 
             # Consult the actor model for an action, then add noise.
             a = actor.predict(np.reshape(observation, (1,) + actor.s_dim))
@@ -931,6 +942,7 @@ def main(flags):
     os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
 
     # Register our custom DASIE environment.
+    # TODO: Add reward function flag.
     gym.envs.registration.register(
         id='Dasie-v0',
         entry_point='dasie_gym_env.dasie:DasieEnv',
@@ -954,8 +966,9 @@ def main(flags):
         # Next, build the models. First, get the action shape.
         action_shape = np.stack(env.action_space.sample()).shape
         print("Action shape: " + str(action_shape))
+
         # TODO: Hard-coding action bound to keep action in domain after noise.
-        action_bound = env.action_space.high * 0.5
+        action_bound = env.action_space.high * 0.01
 
         state_shape = np.stack(env.observation_space.sample()).shape
         print("State shape: " + str(state_shape))
@@ -971,7 +984,8 @@ def main(flags):
                              action_bound,
                              flags.actor_learning_rate,
                              flags.target_mixing_factor,
-                             flags.batch_size)
+                             flags.batch_size,
+                             num_filters=flags.num_filters)
 
 
         # Build an critic model in this sess for this env.
@@ -981,13 +995,15 @@ def main(flags):
                                flags.critic_learning_rate,
                                flags.target_mixing_factor,
                                flags.discount_factor,
-                               actor.get_num_trainable_vars())
+                               actor.get_num_trainable_vars(),
+                               num_filters=flags.num_filters)
 
-        actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_shape),
-                                                   sigma=0.06,
-                                                   theta=.015,
-                                                   dt=1e-2,
-                                                   x0=None)
+        action_noise_mu = np.ones(action_shape) * flags.action_noise_mu
+        actor_noise = OrnsteinUhlenbeckActionNoise(mu=action_noise_mu,
+                                                   sigma=flags.action_noise_sigma,
+                                                   theta=flags.action_noise_theta,
+                                                   dt=flags.action_noise_dt,
+                                                   x0=flags.action_noise_x0)
 
         summary_ops = tf.compat.v1.summary.merge_all()
 
@@ -1030,12 +1046,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--logdir',
                         type=str,
-                        default=".\\temp\\",
+                        default=".\\logs\\",
                         help='The directory to which summaries are written.')
 
     parser.add_argument('--run_name',
                         type=str,
-                        default="run_" + str(datetime.timestamp(datetime.now())),
+                        default=datetime.today().strftime('%Y%m%d_%H%M%S'),
                         help='The name of this run')
 
     parser.add_argument('--num_episodes',
@@ -1083,10 +1099,25 @@ if __name__ == '__main__':
                         default=0.001,
                         help='The learning rate for the critic optimizer.')
 
+    parser.add_argument('--num_filters',
+                        type=int,
+                        default=32,
+                        help='The number of filters to use for vanilla convs.')
+
     parser.add_argument('--render_env',
                         action='store_true',
                         default=False,
                         help='If provided, render the environment.')
+
+    parser.add_argument('--render_mode',
+                        type=str,
+                        default='human',
+                        help='One of human or gif.')
+
+    parser.add_argument('--render_frequency',
+                        type=int,
+                        default=1,
+                        help='Render gif this frequently, in steps.')
 
     parser.add_argument('--baseline',
                         action='store_true',
@@ -1094,9 +1125,50 @@ if __name__ == '__main__':
                         help='If provided, do not train the model.')
 
 
+    ######################### Action Noise Flags ##############################
+    # TODO: Update help.
+    parser.add_argument('--action_noise_mu',
+                        type=float,
+                        default=0.0,
+                        help='The learning rate for the critic optimizer.')
+
+    # TODO: Update help.
+    parser.add_argument('--action_noise_sigma',
+                        type=float,
+                        default=0.06,
+                        help='The learning rate for the critic optimizer.')
+
+    # TODO: Update help.
+    parser.add_argument('--action_noise_theta',
+                        type=float,
+                        default=0.015,
+                        help='The learning rate for the critic optimizer.')
+
+    # TODO: Update help.
+    parser.add_argument('--action_noise_dt',
+                        type=float,
+                        default=1e-2,
+                        help='The learning rate for the critic optimizer.')
+
+    # TODO: Update help.
+    parser.add_argument('--action_noise_x0',
+                        type=float,
+                        default=None,
+                        help='The learning rate for the critic optimizer.')
+
+
     ############################ DASIE FLAGS ##################################
     parser.add_argument('--extended_object_image_file', type=str,
+                        default=None,
                         help='Filename of image to convolve PSF with (if none, PSF returned)')
+
+    parser.add_argument('--extended_object_distance', type=str,
+                        default=None,
+                        help='Distance in meters to the extended object.')
+
+    parser.add_argument('--extended_object_extent', type=str,
+                        default=None,
+                        help='Extent in meters of the extended object image.')
 
     ### Telescope / pupil-plane setup ###
 
