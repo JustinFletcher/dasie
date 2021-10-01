@@ -69,13 +69,26 @@ def generalized_gaussian_2d(u, v, mu_u, mu_v, alpha, beta):
 
     return z
 
+@np.vectorize
+def circle_mask(X, Y, x_center, y_center, radius):
+    r = np.sqrt((X-x_center)**2 + (Y-y_center)**2)
+    return r < radius
+
 def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
 
     generalized_gaussian_2d_sample = generalized_gaussian_2d(X, Y, mu_u, mu_v, alpha, beta)
+    
+    # Subsistitute simple circular mask function
+    # Warning!  Ugly alpha fudge factor!
+#     subaperture_radius = alpha*4
+#     generalized_gaussian_2d_sample = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
 
     plane_2d_sample = plane_2d(X, Y, mu_u, mu_v, tip, tilt, piston)
+    
+    # The piston tip and tilt are encoded as the phase-angle of pupil plane
+    plane_2d_field = np.exp(1.j*plane_2d_sample)
 
-    aperture_sample = generalized_gaussian_2d_sample * plane_2d_sample
+    aperture_sample = generalized_gaussian_2d_sample * plane_2d_field
 
     return aperture_sample
 
@@ -98,17 +111,27 @@ def main(flags):
 
     # Set simulation parameters
     spatial_quantization = 256
-    alpha = 0.025
-    beta = 110.0
-    radius = 0.81
+    beta = 80.0
+#     radius = 0.81
+#     alpha = 0.025
+    radius = 1.25   # meters
+    alpha = np.pi*radius/num_apertures/4  # Completely BS alpha scaling factor again...
 
+    filter_wavelength_micron = 1.0
+#     field_of_view_arcsec = 15.0    # Big FOV makes pupil-function easier to see
+    field_of_view_arcsec = 4.0
+
+    # Pupil-plane scaling factor
+    # 4.848 microradians / arcsec
+    pupil_extent = filter_wavelength_micron * spatial_quantization / (4.8 * field_of_view_arcsec) 
+    
     # Establish the simulation mesh grid.
-    x = np.linspace(-1.0, 1.0, spatial_quantization)
-    y = np.linspace(-1.0, 1.0, spatial_quantization)
+    x = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+    y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
     X, Y = np.meshgrid(x, y)
 
     # Construct the pupil plan by adding independent aperture functions.
-    pupil_plane = np.zeros((spatial_quantization, spatial_quantization))
+    pupil_plane = np.zeros((spatial_quantization, spatial_quantization), dtype=np.complex)
 
     for aperture_num in range(num_apertures):
 
@@ -116,17 +139,25 @@ def main(flags):
         # tip = np.random.uniform(0.0, 6.0)
         # tilt = np.random.uniform(0.0, 6.0)
         # piston = np.random.uniform(0.0, 6.0)
-        tip = 0.0
-        tilt = 0.0
-        piston = 0.01
+        tip = 0.0      
+        tilt = 0.0     # microns / meter (not far off from microradian tilt)
+        piston = 0.01  # microns
+        
+        # Piston (in microns) encoded in phase angle
+        pison_phase = 2 * np.pi * piston / filter_wavelength_micron
+
+        # Tip and tilt (micron/meter) ~= (microradians of tilt)
+        tip_phase = 2 * np.pi * tip / filter_wavelength_micron
+        tilt_phase = 2 * np.pi * tip / filter_wavelength_micron
 
         rotation = (aperture_num + 1) / num_apertures
         mu_u = radius * np.cos((2 * np.pi) * rotation)
         mu_v = radius * np.sin((2 * np.pi) * rotation)
 
-        pupil_plane += aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston)
+        pupil_plane += aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip_phase, tilt_phase, pison_phase)
 
-    pupil_plane = pupil_plane / np.max(pupil_plane)
+    # Not sure what this would do (~Ian)
+#     pupil_plane = pupil_plane / np.max(pupil_plane)
 
     # Compute the PSF from the pupil plane.
     # psf = np.abs(np.fft.fft2(pupil_plane))
@@ -149,10 +180,25 @@ def main(flags):
     # If requested, save the plot.
     if flags.save_plot:
 
-        plt.matshow(pupil_plane)
-        plt.matshow(np.log(psf))
+        # plt.matshow(pupil_plane)
+        # plt.matshow(np.log(psf))
         # plt.matshow(np.log((mtf)))
         # plt.matshow(distributed_aperture_image)
+        
+        
+        # Ian's alternative plots
+        plt.figure(figsize=[12, 4])
+        plt.subplot(121)
+        # Plot phase angle
+        plt.imshow(np.angle(pupil_plane), cmap='twilight_shifted')
+        plt.colorbar()
+        # Overlay aperture mask
+        plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2)
+
+        plt.subplot(122)
+        # Plot log10(psf)
+        plt.imshow(np.log10(psf), vmin=-3, cmap='inferno')
+        plt.colorbar()
 
         run_id = None
         if run_id:
