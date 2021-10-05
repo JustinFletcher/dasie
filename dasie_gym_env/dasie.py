@@ -3,15 +3,41 @@
 Distributed Aperture System for Interferometric Exploitation control system
 simulation environment.
 
-Author: Justin Fletcher
+Author: Justin Fletcher, Ian Cunnyngham
 """
 
+import os
+
 import gym
+import glob
 import time
 import numpy as np
 
+from collections import deque
+
+from PIL import Image, ImageSequence
+
 from gym import spaces, logger
 from gym.utils import seeding
+
+from matplotlib import pyplot as plt
+
+# Simulation of multi aperture telescope built on top of MutiPSFSampler built on top of HCIPy
+from simulate_multi_aperture import SimulateMultiApertureTelescope
+
+
+def cosine_similarity(u, v):
+    """
+
+    :param u: Any np.array matching u in shape (and semantics probably)
+    :param v: Any np.array matching v in shape (and semantics probably)
+    :return: np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v))
+    """
+    u = u.flatten()
+    v = v.flatten()
+
+    return (np.dot(v, u) / (np.linalg.norm(u) * np.linalg.norm(v)))
+
 
 class DasieEnv(gym.Env):
     """
@@ -27,7 +53,7 @@ class DasieEnv(gym.Env):
         in the forthcoming work by Fletcher et. al.
 
     Observation: 
-        Type: Tuple(observation_window_size )
+        Type: Box(observation_window_size, height, width)
         Each observation is a tuple of the last N_w (window size)
         
     Actions:
@@ -55,24 +81,38 @@ class DasieEnv(gym.Env):
     def __init__(self, **kwargs):
 
         print(kwargs)
+        
+        ### Inialize multi-aperture telescope simulator
+        # Pass all parsed kwargs in, will only use the ones it needs and grab defaults for anything missing
+        self.telescope_sim = SimulateMultiApertureTelescope(**kwargs)
+        
+        # Copy this locally
+        self.num_apertures = self.telescope_sim.num_apertures
 
-        # First, parse the keyword arguments.
-        self.num_apertures = kwargs['num_apertures']
-        self.phase_simulation_resolution = kwargs['phase_simulation_resolution']
+        # If an extended object image is provided, load it only once.
+        # TODO: generalize to accomodate changing images.
+        self.extended_object_image_file = kwargs['extended_object_image_file']
+        if self.extended_object_image_file:
+            perfect_image = plt.imread('sample_image.png')
+            self.perfect_image = perfect_image / np.max(perfect_image)
+        
+        
+        # Keep track of simulation time for atmosphere evolution at least (probably more later)
+        self.simulation_time = 0
+        
+        # Parse the rest of the keyword arguments
+        self.step_time_granularity = kwargs['step_time_granularity']
         self.tip_phase_error_scale = kwargs['tip_phase_error_scale']
         self.tilt_phase_error_scale = kwargs['tilt_phase_error_scale']
         self.piston_phase_error_scale = kwargs['piston_phase_error_scale']
 
-        # Create an empty phase matrix to modify.
-        self.system_phase_matrix = 0.0 * np.ones((self.phase_simulation_resolution,
-                                                  self.phase_simulation_resolution))
-
         # TODO: Compute the number of tau needed for one model inference.
 
         # Define the action space for DASIE, by setting the lower limits...
-        tip_lower_limit = 0.0
-        tilt_lower_limits = 0.0
-        piston_lower_limits = 0.0
+        # (Ian) Switched this to be symetric about zero
+        tip_lower_limit = -1.0
+        tilt_lower_limits = -1.0
+        piston_lower_limits = -1.0
         lower_limits = np.array([tip_lower_limit,
                                  tilt_lower_limits,
                                  piston_lower_limits])
@@ -85,29 +125,53 @@ class DasieEnv(gym.Env):
                                  tilt_upper_limits,
                                  piston_upper_limits])
 
-        # We then create a list to hold the composite action spaces, and...
-        aperture_action_spaces = list()
+        # # We then create a list to hold the composite action spaces, and...
+        # aperture_action_spaces = list()
+        #
+        # # ...iterate over each aperture...
+        # for aperture_num in range(self.num_apertures):
+        #
+        #     # ...instantiating a box space using the established limits...
+        #     aperture_space = spaces.Box(lower_limits,
+        #                                 upper_limits, dtype=np.float32)
+        #     # ...and adding that space to the list of spaces.
+        #     aperture_action_spaces.append(aperture_space)
+        #
+        # # Finally, we complete the space by building it from the template list.
+        # self.action_space = spaces.Tuple(aperture_action_spaces)
 
-        # ...iterate over each aperture...
-        for aperture_num in range(self.num_apertures):
+        # Define a symmetric action space.
+        self.action_shape = (self.num_apertures, 3)
+        action_bound_low = -1.0 * np.ones(self.action_shape)
+        action_bound_high = np.ones(self.action_shape)
+        self.action_space = spaces.Box(low=action_bound_low,
+                                       high=action_bound_high,
+                                       dtype=np.float32)
 
-            # ...instantiating a box space using the established limits...
-            aperture_space = spaces.Box(lower_limits,
-                                        upper_limits, dtype=np.float32)
-
-            # ...and adding that space to the list of spaces.
-            aperture_action_spaces.append(aperture_space)
-
-        # Finally, we complete the space by building it from the template list.
-        self.action_space = spaces.Tuple(aperture_action_spaces)
+        # TODO: Refactor action space to allow Box-based asymmetric spaces.
 
         # TODO: Build a correct observation space.
-        self.observation_space = spaces.Tuple(aperture_action_spaces)
+        # Get image shape.
+        self.image_shape = kwargs['filter_psf_resolution']
+
+        # Get window depth.
+        self.observation_window_size = kwargs['observation_window_size']
+
+        # Define a 3D observation space
+        self.observation_shape = (self.image_shape,
+                                  self.image_shape,
+                                  self.observation_window_size)
+        self.observation_space = spaces.Box(low = np.zeros(self.observation_shape),
+                                            high = np.ones(self.observation_shape),
+                                            dtype = np.float16)
 
         self.seed()
         self.viewer = None
         self.state = None
         self.steps_beyond_done = None
+
+        self.render_frequency = kwargs['render_frequency']
+        
 
     def seed(self, seed=None):
 
@@ -118,114 +182,62 @@ class DasieEnv(gym.Env):
     def reset(self):
         # Set the initial state. This is the first thing called in an episode.
 
+        print("Resetting Environment")
+        
         self.apertures = list()
-        # TODO: Once refactored, parallelize this.
-
-        # Compute the global midpoint for all apertures.
-        phase_map_midpoint = np.floor(self.phase_simulation_resolution // 2)
-
-        # Compute a scale factor; shrink the subapertures by just enough.
-        # TODO: Determine why this works. I made it. I'm just not sure how.
-        aperture_scale = (np.cos(np.pi / self.num_apertures) / np.sin(np.pi / self.num_apertures)) + (2 * np.pi)
-
-        # Scale the midpoint to get the radius.
-        aperture_radius = (phase_map_midpoint / aperture_scale)
-        aperture_annulus_radius = (aperture_radius / np.sin(np.pi / self.num_apertures))
-
+        
         # Iterate over each aperture.
         for aperture_index in range(self.num_apertures):
-
-            # TODO: Refactor to a build_aperture function.
-
-            start_time = time.time()
-
-            # Compute the angular position for this aperture.
-            angular_position = 2 * np.pi * aperture_index / self.num_apertures
-
-            # Compute the global-reference midpoint using position and radius.
-            phase_map_x_centroid = phase_map_midpoint + (aperture_annulus_radius * np.sin(angular_position))
-            phase_map_y_centroid = phase_map_midpoint + (aperture_annulus_radius * np.cos(angular_position))
-
-            # For each aperture, compute all of it's pixel coordinates.
-            xx, yy = np.mgrid[:self.phase_simulation_resolution,
-                              :self.phase_simulation_resolution]
-
-            # Compute the meshgrid map for the radius of this apertures circle.
-            circle = (xx - phase_map_x_centroid) ** 2 + \
-                     (yy - phase_map_y_centroid) ** 2
-
-            # Compute the inclusive region of a circle given by this radius.
-            circle = np.sqrt(circle) <= aperture_radius
-
-            # Next, we bookkeep the aperture, by computing its extent...
-            r_min = self.phase_simulation_resolution
-            r_max = 0
-            c_min = self.phase_simulation_resolution
-            c_max = 0
-
-            # ...and its pixels. Both methods are retained for comparisons.
-            aperture_pixels = list()
-
-            # Iterate over each pixle in the whole phase map. This is slow.
-            for r, row in enumerate(circle):
-                for c, value in enumerate(row):
-
-                    # If the pixel is in the circle of this aperture...
-                    if circle[r, c]:
-
-                        # ...store the pixel...
-                        aperture_pixels.append((r, c))
-
-                        # ...and use it to assess aperture pixel bounds.
-                        if r < r_min:
-                            r_min = r
-                        if r > r_max:
-                            r_max = r
-                        if c < c_min:
-                            c_min = c
-                        if c > c_max:
-                            c_max = c
-
             # Now, create a new dict to track this aperture through simulation.
             aperture = dict()
-
-            # Store a reference index for this aperture.
-            aperture['index'] = aperture_index
-
+            
             # Initialize the tip, tilt, and piston for this aperture.
             tip = 0.0 + self.tip_phase_error_scale * np.random.randn(1)
             tilt = 0.0 + self.tilt_phase_error_scale * np.random.randn(1)
-            piston = 1.0 + self.piston_phase_error_scale * np.random.randn(1)
-            aperture['tip_phase'] = tip
-            aperture['tilt_phase'] = tilt
-            aperture['piston_phase'] = piston
-
-            # Compute a grid of phase for this aperture, and record it's value.
-            xx, yy = np.mgrid[:(r_max - r_min), :(c_max - c_min)]
-            patch = (tip * xx) + (tilt * yy) + piston
-            aperture['phase_map_patch'] = patch
-
-            # Store the bounds of this aperture, relative to the global phase.
-            aperture['phase_map_patch_bounds'] = [r_min, r_max, c_min, c_max]
-
-            # Store this apertures circular mask. Eases later computations.
-            aperture['phase_map_circle_patch'] = circle[r_min:r_max, c_min:c_max]
-            aperture['phase_map_radius'] = aperture_radius
-            aperture['phase_map_x_centroid'] = phase_map_x_centroid
-            aperture['phase_map_y_centroid'] = phase_map_y_centroid
-
-            aperture['pixel_list'] = aperture_pixels
-
+            piston = 1.0 +self.piston_phase_error_scale * np.random.randn(1)
+            aperture['tip_phase'] = tip[0]
+            aperture['tilt_phase'] = tilt[0]
+            aperture['piston_phase'] = piston[0]
+            
             self.apertures.append(aperture)
+            
+        # Reset simulation time
+        self.simulation_time = 0
+        
+        # Reset telescope simulator (atmosphere if any)
+        self.telescope_sim.reset()
 
-            print("--- Setup time = %s seconds ---" % (time.time() - start_time))
+        # Update observables 
+        # ( Since state is set to None, is this important? )
+        self._update_sampler()
+        
+        # Initialize state.
 
-        self._update_phase_matrix()
-        self._update_psf_matrix()
+        # Construct the observation queue (FIFO) using blank frames.
+        state_shape = np.stack(self.observation_space.sample()).shape
+        blank_frame = np.zeros(state_shape[:-1] + (1,))
+        self.observation_stack = deque()
 
-        # TODO: Initialize state.
-        self.state = None
+        for _ in range(self.observation_window_size):
+
+            self.observation_stack.append(blank_frame)
+
+        # Let the system run uncontrolled to populate the frame buffer.
+        initial_state = self.observation_stack
+
+        print("Resetting Environment: Populating Initial State")
+
+        for _ in range(self.observation_window_size):
+
+            no_action = np.zeros_like(self.action_space.sample())
+
+            (initial_state, _, _, _) = self.step(action=no_action)
+
+        self.state = initial_state
         self.steps_beyond_done = None
+
+
+        print("Resetting Environment: Complete")
         return np.array(self.state)
 
     def step(self, action):
@@ -240,30 +252,35 @@ class DasieEnv(gym.Env):
             aperture['tilt_phase_command'] = aperture_command[1]
             aperture['piston_phase_command'] = aperture_command[2]
 
+            # print("Start Aperture Commands")
+            # print(aperture['tip_phase_command'])
+            # print(aperture['tilt_phase_command'])
+            # print(aperture['piston_phase_command'])
+            # print("Stop Aperture Commands")
+
             # TODO: Move this and do incremental updates.
             aperture['tip_phase'] = aperture['tip_phase_command']
             aperture['tilt_phase'] = aperture['tilt_phase_command']
             aperture['piston_phase'] = aperture['piston_phase_command']
 
-        # # TODO: Write main simulation loop here.
+        # # TODO: Write actuation simulation loop here.
         # # num_timesteps is probably the inference latency of the system.
         # for t in range(num_timesteps):
         #     # TODO: Iterate the target model state.
         #     # TODO: Iterate the at-aperture irradiance.
         #     # TODO: Iterate toward commanded articulations.
 
-        # # Parse the state.
-        # state = self.state
-        # x, x_dot, theta, theta_dot = state
-        # self.state = (x,x_dot,theta,theta_dot)
+        # Move time forward by one time-step
+        self.simulation_time += self.step_time_granularity
 
-        self._update_phase_matrix()
-        self._update_psf_matrix()
+        # Evolve telescope simulation (atmosphere)
+        self.telescope_sim.evolve_to(self.simulation_time)
 
-        # TODO: Figure out what this means for our problem, if anything.
+        # Update observables.
+        self._update_sampler()
+
         done = False
 
-        # TODO: Build a reward function.
         # In this implementation, reward is a function of done.
         if not done:
             reward = 1.0
@@ -277,14 +294,51 @@ class DasieEnv(gym.Env):
             self.steps_beyond_done += 1
             reward = 0.0
 
-        # compute_reward()
-        # compute_done()
+        # TODO: compute_reward()
+        # TODO: compute_done()
 
-        self.state = self.optical_psf_matrix
+        # Build the state by popping the oldest frame and appending the newest.
+        self.observation_stack.popleft()
+        self.observation_stack.append(self.focal_plane_obs)
+
+        # Set the state to the updated queue.
+        self.state = self.observation_stack
+
+        self.reward_function = "strehl"
+        self.reward_function = "truth_cosine_similarity"
+
+        if self.reward_function == "strehl":
+
+            reward = self.strehl_scalar
+
+        if self.reward_function == "truth_cosine_similarity":
+
+            truth_image = self.telescope_sim.get_extended_object_image()
+
+            if truth_image is None:
+
+                print("No extended_object_image_file was provided.")
+
+            recovered_image = np.mean(np.stack(self.observation_stack), axis=(0, -1))
+
+            reward = cosine_similarity(truth_image, recovered_image)
+
+        print(reward)
 
         return np.array(self.state), reward, done, {}
 
-    def render(self, mode='human'):
+    def render(self,
+               render_mode,
+               logdir=None,
+               run_name=None,
+               episode=None,
+               step=None):
+
+        if not logdir:
+            logdir = "."
+
+        if not run_name:
+            run_name = str(datetime.timestamp(datetime.now()))
 
         if self.state is None: return None
 
@@ -294,7 +348,7 @@ class DasieEnv(gym.Env):
 
             normalized_img = shifted_img / np.max(shifted_img)
 
-            scaled_img = (scale) * normalized_img
+            scaled_img = scale * normalized_img
 
             return(scaled_img)
 
@@ -307,18 +361,90 @@ class DasieEnv(gym.Env):
             ret[:, :, 2] = ret[:, :, 1] = ret[:, :, 0] = im
             return ret
 
-        log_real_optical_psf = np.log(np.abs(np.fft.fftshift(self.optical_psf_matrix)))
-        log_real_optical_psf_img = to_rgb(positive_shift_norm_scale_img(log_real_optical_psf))
-        system_phase_matrix_img = to_rgb(positive_shift_norm_scale_img(self.system_phase_matrix))
+        perfect_image = to_rgb(positive_shift_norm_scale_img(self.perfect_image))
+        system_phase_matrix_img = to_rgb(positive_shift_norm_scale_img(self.pupil_plane_phase_screen))
+        # (Ian) The output of sampler is (res, res, num_wavelengths), so need to select just one
+        log_real_focal_plane = np.abs(self.focal_plane_obs[..., 0])
+        log_real_focal_plane = to_rgb(positive_shift_norm_scale_img(log_real_focal_plane))
+        restored_image = np.mean(np.stack(self.observation_stack), axis=(0, -1))
+        restored_image = to_rgb(positive_shift_norm_scale_img(restored_image))
 
-        render_image = np.hstack([system_phase_matrix_img,
-                                  log_real_optical_psf_img])
+        # Compose the component images into a single view.
+        if self.extended_object_image_file:
 
-        if mode == 'rgb_array':
+            render_image = np.hstack([perfect_image,
+                                      system_phase_matrix_img,
+                                      log_real_focal_plane,
+                                      restored_image])
 
+        else:
+
+            render_image = np.hstack([system_phase_matrix_img,
+                                      log_real_focal_plane])
+
+        # TODO: Make render gifs work here.
+
+        if render_mode == 'gif':
+
+            if step % self.render_frequency == 0:
+
+                render_output_path = os.path.join(logdir,
+                                                  run_name,
+                                                  str(episode))
+                if not os.path.exists(render_output_path):
+                    os.makedirs(render_output_path)
+
+                im = Image.fromarray(render_image)
+                im.save(os.path.join(render_output_path, str(step) + ".jpeg"))
+
+            # self.render_images.append(render_image)
+            #
+            # print(self.steps_until_render)
+
+            # if self.steps_until_render == 0:
+                #
+                # print("Rendering")
+                #
+                # # First, load prior frame from disk.
+                # prior_images = list()
+                #
+                # # if os.path.isfile("render.gif"):
+                # #
+                # #     for im in ImageSequence.Iterator(Image.open("render.gif")):
+                # #
+                # #         prior_images.append(im)
+                # #     # prior_images = list(ImageSequence.Iterator(Image.open("render.gif")))
+                # #
+                # #     print(len(prior_images))
+                #
+                # render_images = prior_images + self.render_images
+                #
+                # print(len(render_images))
+                # render_images[0].save("render.gif",
+                #                       save_all=True,
+                #                       append_images=render_images[1:],
+                #                       duration=50,
+                #                       loop=0)
+                #
+                # self.steps_until_render = self.render_frequency
+                # self.render_images = list()
+
+
+            # render_stack.append(render_image)
+            # imgs = [Image.fromarray(img) for img in render_stack]
+            # # duration is the number of milliseconds between frames; this is 40 frames per second
+            # imgs[0].save("render.gif",
+            #              save_all=True,
+            #              append_images=imgs[1:],
+            #              duration=50,
+            #              loop=0)
+            #
+            # render_stack.append(render_image)
+
+            # Count down the steps until render.
             return render_image
 
-        elif mode == 'human':
+        elif render_mode == 'human':
 
             from gym.envs.classic_control import rendering
 
@@ -335,64 +461,33 @@ class DasieEnv(gym.Env):
             self.viewer.close()
             self.viewer = None
 
-    def _update_phase_matrix(self):
-        mode = "use_aperture_patch"
+    def _update_sampler(self):
 
-        # TODO: Multithread this.
+        # Retrieve piston, tip, and tilt phases
+        sampler_ptt_phases = []
         for aperture in self.apertures:
-
             piston = aperture['piston_phase']
             tip = aperture['tip_phase']
             tilt = aperture['tilt_phase']
+            
+            sampler_ptt_phases += [[piston, tip, tilt]]
+        
+        # Sampler takes a (nMir, 3) numpy array with piston, tip, tilt for each sub-aperture
+        sampler_ptt_phases = np.array(sampler_ptt_phases)
+        
+        # X: Stack of focal plane observations
+        #    PSF by default, extended image convolved with PSF if provided
+        # Y: Returns the optimal P/T/T (n_aper, 3) phases to get optimal strehl (measured vs atmosphere)
+        # strehls: If meas_strehls set, returns strehl vs perfectly phase mirror
+        X, Y, strehls  = self.telescope_sim.get_observation(
+            piston_tip_tilt = sampler_ptt_phases,  # (n_aper, 3) piston, tip, tilts to set telescope to
+        )
 
-            [r_min, r_max, c_min, c_max] = aperture['phase_map_patch_bounds']
+        self.strehl_scalar = strehls[0]
+        self.focal_plane_obs = X
 
-            # Get the last patch, and use it to compute a phase map delta.
-            old_patch = aperture['phase_map_patch']
-
-            # Create current patch based on the tip, tilt, piston.
-            xx, yy = np.mgrid[:(r_max - r_min),
-                     :(c_max - c_min)]
-            new_patch = (tip * xx) + (tilt * yy) + piston
-
-            # As the number of apertures increases, pixel-wise is better.
-            # As the number of apertures decreases, matrix addition is better.
-            # Both scale with the square of the resolution,  but pixel-wise scales worse.
-            aperture['phase_map_patch'] = new_patch
-
-            if mode == "use_matrix_addition":
-
-                # This meshgrid approach is extremely inefficient.
-                xx, yy = np.mgrid[:self.phase_simulation_resolution,
-                         :self.phase_simulation_resolution]
-
-                circle = (xx - aperture['phase_map_x_centroid']) ** 2 + \
-                         (yy - aperture['phase_map_y_centroid']) ** 2
-
-                circle = np.sqrt(circle) <= aperture['phase_map_radius']
-
-                patch_delta = new_patch - old_patch
-                patch_delta = patch_delta * aperture[
-                    'phase_map_circle_patch']
-
-                self.system_phase_matrix[r_min:r_max,
-                c_min:c_max] += patch_delta * circle[r_min:r_max,
-                                              c_min:c_max]
-
-            elif mode == "use_pixel_list":
-
-                for (r, c) in aperture['pixel_list']:
-                    self.system_phase_matrix[r, c] = new_patch[
-                        r - r_min - 1, c - c_min - 1]
-
-            elif mode == "use_aperture_patch":
-
-                patch_delta = new_patch - old_patch
-                patch_delta = patch_delta * aperture['phase_map_circle_patch']
-                self.system_phase_matrix[r_min:r_max, c_min:c_max] += patch_delta
-
-    def _update_psf_matrix(self):
-
-        # Finally, compute the psy of this state.
-        self.optical_psf_matrix = np.fft.fft2(self.system_phase_matrix,
-                                              norm="ortho")
+        # self.truth_image = self.telescope_sim.get_extended_object_image()
+        
+        # Maybe only fetch the phase screen if render is set to True?
+        # Get a numpy matrix instead of an HCIPy "Field"
+        self.pupil_plane_phase_screen = self.telescope_sim.pupil_plane_phase_screen(np_array=True)

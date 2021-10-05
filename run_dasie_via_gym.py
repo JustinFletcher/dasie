@@ -2,7 +2,7 @@
 This script runs a simulated Distributed Aperture System for Interferometric
 Exploitation via the OpenAI gym interface.
 
-Author: Justin Fletcher
+Author: Justin Fletcher, Ian Cunnyngham
 Date: 20 October 2019
 """
 
@@ -10,6 +10,10 @@ import os
 import argparse
 
 import gym
+
+# Function which adds all the arugments for running a multi-aperture simulation to argparser instance
+from simulate_multi_aperture import add_multi_aperture_telescope_args
+
 
 # TODO: Move this whole script down a level.
 
@@ -43,7 +47,8 @@ def cli_main(flags):
                 print("Running step %s." % str(t))
 
             # ...show the environment to the caller...
-            env.render()
+            if not flags.no_render:
+                env.render()
 
             # ...get a random action...
             action = env.action_space.sample()
@@ -69,11 +74,35 @@ if __name__ == "__main__":
     parser.add_argument('--gpu_list', type=str,
                         default="0",
                         help='GPUs to use with this model.')
+    
+    # Wasn't sure if defaulting to rendering or not made more sense
+    # Keeps my example commands simpler  this way...
+    parser.add_argument('--no_render', type=str,
+                    default=False,
+                    help='Disable environment render function')
+    
+    
+    ### Add all the arguments for Multi-Aperture Telescope simulator
+    parser = add_multi_aperture_telescope_args(parser)
+    
+    
+    ### Gym simulation setup ###
+    parser.add_argument('--step_time_granularity', type=float,
+                        default=0.01,
+                        help='The time granularity of DASIE step (seconds)')
 
-    parser.add_argument('--phase_simulation_resolution', type=int,
-                        default=2 ** 11,
-                        help='Size of simulated aperture image.')
+    parser.add_argument('--tip_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tip alignment std.')
 
+    parser.add_argument('--tilt_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial tilt alignment std.')
+
+    parser.add_argument('--piston_phase_error_scale', type=float,
+                        default=0.01,
+                        help='The initial piston alignment std.')
+    
     parser.add_argument('--max_episode_steps', type=int,
                         default=10000,
                         help='Steps per episode limit.')
@@ -81,10 +110,6 @@ if __name__ == "__main__":
     parser.add_argument('--num_episodes', type=int,
                         default=1,
                         help='Number of episodes to run.')
-
-    parser.add_argument('--num_apertures', type=int,
-                        default=9,
-                        help='Number of apertures to simulate.')
 
     parser.add_argument('--reward_threshold', type=float,
                         default=25.0,
@@ -105,22 +130,6 @@ if __name__ == "__main__":
     parser.add_argument('--simulated_actuation_latency', type=float,
                         default=0.005,
                         help='The latency caused by actuation in secs.')
-
-    parser.add_argument('--simulation_time_granularity', type=float,
-                        default=0.001,
-                        help='The time granularity of DASIE sim in secs.')
-
-    parser.add_argument('--tip_phase_error_scale', type=float,
-                        default=0.01,
-                        help='The initial tip alignment std.')
-
-    parser.add_argument('--tilt_phase_error_scale', type=float,
-                        default=0.01,
-                        help='The initial tilt alignment std.')
-
-    parser.add_argument('--piston_phase_error_scale', type=float,
-                        default=0.01,
-                        help='The initial piston alignment std.')
 
     parser.add_argument('--silence', action='store_true',
                         default=False,
