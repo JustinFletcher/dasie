@@ -96,11 +96,15 @@ def main(flags):
     num_apertures = flags.num_subapertures
     num_apertures = 15
 
+    pupil_plane_meters = 4.5
+    telescope_aperture_centroid_diameter_meters = 1.5
+    radius_to_centroid_pupil_fraction = telescope_aperture_centroid_diameter_meters / pupil_plane_meters
+
     # Set simulation parameters
     spatial_quantization = 256
-    alpha = 0.025
-    beta = 110.0
-    radius = 0.81
+    alpha = 0.0045
+    beta = 100.0
+    radius = radius_to_centroid_pupil_fraction
 
     # Establish the simulation mesh grid.
     x = np.linspace(-1.0, 1.0, spatial_quantization)
@@ -118,7 +122,7 @@ def main(flags):
         # piston = np.random.uniform(0.0, 6.0)
         tip = 0.0
         tilt = 0.0
-        piston = 0.01
+        piston = 1.0
 
         rotation = (aperture_num + 1) / num_apertures
         mu_u = radius * np.cos((2 * np.pi) * rotation)
@@ -135,13 +139,17 @@ def main(flags):
     # Compute the OTF, which is the Fourier transform of the PSF.
     otf = np.fft.fft2(psf)
 
-    # Compute the mtf, which is the real component of the OTF
+    # Compute the MTF, which is the real component of the OTF
     mtf = np.abs(otf)
 
+    # Apply the MTF to the object plane spectrum to get the image plane spectrum.
     distributed_aperture_image_spectrum = perfect_image_spectrum * mtf
 
+    # Compute the image plane image.
     distributed_aperture_image = np.abs((np.fft.fft2(distributed_aperture_image_spectrum)))
     distributed_aperture_image = distributed_aperture_image / np.max(distributed_aperture_image)
+
+    # Measure the cosine similarity between the object plane and image plane images.
     distributed_aperture_image_cosine_similarity = cosine_similarity(distributed_aperture_image, perfect_image_flipped)
     print("Cosine similarity: " + str(distributed_aperture_image_cosine_similarity))
 
@@ -150,7 +158,7 @@ def main(flags):
     if flags.save_plot:
 
         plt.matshow(pupil_plane)
-        plt.matshow(np.log(psf))
+        # plt.matshow(np.log(psf))
         # plt.matshow(np.log((mtf)))
         # plt.matshow(distributed_aperture_image)
 
