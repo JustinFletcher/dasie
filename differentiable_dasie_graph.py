@@ -865,6 +865,9 @@ def train(sess,
 
 def main(flags):
 
+    # Set the GPUs we want the script to use/see
+    os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
+
     # Set up some log directories.
     timestamp = datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
     save_dir = os.path.join(".", "logs", timestamp)
@@ -930,6 +933,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='provide arguments for training.')
 
+    parser.add_argument('--gpu_list', type=str,
+                        default="0",
+                        help='GPUs to use with this model.')
 
 
     parser.add_argument('--logdir',
