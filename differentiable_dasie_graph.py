@@ -661,6 +661,8 @@ class DASIEModel(object):
         recovered_image = self.sess.run([self.recovered_image],
                                         feed_dict={self.inputs: inputs})
 
+        recovered_image = np.squeeze(recovered_image)
+
         plot_index = num_cols * (num_rows - 2)
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
         # Plot phase angle
