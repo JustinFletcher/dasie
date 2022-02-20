@@ -9,6 +9,7 @@ import time
 import copy
 import json
 import math
+import glob
 import hcipy
 import codecs
 import joblib
@@ -20,6 +21,9 @@ import pandas as pd
 import numpy as np
 
 from decimal import Decimal
+
+# TODO: Refactor this import.
+from dataset_generator import DatasetGenerator
 
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -194,7 +198,7 @@ class DASIEModel(object):
         # TODO: expand to batches as shown:
         # batch_shape = (None,) + (spatial_quantization, spatial_quantization)
         batch_shape = (spatial_quantization, spatial_quantization)
-        if inputs:
+        if inputs is not None:
 
             # TODO: Add shape test here.
             perfect_image_placeholder = inputs
@@ -203,6 +207,8 @@ class DASIEModel(object):
             perfect_image_placeholder = tf.compat.v1.placeholder(tf.float64,
                                                                  shape=batch_shape,
                                                                  name="perfect_image_batch")
+
+
 
         # Compute the pupil extent: 4.848 microradians / arcsec
         # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
@@ -223,7 +229,6 @@ class DASIEModel(object):
         tilt_std = 1.0
         piston_std = 1.0
 
-        num_exposures = 1
         self.num_exposures = num_exposures
 
         # TODO: Migrate this out to a separate function.
@@ -414,6 +419,7 @@ class DASIEModel(object):
         # Iterate over each pupil plane, one per exposure.
         for pupil_plane in self.pupil_planes:
 
+
             # Basically the following is the loss function of the pupil plane.
             # The pupil plan here can be thought of an estimator, parameterized by
             # t/t/p values, of the true image.
@@ -431,27 +437,27 @@ class DASIEModel(object):
                 otf = tf.signal.fft2d(tf.cast(psf, tf.complex128))
                 self.otfs.append(otf)
 
-            # Compute the mtf, which is the real component of the OTF,=.
+            # Compute the mtf, which is the real component of the OTF.
             with tf.name_scope("mtf_model"):
 
                 mtf = tf.math.abs(otf)
                 self.mtfs.append(mtf)
 
             with tf.name_scope("image_spectrum_model"):
-
-                self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(perfect_image_placeholder, dtype=tf.complex128))
-                # TODO: This must become a batch-wise operation...
-                distributed_aperture_image_spectrum = tf.cast(mtf, dtype=tf.complex128) * self.perfect_image_spectrum
+                self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(perfect_image_placeholder, axis=-1), dtype=tf.complex128))
 
 
             with tf.name_scope("image_plane_model"):
+                distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
                 distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
                 distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
+
 
             with tf.name_scope("sensor_model"):
 
                 # TODO: Implement Gaussian and Poisson process noise.
                 distributed_aperture_image = distributed_aperture_image_plane
+
 
                 self.distributed_aperture_images.append(distributed_aperture_image)
 
@@ -466,29 +472,25 @@ class DASIEModel(object):
                 # Compute the PSF from the pupil plane.
                 # TODO: ask for advice, should I NOT be taking the ABS here?
                 with tf.name_scope("monolithic_psf_model"):
-                    self.monolithic_psf = tf.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
+                    self.monolithic_psf = tf.math.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
 
                 # Compute the OTF, which is the Fourier transform of the PSF.
                 with tf.name_scope("monolithic_otf_model"):
                     self.monolithic_otf = tf.signal.fft2d(tf.cast(self.monolithic_psf, tf.complex128))
 
-                # Compute the mtf, which is the real component of the OTF,=.
+                # Compute the mtf, which is the real component of the OTF.
                 with tf.name_scope("monolithic_mtf_model"):
                     self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
 
                 with tf.name_scope("image_spectrum_model"):
-                    # The np here might be a problem soon.
-                    # Still a problem because dumb stuff.
-                    self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(perfect_image_placeholder, dtype=tf.complex128))
-                monolithic_aperture_image_spectrum = tf.cast(self.monolithic_mtf, dtype=tf.complex128) * self.perfect_image_spectrum
+                    self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(perfect_image_placeholder, axis=-1), dtype=tf.complex128))
 
                 with tf.name_scope("monolithic_image_plane_model"):
-                    self.monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
-                    self.monolithic_aperture_image = self.monolithic_aperture_image / tf.reduce_max(self.monolithic_aperture_image)
+                    monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
+                    monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
+                    self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
+                    # self.monolithic_aperture_image = tf.nn.convolution(tf.squeeze(perfect_image_placeholder, axis=-1), tf.expand_dims(self.monolithic_psf, axis=-1))
 
-                with tf.name_scope("monolithic_aperture_metrics"):
-                    perfect_image_flipped = tf.reverse(tf.reverse(perfect_image_placeholder, [0]), [1])
-                    self.monolithic_aperture_image_cosine_similarity = cosine_similarity(self.monolithic_aperture_image, perfect_image_flipped)
 
         # TODO: refactor reconstruction out of this model
         with tf.name_scope("distributed_aperture_image_recovery"):
@@ -499,14 +501,21 @@ class DASIEModel(object):
             # self.recovered_image = tf.math.reduce_mean(self.distributed_aperture_images, 0)
 
         with tf.name_scope("dasie_loss"):
-            # TODO: Explore other losses.
-            perfect_image_flipped = tf.reverse(tf.reverse(perfect_image_placeholder, [0]), [1])
-            self.distributed_aperture_image_cosine_similarity = cosine_similarity(self.recovered_image, perfect_image_flipped)
+            perfect_image_flipped = tf.squeeze(perfect_image_placeholder, axis=-1)
+            perfect_image_flipped = tf.reverse(perfect_image_flipped, [0])
+            perfect_image_flipped = tf.reverse(perfect_image_flipped, [-1])
+            perfect_image_flipped = tf.reverse(perfect_image_flipped, [1])
+            # perfect_image_flipped = tf.reverse(perfect_image_placeholder, [1])
+            # perfect_image_flipped = tf.reverse(perfect_image_placeholder, [0])
+            # perfect_image_flipped = perfect_image_placeholder
+            # perfect_image_flipped = tf.squeeze(perfect_image_flipped, axis=-1)
+            # self.distributed_aperture_image_cosine_similarity = cosine_similarity(self.recovered_image, perfect_image_flipped)
             # self.loss = -tf.math.log(self.distributed_aperture_image_cosine_similarity)
 
-            self.distributed_aperture_mtf_cosine_similarity = cosine_similarity(self.mtfs[0], self.perfect_image_spectrum)
+            # self.distributed_aperture_mtf_cosine_similarity = cosine_similarity(self.mtfs[0], self.perfect_image_spectrum)
             # self.loss = -tf.math.log(self.distributed_aperture_mtf_cosine_similarity)
 
+            # TODO: Explore other losses.
             self.image_mse = tf.reduce_mean((self.recovered_image - perfect_image_flipped)**2)
             self.loss = tf.math.log(self.image_mse)
             # self.loss = self.image_difference
@@ -517,11 +526,13 @@ class DASIEModel(object):
 
         # I wonder if this works...
         with self.writer.as_default():
+
+            # TODO: replace all these endpoints with _batch...
             tf.summary.scalar("in_graph_loss", self.loss)
-            tf.summary.scalar("monolithic_aperture_image_cosine_similarity", self.monolithic_aperture_image_cosine_similarity)
+            # tf.summary.scalar("monolithic_aperture_image_cosine_similarity", self.monolithic_aperture_image_cosine_similarity)
             tf.summary.scalar("monolithic_aperture_image_mse", tf.reduce_mean((self.monolithic_aperture_image - perfect_image_flipped) ** 2))
-            tf.summary.scalar("distributed_aperture_image_cosine_similarity", self.distributed_aperture_image_cosine_similarity)
-            tf.summary.scalar("distributed_aperture_mtf_cosine_similarity", self.distributed_aperture_mtf_cosine_similarity)
+            # tf.summary.scalar("distributed_aperture_image_cosine_similarity", self.distributed_aperture_image_cosine_similarity)
+            # tf.summary.scalar("distributed_aperture_mtf_cosine_similarity", self.distributed_aperture_mtf_cosine_similarity)
             tf.summary.scalar("distributed_aperture_image_mse", tf.reduce_mean((self.recovered_image - perfect_image_flipped)**2))
             tf.summary.scalar("da_mse_mono_mse_ratio", tf.reduce_mean((self.recovered_image - perfect_image_flipped)**2) / tf.reduce_mean((self.monolithic_aperture_image - perfect_image_flipped) ** 2))
 
@@ -545,13 +556,15 @@ class DASIEModel(object):
         return perfect_image_placeholder, output_batch
 
 
-    def _build_recovery_model(self, distributed_aperture_images):
+    def _build_recovery_model(self, distributed_aperture_images_batch):
 
         with tf.name_scope("recovery_model"):
 
             # TODO: Remove this hack once batching is fixed.
-            distributed_aperture_images_batch = tf.expand_dims(distributed_aperture_images, axis=-1)
 
+
+            # distributed_aperture_images_batch = tf.expand_dims(distributed_aperture_images, axis=-1)
+            distributed_aperture_images_batch = tf.stack(distributed_aperture_images_batch, axis=-1)
             with tf.name_scope("recovery_feature_extractor"):
                 x = distributed_aperture_images_batch
                 x = self.conv_block(x,
@@ -592,6 +605,10 @@ class DASIEModel(object):
                                                    dtype=tf.float64))
 
             # Encode the strides for TensorFlow, and build the conv graph.
+
+            # print("make this shape match (8, 256, 256, 2)")
+            # print(input_feature_map.shape)
+            # nowdie
             strides = [1, stride, stride, 1]
             conv_output = tf.nn.conv2d(input_feature_map,
                                        filters,
@@ -607,30 +624,47 @@ class DASIEModel(object):
         return output_feature_map
 
 
-    def plot(self, inputs, logdir=None, step=None):
+    def plot(self, logdir=None, step=None):
 
 
 
         num_da_samples = len(self.pupil_planes)
         num_rows = num_da_samples + 2
-        num_cols = 4
+        num_cols = 6
 
         scale = 6
         plt.figure(figsize=[scale * 4, scale])
 
-        perfect_image_flipped = self.sess.run(self.perfect_image_flipped, feed_dict={self.inputs: inputs})
+        # Replace this with a random crop from the validation set.
+        # perfect_image_flipped = self.sess.run(self.perfect_image_flipped, feed_dict={self.inputs: inputs})
+        perfect_image_flipped = self.sess.run(self.perfect_image_flipped)
+        perfect_image_flipped = perfect_image_flipped[0]
+        perfect_image_spectrum = self.sess.run(self.perfect_image_spectrum)
+        perfect_image_spectrum = perfect_image_spectrum[0]
 
         for i, (pupil_plane,
                 psf,
+                mtf,
                 distributed_aperture_image) in enumerate(zip(self.pupil_planes,
                                                              self.psfs,
+                                                             self.mtfs,
                                                              self.distributed_aperture_images)):
+            # (pupil_plane,
+            #  psf,
+            #  distributed_aperture_image) = self.sess.run([pupil_plane,
+            #                                               psf,
+            #                                               distributed_aperture_image],
+            #                                              feed_dict={self.inputs: inputs})
             (pupil_plane,
              psf,
+             mtf,
              distributed_aperture_image) = self.sess.run([pupil_plane,
                                                           psf,
-                                                          distributed_aperture_image],
-                                                         feed_dict={self.inputs: inputs})
+                                                          mtf,
+                                                          distributed_aperture_image])
+
+            # These are actually batches, so just take the first one.
+            distributed_aperture_image = distributed_aperture_image[0]
 
             plot_index = (num_cols * i)
             # Ian's alternative plots
@@ -643,23 +677,31 @@ class DASIEModel(object):
             plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2)
 
             plt.subplot(num_rows, num_cols, plot_index + 2)
-            # Plot log10(psf)
-            plt.imshow(np.log10(psf), vmin=-3, cmap='inferno')
+            plt.imshow(np.log10(psf), cmap='inferno')
             plt.colorbar()
 
             plt.subplot(num_rows, num_cols, plot_index + 3)
-            # Plot log10(psf)
-            plt.imshow(distributed_aperture_image, vmin=-3, cmap='inferno')
+            plt.imshow(np.log10(mtf), cmap='inferno')
             plt.colorbar()
 
             plt.subplot(num_rows, num_cols, plot_index + 4)
-            # Plot log10(psf)
-            # plt.imshow(np.abs(check_image), vmin=-3, cmap='inferno')
-            plt.imshow(perfect_image_flipped, vmin=-3, cmap='inferno')
+            plt.imshow(distributed_aperture_image, cmap='inferno')
             plt.colorbar()
 
-        recovered_image = self.sess.run([self.recovered_image],
-                                        feed_dict={self.inputs: inputs})
+            plt.subplot(num_rows, num_cols, plot_index + 5)
+            plt.imshow(perfect_image_flipped, cmap='inferno')
+            plt.colorbar()
+
+            plt.subplot(num_rows, num_cols, plot_index + 6)
+            plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
+            plt.colorbar()
+
+        # recovered_image = self.sess.run([self.recovered_image],
+        #                                 feed_dict={self.inputs: inputs})
+        recovered_image = self.sess.run([self.recovered_image])
+
+        # This is a batch, so just take the first one.
+        recovered_image = recovered_image[0]
 
         recovered_image = np.squeeze(recovered_image)
 
@@ -668,31 +710,49 @@ class DASIEModel(object):
         # Plot phase angle
         plt.colorbar()
         # Overlay aperture mask
-        plt.imshow(recovered_image, vmin=-3, cmap='inferno')
+        plt.imshow(recovered_image, cmap='inferno')
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 2))
-        # Plot log10(psf)
-        plt.imshow(recovered_image, vmin=-3, cmap='inferno')
+        plt.imshow(np.log(np.abs(np.fft.fft2(recovered_image))), cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 3))
-        # Plot log10(psf)
-        plt.imshow(recovered_image, vmin=-3, cmap='inferno')
+        plt.imshow(np.log(np.fft.fftshift(np.abs(np.fft.fft2(recovered_image)))), cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 4))
-        # Plot log10(psf)
-        # plt.imshow(np.abs(check_image), vmin=-3, cmap='inferno')
-        plt.imshow(recovered_image, vmin=-3, cmap='inferno')
+        plt.imshow(np.log(np.fft.fftshift(np.abs(np.fft.fft2(recovered_image)))), cmap='inferno')
         plt.colorbar()
+
+        plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 5))
+        plt.imshow(np.log(np.abs(np.fft.fft2(np.fft.fftshift(np.abs(np.fft.fft2(recovered_image)))))), cmap='inferno')
+        plt.colorbar()
+
+        plt.subplot(num_rows, num_cols, plot_index + 6)
+        plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
+        plt.colorbar()
+        # (monolithic_pupil_plane,
+        #  monolithic_psf,
+        #  monolithic_aperture_image,
+        #  perfect_image_flipped) = self.sess.run([self.monolithic_pupil_plane,
+        #                                          self.monolithic_psf,
+        #                                          self.monolithic_aperture_image,
+        #                                          self.perfect_image_flipped],
+        #                                          feed_dict={self.inputs: inputs})
         (monolithic_pupil_plane,
          monolithic_psf,
-         monolithic_aperture_image,
-         perfect_image_flipped) = self.sess.run([self.monolithic_pupil_plane,
-                                                 self.monolithic_psf,
-                                                 self.monolithic_aperture_image,
-                                                 self.perfect_image_flipped],
-                                                 feed_dict={self.inputs: inputs})
+         monolithic_mtf,
+         monolithic_aperture_image) = self.sess.run([self.monolithic_pupil_plane,
+                                                     self.monolithic_psf,
+                                                     self.monolithic_mtf,
+                                                     self.monolithic_aperture_image])
+
+
+        # These are actually batches, so just take the first element.
+        monolithic_pupil_plane = monolithic_pupil_plane
+        monolithic_psf = monolithic_psf
+        monolithic_aperture_image = monolithic_aperture_image[0]
+        perfect_image_flipped = np.abs(perfect_image_flipped)
 
         plot_index = num_cols * (num_rows - 1)
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
@@ -703,19 +763,23 @@ class DASIEModel(object):
         plt.imshow(np.abs(monolithic_pupil_plane), cmap='Greys', alpha=.2)
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 2))
-        # Plot log10(psf)
-        plt.imshow(np.log10(monolithic_psf), vmin=-3, cmap='inferno')
+        plt.imshow(np.log10(monolithic_psf), cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 3))
-        # Plot log10(psf)
-        plt.imshow(monolithic_aperture_image, vmin=-3, cmap='inferno')
+        plt.imshow(np.log10(monolithic_mtf), cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 4))
-        # Plot log10(psf)
-        # plt.imshow(np.abs(check_image), vmin=-3, cmap='inferno')
-        plt.imshow(perfect_image_flipped, vmin=-3, cmap='inferno')
+        plt.imshow(monolithic_aperture_image, cmap='inferno')
+        plt.colorbar()
+
+        plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 5))
+        plt.imshow(perfect_image_flipped, cmap='inferno')
+        plt.colorbar()
+
+        plt.subplot(num_rows, num_cols, plot_index + 6)
+        plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
         plt.colorbar()
 
         # fig = Figure()
@@ -757,10 +821,13 @@ class DASIEModel(object):
             plt.savefig(fig_path)
             plt.close()
 
-    def train(self, inputs):
-        return self.sess.run([self.output_images, self.optimize], feed_dict={
-                self.inputs: inputs
-        })
+    # def train(self, inputs):
+    #     return self.sess.run([self.output_images, self.optimize], feed_dict={
+    #             self.inputs: inputs
+    #     })
+
+    def train(self):
+        return self.sess.run([self.optimize])
 
     def get_loss(self, inputs):
         return self.sess.run([self.loss], feed_dict={
@@ -779,6 +846,8 @@ class DASIEModel(object):
 
 def train(sess,
           dasie_model,
+          train_dataset,
+          valid_dataset,
           spatial_quantization=256,
           image_path='sample_image.png',
           num_steps=1,
@@ -787,7 +856,8 @@ def train(sess,
           step_update=None,
           all_summary_ops=None,
           writer_flush=None,
-          logdir=None):
+          logdir=None,
+          save_plot=False):
     """
     This function realizes a DASIE model optimization loop.
 
@@ -805,22 +875,11 @@ def train(sess,
 
     # TODO: replace this with a dataset interface.
     # Read the target image only once.
-    perfect_image = plt.imread(image_path)
-
-    # Check the dims of the input and manually crop.
-    crop = False
-    crop_top_left_x = 100
-    crop_top_left_y = 450
-    for image_scale in perfect_image.shape:
-        if image_scale > spatial_quantization:
-            print("Need to crop.")
-            crop = True
-    if crop:
-        perfect_image = perfect_image[crop_top_left_x:crop_top_left_x + spatial_quantization,
-                                      crop_top_left_y:crop_top_left_y + spatial_quantization]
+    # perfect_image = plt.imread(image_path)
 
     # Normalize the image, just in case. You never know.
-    perfect_image = perfect_image / np.max(perfect_image)
+    # perfect_image = perfect_image / np.max(perfect_image)
+
 
     # Enter the main training loop.
     for i in range(num_steps):
@@ -828,11 +887,9 @@ def train(sess,
         print("Beginning Step %d" % i)
         tf.summary.experimental.set_step(i)
 
-        # TODO: replace this with actual batching from a dataset.
-        batch = perfect_image
 
         # Execute one gradient update step.
-        dasie_model.train(batch)
+        dasie_model.train()
 
         # run_loss = dasie_model.get_loss(perfect_image)[0]
         # with writer.as_default():
@@ -845,23 +902,60 @@ def train(sess,
         # print(run_metric)
 
         # If requested, plot the model status.
-        if (i % plot_periodicity) == 0:
+        if save_plot:
+            if (i % plot_periodicity) == 0:
 
-            print("Plotting...")
+                print("Plotting...")
 
-            dasie_model.plot(batch,
-                             logdir=logdir,
-                             step=i)
+                dasie_model.plot(logdir=logdir,
+                                 step=i)
 
-            print("Plotting completed.")
+                print("Plotting completed.")
 
         # Execute the summary writer ops to write their values.
-        sess.run(all_summary_ops,
-                 feed_dict={dasie_model.inputs: batch})
+        sess.run(all_summary_ops)
         sess.run(step_update)
         sess.run(writer_flush)
 
+def speedplus_parse_function(example_proto):
+    """
+    This is the first step of the generator/augmentation chain. Reading the
+    raw file out of the TFRecord is fairly straight-forward, though does
+    require some simple fixes. For instance, the number of bounding boxes
+    needs to be padded to some upper bound so that the tensors are all of
+    the same shape and can thus be batched.
 
+    :param example_proto: Example from a TFRecord file
+    :return: The raw image and padded bounding boxes corresponding to
+    this TFRecord example.
+    """
+    # Define how to parse the example
+    features = {
+        "image_raw": tf.io.VarLenFeature(dtype=tf.string),
+        "width": tf.io.FixedLenFeature([], dtype=tf.int64),
+        "height": tf.io.FixedLenFeature([], dtype=tf.int64),
+    }
+
+    # Parse the example
+    features_parsed = tf.io.parse_single_example(
+        serialized=example_proto, features=features
+    )
+    width = tf.cast(features_parsed["width"], tf.int32)
+    height = tf.cast(features_parsed["height"], tf.int32)
+
+    # filename = tf.cast(
+    #     tf.sparse.to_dense(features_parsed["filename"], default_value=""),
+    #     tf.string,
+    # )
+
+    image = tf.sparse.to_dense(
+        features_parsed["image_raw"], default_value=""
+    )
+    image = tf.io.decode_raw(image, tf.uint8)
+    image = tf.reshape(image, [width, height, 1])
+    image = tf.cast(image, tf.float64)
+
+    return image
 
 def main(flags):
 
@@ -901,10 +995,77 @@ def main(flags):
         writer = tf.summary.create_file_writer(save_dir)
 
 
+        # TODO: Externalize this flag.
+        dataset = "speedplus"
+        # Different datasets may require different parsers, so we choose one.
+        if dataset == "speedplus":
+            parse_function = speedplus_parse_function
+        else:
+            # TODO: Throw exception when not supplied.
+            replacemewithanexception
+
+        # TODO: Force DatasetGenerators to fix the size of the batches.
+        # We create a tf.data.Dataset object wrapping the train dataset here.
+
+        # Check the dims of the input and manually crop.
+
+        crop_size = None
+        if flags.crop:
+            crop_size = flags.spatial_quantization
+
+        train_dataset = DatasetGenerator(flags.train_data_dir,
+                                         parse_function=parse_function,
+                                         augment=False,
+                                         shuffle=False,
+                                         crop_size=crop_size,
+                                         batch_size=flags.batch_size,
+                                         num_threads=2,
+                                         buffer=32,
+                                         encoding_function=None,
+                                         cache_dataset_memory=False,
+                                         cache_dataset_file=False,
+                                         cache_path="")
+
+        train_dataset_iter = train_dataset.get_iterator()
+        train_dataset_batch = train_dataset_iter.get_next()
+
+        # Manual debug here, to diagnose data problems.
+        plot_data = False
+        if plot_data:
+            train_dataset_batch = sess.run(train_dataset_batch)
+            plt.subplot(141)
+            plt.imshow(np.abs(np.fft.fft2(np.abs(train_dataset_batch[0]))))
+            # plt.subplot(142)
+            # plt.imshow(train_dataset_batch[1])
+            # plt.subplot(143)
+            # plt.imshow(train_dataset_batch[2])
+            # plt.subplot(144)
+            # plt.imshow(train_dataset_batch[3])
+            print(np.min(train_dataset_batch[0]))
+            print(np.max(train_dataset_batch[0]))
+            plt.show()
+
+        # We create a tf.data.Dataset object wrapping the valid dataset here.
+        # valid_dataset = DatasetGenerator(flags.valid_data_dir,
+        #                                  parse_function=parse_function,
+        #                                  augment=False,
+        #                                  shuffle=False,
+        #                                  crop_size=flags.spatial_quantization,
+        #                                  batch_size=flags.batch_size,
+        #                                  num_threads=2,
+        #                                  buffer=32,
+        #                                  encoding_function=None,
+        #                                  cache_dataset_memory=False,
+        #                                  cache_dataset_file=False,
+        #                                  cache_path="")
+        valid_dataset = None
+
+
         # Build a DA model. Inputs: n p/t/t tensors. Output: n image tensors.
         dasie_model = DASIEModel(sess,
-                                 spatial_quantization=flags.spatial_quantization,
+                                 inputs=train_dataset_batch,
                                  num_exposures=flags.num_exposures,
+                                 spatial_quantization=flags.spatial_quantization,
                                  learning_rate=flags.learning_rate,
                                  writer=writer,
                                  alpha=alpha)
@@ -917,6 +1078,8 @@ def main(flags):
         # Optimize the DASIE model parameters.
         train(sess,
               dasie_model,
+              train_dataset,
+              valid_dataset,
               spatial_quantization=flags.spatial_quantization,
               image_path=flags.image_path,
               num_steps=flags.num_steps,
@@ -925,11 +1088,15 @@ def main(flags):
               step_update=step_update,
               all_summary_ops=all_summary_ops,
               writer_flush=writer_flush,
-              logdir=save_dir)
+              logdir=save_dir,
+              save_plot=flags.save_plot)
 
 
 
 if __name__ == '__main__':
+
+    # TODO: I need to enable a test of negligable, random, and learned articulations to measure validation set reconstructions.
+
     parser = argparse.ArgumentParser(
         description='provide arguments for training.')
 
@@ -983,6 +1150,11 @@ if __name__ == '__main__':
                         default=256,
                         help='Quantization of all images.')
 
+    parser.add_argument('--batch_size',
+                        type=int,
+                        default=4,
+                        help='Number of perfect images per batch.')
+
     parser.add_argument('--num_exposures',
                         type=int,
                         default=1,
@@ -996,6 +1168,25 @@ if __name__ == '__main__':
                         default=False,
                         help='Save the plot?')
 
+    parser.add_argument("--crop", action='store_true',
+                        default=False,
+                        help='If true, crop images to spatial_quantization.')
+
+    # parser.add_argument('--train_data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords\\train",
+    #                     help='Path to the train data TFRecords directory.')
+    #
+    # parser.add_argument('--valid_data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords\\valid",
+    #                     help='Path to the val data TFRecords directory.')
+
+    parser.add_argument('--train_data_dir', type=str,
+                        default="C:\\Users\\justin.fletcher\\research\\onesat_example_tfrecords\\train",
+                        help='Path to the train data TFRecords directory.')
+
+    parser.add_argument('--valid_data_dir', type=str,
+                        default="C:\\Users\\justin.fletcher\\research\\onesat_example_tfrecords\\valid",
+                        help='Path to the val data TFRecords directory.')
 
 
 
