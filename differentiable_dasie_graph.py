@@ -158,6 +158,8 @@ class DASIEModel(object):
 
     def __init__(self,
                  sess,
+                 train_dataset,
+                 valid_dataset,
                  inputs=None,
                  learning_rate=1.0,
                  num_apertures=15,
@@ -171,10 +173,27 @@ class DASIEModel(object):
         self.sess = sess
         self.writer = writer
 
+
+        train_iterator = train_dataset.get_iterator()
+        self.train_iterator_handle = sess.run(train_iterator.string_handle())
+
+        valid_iterator = valid_dataset.get_iterator()
+        self.valid_iterator_handle = sess.run(valid_iterator.string_handle())
+
+        self.handle = tf.compat.v1.placeholder(tf.string, shape=[])
+        # Abstract specific iterators as type.
+        iterator_output_types = train_iterator.output_types
+        # iterator_output_types = tf.compat.v1.data.get_output_shapes(train_iterator)
+        iterator = tf.compat.v1.data.Iterator.from_string_handle(self.handle, iterator_output_types)
+        dataset_batch = iterator.get_next()
+
+        self.dataset_batch = dataset_batch
+
         with tf.name_scope("dasie_model"):
 
+
             self.inputs, self.output_images = self._build_dasie_model(
-                inputs=inputs,
+                inputs=dataset_batch,
                 spatial_quantization=spatial_quantization,
                 num_apertures=self.num_apertures,
                 alpha=alpha,
@@ -209,6 +228,9 @@ class DASIEModel(object):
                                                                  name="perfect_image_batch")
 
 
+
+        # Maybe remove or move these.
+        self.perfect_image = perfect_image_placeholder
 
         # Compute the pupil extent: 4.848 microradians / arcsec
         # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
@@ -367,6 +389,8 @@ class DASIEModel(object):
 
                             ttp_variables.append([tip, tilt, piston])
 
+                self.ttp_variables = ttp_variables
+
                 # Construct the model of the pupil plane, conditioned on the Variables.
                 with tf.name_scope("pupil_plane_model"):
 
@@ -442,22 +466,21 @@ class DASIEModel(object):
 
                 mtf = tf.math.abs(otf)
                 self.mtfs.append(mtf)
-
+            #
             with tf.name_scope("image_spectrum_model"):
-                self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(perfect_image_placeholder, axis=-1), dtype=tf.complex128))
 
+                self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
 
             with tf.name_scope("image_plane_model"):
+
                 distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
                 distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
                 distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
-
 
             with tf.name_scope("sensor_model"):
 
                 # TODO: Implement Gaussian and Poisson process noise.
                 distributed_aperture_image = distributed_aperture_image_plane
-
 
                 self.distributed_aperture_images.append(distributed_aperture_image)
 
@@ -482,15 +505,14 @@ class DASIEModel(object):
                 with tf.name_scope("monolithic_mtf_model"):
                     self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
 
-                with tf.name_scope("image_spectrum_model"):
-                    self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(perfect_image_placeholder, axis=-1), dtype=tf.complex128))
+                # with tf.name_scope("image_spectrum_model"):
+                #     # TODO: Maybe undo this????
+                #     self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(perfect_image_placeholder, axis=-1), dtype=tf.complex128))
 
                 with tf.name_scope("monolithic_image_plane_model"):
                     monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
                     monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
                     self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
-                    # self.monolithic_aperture_image = tf.nn.convolution(tf.squeeze(perfect_image_placeholder, axis=-1), tf.expand_dims(self.monolithic_psf, axis=-1))
-
 
         # TODO: refactor reconstruction out of this model
         with tf.name_scope("distributed_aperture_image_recovery"):
@@ -501,10 +523,12 @@ class DASIEModel(object):
             # self.recovered_image = tf.math.reduce_mean(self.distributed_aperture_images, 0)
 
         with tf.name_scope("dasie_loss"):
-            perfect_image_flipped = tf.squeeze(perfect_image_placeholder, axis=-1)
-            perfect_image_flipped = tf.reverse(perfect_image_flipped, [0])
-            perfect_image_flipped = tf.reverse(perfect_image_flipped, [-1])
-            perfect_image_flipped = tf.reverse(perfect_image_flipped, [1])
+            # perfect_image_flipped = tf.squeeze(self.perfect_image, axis=-1)
+            # perfect_image_flipped = tf.reverse(perfect_image_flipped, [0])
+            # perfect_image_flipped = tf.reverse(perfect_image_flipped, [-1])
+            #
+            # self.perfect_image_flipped = tf.reverse(perfect_image_flipped, [1])
+            self.perfect_image_flipped = tf.reverse(tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
             # perfect_image_flipped = tf.reverse(perfect_image_placeholder, [1])
             # perfect_image_flipped = tf.reverse(perfect_image_placeholder, [0])
             # perfect_image_flipped = perfect_image_placeholder
@@ -516,7 +540,7 @@ class DASIEModel(object):
             # self.loss = -tf.math.log(self.distributed_aperture_mtf_cosine_similarity)
 
             # TODO: Explore other losses.
-            self.image_mse = tf.reduce_mean((self.recovered_image - perfect_image_flipped)**2)
+            self.image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2)
             self.loss = tf.math.log(self.image_mse)
             # self.loss = self.image_difference
 
@@ -530,11 +554,11 @@ class DASIEModel(object):
             # TODO: replace all these endpoints with _batch...
             tf.summary.scalar("in_graph_loss", self.loss)
             # tf.summary.scalar("monolithic_aperture_image_cosine_similarity", self.monolithic_aperture_image_cosine_similarity)
-            tf.summary.scalar("monolithic_aperture_image_mse", tf.reduce_mean((self.monolithic_aperture_image - perfect_image_flipped) ** 2))
+            tf.summary.scalar("monolithic_aperture_image_mse", tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2))
             # tf.summary.scalar("distributed_aperture_image_cosine_similarity", self.distributed_aperture_image_cosine_similarity)
             # tf.summary.scalar("distributed_aperture_mtf_cosine_similarity", self.distributed_aperture_mtf_cosine_similarity)
-            tf.summary.scalar("distributed_aperture_image_mse", tf.reduce_mean((self.recovered_image - perfect_image_flipped)**2))
-            tf.summary.scalar("da_mse_mono_mse_ratio", tf.reduce_mean((self.recovered_image - perfect_image_flipped)**2) / tf.reduce_mean((self.monolithic_aperture_image - perfect_image_flipped) ** 2))
+            tf.summary.scalar("distributed_aperture_image_mse", tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2))
+            tf.summary.scalar("da_mse_mono_mse_ratio", tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2) / tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2))
 
         with tf.name_scope("dasie_optimizer"):
             # Build an op that applies the policy gradients to the model.
@@ -542,28 +566,30 @@ class DASIEModel(object):
             self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
             # self.optimize = tf.compat.v1.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
 
+
+        output_batch = self.recovered_image
+
         with tf.compat.v1.Graph().as_default():
             tf.summary.scalar("debug_metric", 0.5)
 
         self.summaries = tf.compat.v1.summary.all_v2_summary_ops()
 
-        # Maybe remove or move these.
-        self.perfect_image_flipped = perfect_image_flipped
-        self.perfect_image = perfect_image_placeholder
-        self.ttp_variables = ttp_variables
-
-        output_batch = self.recovered_image
-        return perfect_image_placeholder, output_batch
+        return self.perfect_image, output_batch
 
 
     def _build_recovery_model(self, distributed_aperture_images_batch):
+        """
+
+        :param distributed_aperture_images_batch: a batch of num_exposure
+        images.
+        :return:
+        """
 
         with tf.name_scope("recovery_model"):
 
-            # TODO: Remove this hack once batching is fixed.
-
-
-            # distributed_aperture_images_batch = tf.expand_dims(distributed_aperture_images, axis=-1)
+            # # TODO: Validate the shape of this stack.
+            # # distributed_aperture_images_batch = tf.expand_dims(distributed_aperture_images, axis=-1)
+            # Stack the the images in the ensemble to form a batch of inputs.
             distributed_aperture_images_batch = tf.stack(distributed_aperture_images_batch, axis=-1)
             with tf.name_scope("recovery_feature_extractor"):
                 x = distributed_aperture_images_batch
@@ -576,6 +602,7 @@ class DASIEModel(object):
 
             recovered_image_batch = x
 
+            # TODO: Correct this to output the batch shape - input less the ensemble dimension.
             recovered_image = tf.math.reduce_mean(recovered_image_batch[0], -1)
 
         return recovered_image
@@ -626,8 +653,6 @@ class DASIEModel(object):
 
     def plot(self, logdir=None, step=None):
 
-
-
         num_da_samples = len(self.pupil_planes)
         num_rows = num_da_samples + 2
         num_cols = 6
@@ -635,39 +660,63 @@ class DASIEModel(object):
         scale = 6
         plt.figure(figsize=[scale * 4, scale])
 
-        # Replace this with a random crop from the validation set.
-        # perfect_image_flipped = self.sess.run(self.perfect_image_flipped, feed_dict={self.inputs: inputs})
-        perfect_image_flipped = self.sess.run(self.perfect_image_flipped)
+        # Do a single sess.run to get all the values from a single batch.
+        (pupil_planes,
+         psfs,
+         mtfs,
+         distributed_aperture_images,
+         perfect_image_flipped,
+         perfect_image_spectrum,
+         perfect_image,
+         recovered_image,
+         monolithic_pupil_plane,
+         monolithic_psf,
+         monolithic_mtf,
+         monolithic_aperture_image
+         ) = self.sess.run([self.pupil_planes,
+                            self.psfs,
+                            self.mtfs,
+                            self.distributed_aperture_images,
+                            self.perfect_image_flipped,
+                            self.perfect_image_spectrum,
+                            self.perfect_image,
+                            self.recovered_image,
+                            self.monolithic_pupil_plane,
+                            self.monolithic_psf,
+                            self.monolithic_mtf,
+                            self.monolithic_aperture_image],
+                           feed_dict={self.handle: self.valid_iterator_handle})
+
         perfect_image_flipped = perfect_image_flipped[0]
-        perfect_image_spectrum = self.sess.run(self.perfect_image_spectrum)
+        # perfect_image_flipped = np.abs(perfect_image_flipped)
+        perfect_image = perfect_image[0]
+        # perfect_image = perfect_image_flipped
+
         perfect_image_spectrum = perfect_image_spectrum[0]
+        # recovered_image = recovered_image[0]
+
+        recovered_image = np.squeeze(recovered_image)
+
+
+        # These are actually batches, so just take the first element.
+        monolithic_pupil_plane = monolithic_pupil_plane
+        monolithic_psf = monolithic_psf
+        monolithic_aperture_image = monolithic_aperture_image[0]
+
+
 
         for i, (pupil_plane,
                 psf,
                 mtf,
-                distributed_aperture_image) in enumerate(zip(self.pupil_planes,
-                                                             self.psfs,
-                                                             self.mtfs,
-                                                             self.distributed_aperture_images)):
-            # (pupil_plane,
-            #  psf,
-            #  distributed_aperture_image) = self.sess.run([pupil_plane,
-            #                                               psf,
-            #                                               distributed_aperture_image],
-            #                                              feed_dict={self.inputs: inputs})
-            (pupil_plane,
-             psf,
-             mtf,
-             distributed_aperture_image) = self.sess.run([pupil_plane,
-                                                          psf,
-                                                          mtf,
-                                                          distributed_aperture_image])
+                distributed_aperture_image) in enumerate(zip(pupil_planes,
+                                                             psfs,
+                                                             mtfs,
+                                                             distributed_aperture_images)):
 
             # These are actually batches, so just take the first one.
             distributed_aperture_image = distributed_aperture_image[0]
 
             plot_index = (num_cols * i)
-            # Ian's alternative plots
 
             plt.subplot(num_rows, num_cols, plot_index + 1)
             # Plot phase angle
@@ -696,63 +745,34 @@ class DASIEModel(object):
             plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
             plt.colorbar()
 
-        # recovered_image = self.sess.run([self.recovered_image],
-        #                                 feed_dict={self.inputs: inputs})
-        recovered_image = self.sess.run([self.recovered_image])
-
-        # This is a batch, so just take the first one.
-        recovered_image = recovered_image[0]
-
-        recovered_image = np.squeeze(recovered_image)
-
+        # Plot the reconstructed image multiple times, just for ease.
         plot_index = num_cols * (num_rows - 2)
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
-        # Plot phase angle
+
         plt.colorbar()
-        # Overlay aperture mask
         plt.imshow(recovered_image, cmap='inferno')
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 2))
-        plt.imshow(np.log(np.abs(np.fft.fft2(recovered_image))), cmap='inferno')
+        plt.imshow(recovered_image, cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 3))
-        plt.imshow(np.log(np.fft.fftshift(np.abs(np.fft.fft2(recovered_image)))), cmap='inferno')
+        plt.imshow(recovered_image, cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 4))
-        plt.imshow(np.log(np.fft.fftshift(np.abs(np.fft.fft2(recovered_image)))), cmap='inferno')
+        plt.imshow(recovered_image, cmap='inferno')
         plt.colorbar()
 
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 5))
-        plt.imshow(np.log(np.abs(np.fft.fft2(np.fft.fftshift(np.abs(np.fft.fft2(recovered_image)))))), cmap='inferno')
+        plt.imshow(recovered_image, cmap='inferno')
         plt.colorbar()
 
         plt.subplot(num_rows, num_cols, plot_index + 6)
-        plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
+        plt.imshow(recovered_image, cmap='inferno')
         plt.colorbar()
-        # (monolithic_pupil_plane,
-        #  monolithic_psf,
-        #  monolithic_aperture_image,
-        #  perfect_image_flipped) = self.sess.run([self.monolithic_pupil_plane,
-        #                                          self.monolithic_psf,
-        #                                          self.monolithic_aperture_image,
-        #                                          self.perfect_image_flipped],
-        #                                          feed_dict={self.inputs: inputs})
-        (monolithic_pupil_plane,
-         monolithic_psf,
-         monolithic_mtf,
-         monolithic_aperture_image) = self.sess.run([self.monolithic_pupil_plane,
-                                                     self.monolithic_psf,
-                                                     self.monolithic_mtf,
-                                                     self.monolithic_aperture_image])
 
-
-        # These are actually batches, so just take the first element.
-        monolithic_pupil_plane = monolithic_pupil_plane
-        monolithic_psf = monolithic_psf
-        monolithic_aperture_image = monolithic_aperture_image[0]
-        perfect_image_flipped = np.abs(perfect_image_flipped)
+        # Plot the monolithic aperture outputs.
 
         plot_index = num_cols * (num_rows - 1)
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
@@ -827,22 +847,21 @@ class DASIEModel(object):
     #     })
 
     def train(self):
-        return self.sess.run([self.optimize])
+        return self.sess.run([self.loss, self.image_mse, self.optimize], feed_dict={self.handle: self.train_iterator_handle})
 
-    def get_loss(self, inputs):
-        return self.sess.run([self.loss], feed_dict={
-                self.inputs: inputs
-        })
+    def validate(self):
+        return self.sess.run([self.loss, self.image_mse], feed_dict={self.handle: self.valid_iterator_handle})
 
-    def get_metric(self, inputs):
-        return self.sess.run([self.distributed_aperture_image_cosine_similarity], feed_dict={
-                self.inputs: inputs
-        })
+    # def get_loss(self, inputs):
+    #     return self.sess.run([self.loss], feed_dict={
+    #             self.inputs: inputs
+    #     })
+    #
+    # def get_metric(self, inputs):
+    #     return self.sess.run([self.distributed_aperture_image_cosine_similarity], feed_dict={
+    #             self.inputs: inputs
+    #     })
 
-
-# ===========================
-#   Agent Training
-# ===========================
 
 def train(sess,
           dasie_model,
@@ -880,16 +899,83 @@ def train(sess,
     # Normalize the image, just in case. You never know.
     # perfect_image = perfect_image / np.max(perfect_image)
 
+    # Initialize with required Datasets
+
+    train_dataset_initializer = train_dataset.get_initializer()
+    valid_dataset_initializer = valid_dataset.get_initializer()
 
     # Enter the main training loop.
     for i in range(num_steps):
 
-        print("Beginning Step %d" % i)
+        print("Beginning Epoch %d" % i)
         tf.summary.experimental.set_step(i)
 
+        # If requested, plot the model status.
+        if save_plot:
+            if (i % plot_periodicity) == 0:
 
-        # Execute one gradient update step.
-        dasie_model.train()
+                sess.run(valid_dataset_initializer)
+
+                print("Plotting...")
+
+                dasie_model.plot(logdir=logdir, step=i)
+
+                print("Plotting completed.")
+
+
+        print("Training...")
+
+        sess.run(train_dataset_initializer)
+
+
+        train_loss = 0.0
+        train_image_mse = 0.0
+        train_steps = 0.0
+        try:
+
+            while True:
+                # Execute one gradient update step.
+                print("Starting train step %d..." % train_steps)
+                step_train_loss, step_train_image_mse, _ = dasie_model.train()
+                train_loss += step_train_loss
+                train_image_mse += step_train_image_mse
+                train_steps += 1.0
+
+                print("...train step %d complete." % train_steps)
+
+        except tf.errors.OutOfRangeError:
+
+            print("Train Loss: %f" % (train_loss / train_steps))
+            print("Train MSE: %f" % (train_image_mse / train_steps))
+            print("Epoch %d Training Complete." % i)
+            pass
+
+        print("Validating...")
+
+        sess.run(valid_dataset_initializer)
+
+        valid_loss = 0.0
+        valid_image_mse = 0.0
+        valid_steps = 0.0
+
+        # Validate by looping an calling validate batches, until...
+        try:
+            while True:
+                # Execute one gradient update step.
+                step_valid_loss, step_valid_image_mse = dasie_model.validate()
+
+                valid_loss += step_valid_loss
+                valid_image_mse += step_valid_image_mse
+                valid_steps += 1.0
+
+        # ...there are no more validate batches
+        except tf.errors.OutOfRangeError:
+
+            print("Validation Loss: %f" % (valid_loss / valid_steps))
+            print("Validation MSE: %f" % (valid_image_mse / valid_steps))
+
+            print("Epoch %d Validation Complete." % i)
+            pass
 
         # run_loss = dasie_model.get_loss(perfect_image)[0]
         # with writer.as_default():
@@ -901,21 +987,12 @@ def train(sess,
         #     tf.summary.scalar("run_metric", run_metric, step=i)
         # print(run_metric)
 
-        # If requested, plot the model status.
-        if save_plot:
-            if (i % plot_periodicity) == 0:
-
-                print("Plotting...")
-
-                dasie_model.plot(logdir=logdir,
-                                 step=i)
-
-                print("Plotting completed.")
-
         # Execute the summary writer ops to write their values.
-        sess.run(all_summary_ops)
-        sess.run(step_update)
-        sess.run(writer_flush)
+
+        sess.run(valid_dataset_initializer)
+        sess.run(all_summary_ops, feed_dict={dasie_model.handle: dasie_model.valid_iterator_handle})
+        sess.run(step_update, feed_dict={dasie_model.handle: dasie_model.valid_iterator_handle})
+        sess.run(writer_flush, feed_dict={dasie_model.handle: dasie_model.valid_iterator_handle})
 
 def speedplus_parse_function(example_proto):
     """
@@ -952,6 +1029,7 @@ def speedplus_parse_function(example_proto):
         features_parsed["image_raw"], default_value=""
     )
     image = tf.io.decode_raw(image, tf.uint8)
+
     image = tf.reshape(image, [width, height, 1])
     image = tf.cast(image, tf.float64)
 
@@ -995,14 +1073,19 @@ def main(flags):
         writer = tf.summary.create_file_writer(save_dir)
 
 
-        # TODO: Externalize this flag.
-        dataset = "speedplus"
         # Different datasets may require different parsers, so we choose one.
-        if dataset == "speedplus":
+        if flags.dataset_name == "speedplus":
             parse_function = speedplus_parse_function
+            train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
+            valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
+        elif flags.dataset_name == "inria_holiday":
+            parse_function = speedplus_parse_function
+            train_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "train")
+            valid_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "valid")
         else:
-            # TODO: Throw exception when not supplied.
-            replacemewithanexception
+            parse_function = speedplus_parse_function
+            train_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "train")
+            valid_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "valid")
 
         # TODO: Force DatasetGenerators to fix the size of the batches.
         # We create a tf.data.Dataset object wrapping the train dataset here.
@@ -1013,7 +1096,7 @@ def main(flags):
         if flags.crop:
             crop_size = flags.spatial_quantization
 
-        train_dataset = DatasetGenerator(flags.train_data_dir,
+        train_dataset = DatasetGenerator(train_data_dir,
                                          parse_function=parse_function,
                                          augment=False,
                                          shuffle=False,
@@ -1026,11 +1109,8 @@ def main(flags):
                                          cache_dataset_file=False,
                                          cache_path="")
 
-        train_dataset_iter = train_dataset.get_iterator()
-        train_dataset_batch = train_dataset_iter.get_next()
-
         # Manual debug here, to diagnose data problems.
-        plot_data = False
+        plot_data = True
         if plot_data:
             train_dataset_batch = sess.run(train_dataset_batch)
             plt.subplot(141)
@@ -1046,24 +1126,39 @@ def main(flags):
             plt.show()
 
         # We create a tf.data.Dataset object wrapping the valid dataset here.
-        # valid_dataset = DatasetGenerator(flags.valid_data_dir,
-        #                                  parse_function=parse_function,
-        #                                  augment=False,
-        #                                  shuffle=False,
-        #                                  crop_size=flags.spatial_quantization,
-        #                                  batch_size=flags.batch_size,
-        #                                  num_threads=2,
-        #                                  buffer=32,
-        #                                  encoding_function=None,
-        #                                  cache_dataset_memory=False,
-        #                                  cache_dataset_file=False,
-        #                                  cache_path="")
-        valid_dataset = None
+        valid_dataset = DatasetGenerator(valid_data_dir,
+                                         parse_function=parse_function,
+                                         augment=False,
+                                         shuffle=False,
+                                         crop_size=crop_size,
+                                         batch_size=flags.batch_size,
+                                         num_threads=2,
+                                         buffer=32,
+                                         encoding_function=None,
+                                         cache_dataset_memory=False,
+                                         cache_dataset_file=False,
+                                         cache_path="")
+        # valid_dataset = None
 
+
+        # Make a template dataset to be initialized with train or val data.
+        # dataset_placeholder = tf.placeholder(tf.float32, [None, flags.spatial_quantization, flags.spatial_quantization, 1])
+        # dataset = tf.data.Dataset.from_tensor_slices((dataset_placeholder))
+        # dataset = dataset.batch(flags.batch_size)
+        # iterator = dataset.make_initializable_iterator()
+        # dataset_batch = iterator.get_next()
 
         # Build a DA model. Inputs: n p/t/t tensors. Output: n image tensors.
+        # dasie_model = DASIEModel(sess,
+        #                          inputs=train_dataset_batch,
+        #                          num_exposures=flags.num_exposures,
+        #                          spatial_quantization=flags.spatial_quantization,
+        #                          learning_rate=flags.learning_rate,
+        #                          writer=writer,
+        #                          alpha=alpha)
         dasie_model = DASIEModel(sess,
-                                 inputs=train_dataset_batch,
+                                 train_dataset=train_dataset,
+                                 valid_dataset=valid_dataset,
                                  num_exposures=flags.num_exposures,
                                  spatial_quantization=flags.spatial_quantization,
                                  learning_rate=flags.learning_rate,
@@ -1172,6 +1267,15 @@ if __name__ == '__main__':
                         default=False,
                         help='If true, crop images to spatial_quantization.')
 
+
+    parser.add_argument('--dataset_root', type=str,
+                        default="..\\data",
+                        help='Path to a directory holding all datasetss.')
+
+    parser.add_argument('--dataset_name', type=str,
+                        default="onesat_example",
+                        help='Path to the train data TFRecords directory.')
+
     # parser.add_argument('--train_data_dir', type=str,
     #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords\\train",
     #                     help='Path to the train data TFRecords directory.')
@@ -1179,14 +1283,22 @@ if __name__ == '__main__':
     # parser.add_argument('--valid_data_dir', type=str,
     #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords\\valid",
     #                     help='Path to the val data TFRecords directory.')
+    # #
+    # parser.add_argument('--train_data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\onesat_example_tfrecords\\train",
+    #                     help='Path to the train data TFRecords directory.')
+    #
+    # parser.add_argument('--valid_data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\onesat_example_tfrecords\\valid",
+    #                     help='Path to the val data TFRecords directory.')
 
-    parser.add_argument('--train_data_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\onesat_example_tfrecords\\train",
-                        help='Path to the train data TFRecords directory.')
-
-    parser.add_argument('--valid_data_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\onesat_example_tfrecords\\valid",
-                        help='Path to the val data TFRecords directory.')
+    # parser.add_argument('--train_data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\inria_holiday_tfrecords\\train",
+    #                     help='Path to the train data TFRecords directory.')
+    #
+    # parser.add_argument('--valid_data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\inria_holiday_tfrecords\\valid",
+    #                     help='Path to the val data TFRecords directory.')
 
 
 
