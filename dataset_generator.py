@@ -8,6 +8,7 @@ Author: 1st Lt Ian McQuaid
 Date: 16 Nov 2018
 """
 
+import os
 import json
 import fnmatch
 import numpy as np
@@ -15,12 +16,80 @@ import tensorflow as tf
 from miss_utilities import get_tfrecords_list
 
 
+def parse_run_config_json(filepath):
+    # If the path points to a JSON, we need to parse it and read in all
+    # directories listed
+    tfrecords_list = []
+    fp = open(filepath, "r")
+    tfrecord_dirs_dict = json.load(fp)
+    fp.close()
+
+    # Tolerate a naming bug for the time being
+    if "dirs" in tfrecord_dirs_dict.keys():
+        dir_key = "dirs"
+    elif "dir" in tfrecord_dirs_dict.keys():
+        dir_key = "dir"
+    else:
+        raise Exception(
+            "utils.parse_run_config_json: could not find either "
+            "'dir' or 'dirs' in config file."
+        )
+
+    # Check every directory the JSON provided
+    for tfrecord_path in tfrecord_dirs_dict[dir_key]:
+        if os.path.isabs(tfrecord_path):
+            # Easy if the path is absolute
+            abs_tfrecord_path = tfrecord_path
+        else:
+            # If this path is relative
+            start_dir = os.getcwd()
+            os.chdir(os.path.split(filepath)[0])
+            abs_tfrecord_path = os.path.abspath(tfrecord_path)
+            os.chdir(start_dir)
+
+        if os.path.isfile(abs_tfrecord_path):
+            # In case individual files are listed as well
+            tfrecords_list += [abs_tfrecord_path]
+        else:
+            tfrecords_list += get_tfrecords_in_dir(abs_tfrecord_path)
+
+    # Done, so return
+    return tfrecords_list
+
+def get_dir_content_paths(directory):
+    """
+    Given a directory, returns a list of complete paths to contents.
+    """
+    return [os.path.join(directory, f) for f in os.listdir(directory)]
+
+def get_tfrecords_list(filepath):
+    """
+    Helper function to handle parsing many tfrecords, potentially located
+    in many directories, into a single list that can be treated as a single
+    dataset.
+
+    :param filepath: path to either tfrecord file, directory of tfrecords, or
+    a configuration file that lists paths to tfrecords.
+    :return: a list of all TFRecords files in this "dataset"
+    """
+    if os.path.isdir(filepath):
+        # If this points to a directory, simply list everything in it
+        tfrecords_list = get_dir_content_paths(filepath)
+    elif fnmatch.fnmatch(filepath, "*.json"):
+        tfrecords_list = parse_run_config_json(filepath)
+    else:
+        # In the simplest case, the path points to a single TFRecords file
+        tfrecords_list = [filepath]
+
+    return tfrecords_list
+
 class DatasetGenerator(object):
     def __init__(self,
                  tfrecords,
                  parse_function,
                  augment=False,
                  shuffle=False,
+                 crop_size=None,
                  batch_size=1,
                  num_threads=1,
                  buffer=30,
@@ -79,6 +148,7 @@ class DatasetGenerator(object):
             tfrecords_list,
             augment=augment,
             shuffle=shuffle,
+            crop_size=crop_size,
             batch_size=batch_size,
             num_threads=num_threads,
             buffer=buffer,
@@ -101,7 +171,25 @@ class DatasetGenerator(object):
         return self.dataset
 
     def get_iterator(self):
-        return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
+        # return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
+        self.iterator = tf.compat.v1.data.make_initializable_iterator(self.dataset)
+        return self.iterator
+        # TODO: Pick up here working towards a validation loop.
+
+    def get_initializer(self):
+        # return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
+        # return tf.compat.v1.data.make_initializable_iterator(self.dataset)
+        self.initializer = self.iterator.make_initializer(self.dataset)
+        return self.initializer
+        # TODO: Pick up here working towards a validation loop.
+
+        # def get_initializable_iterator(self):
+    #     return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
+    #     # TODO: Pick up here working towards a validation loop.
+    #     iterator = tf.compat.v1.data.make_initializable_iterator(self.dataset)
+    #     iterator.make_initializer()
+
+        # return tf.compat.v1.data.make_initializable_iterator(self.dataset)
 
     def build_pipeline(self,
                        tfrecord_path,
@@ -110,6 +198,7 @@ class DatasetGenerator(object):
                        batch_size,
                        num_threads,
                        buffer,
+                       crop_size=None,
                        cache_dataset_memory=False,
                        cache_dataset_file=False,
                        cache_path="",
@@ -154,9 +243,15 @@ class DatasetGenerator(object):
             data = data.map(_flip_up_down, num_parallel_calls=num_threads)
             data = data.map(_rotate_random, num_parallel_calls=num_threads)
 
-            # 50/50 chance of performing some crop, which is then randomly
-            # data = data.map(_crop_random,
-            #                 num_parallel_calls=num_threads).prefetch(buffer)
+        # Crop the data to a specified size.
+        # TODO: Figure out how to configure this... maybe make it a method?
+        if crop_size:
+
+            data = data.map(_perform_crop,
+                            num_parallel_calls=num_threads).prefetch(buffer)
+
+        data = data.map(_normalize,
+                        num_parallel_calls=num_threads).prefetch(buffer)
 
         # Force images to the same size
         # data = data.map(_resize_data,
@@ -192,10 +287,10 @@ class DatasetGenerator(object):
         # Shuffle/repeat the data forever (i.e. as many epochs as we want)
         if shuffle:
             data = data.shuffle(buffer)
-        data = data.repeat()
+        # data = data.repeat()
 
         # Batch the data
-        data = data.batch(batch_size)
+        data = data.batch(batch_size, drop_remainder=True)
 
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
@@ -228,7 +323,7 @@ def get_input_shape(dataset_no_repeat):
         dataset_no_repeat
     )
     next_elem = single_pass_iter.get_next()
-    images, _, _ = sess.run(next_elem)
+    images = sess.run(next_elem)
     return images.shape
 
 
@@ -276,7 +371,36 @@ def _crop_random(image, bboxs, filename=None):
         return image, bboxs
 
 
-def _perform_crop(image, bboxs, filename=None, min_crop_size=(400, 400)):
+def _normalize(image):
+
+    # Move the entire dynamic range up above zero.
+    # image = image + tf.abs(tf.reduce_min(image))
+    #
+    # # If it was already above zero, or is now, bring it to zero.
+    # image = image - tf.reduce_min(image)
+    #
+    # # And divide by the largest value to normalize the range to [0, 1] exactly.
+    # image = image / tf.reduce_max(image)
+
+    image_min = tf.reduce_min(image)
+    image_max = tf.reduce_max(image)
+
+    a = (1.0 - 0.0) / (image_max - image_min)
+    b = 1.0 - (a * image_max)
+    image = (a * image) + b
+    return image
+
+    return image
+
+
+def _standardize(image):
+
+    image = (image - tf.reduce_mean(image)) / tf.reduce_std(image)
+
+    return image
+
+
+def _perform_crop(image, filename=None, min_crop_size=(256, 256)):
     """
     Randomly crops the image. Crop positions are chosen randomly, as well as
     the size (provided it is above the requested minimum size). If any bounding
@@ -299,18 +423,22 @@ def _perform_crop(image, bboxs, filename=None, min_crop_size=(400, 400)):
 
     # First come up with a desired crop size, from given mins to the whole image
     #  (maxval is exclusive)
-    crop_width = tf.random.uniform(
-        [],
-        minval=min_crop_size[1],
-        maxval=img_shape[1] + 1,
-        dtype=tf.int32
-    )
-    crop_height = tf.random.uniform(
-        [],
-        minval=min_crop_size[0],
-        maxval=img_shape[0] + 1,
-        dtype=tf.int32
-    )
+    # TODO: Externalize this value and make it spatial_quantization.
+    crop_size = 512
+    # crop_width = tf.random.uniform(
+    #     [],
+    #     minval=min_crop_size[1],
+    #     maxval=max_crop_width,
+    #     dtype=tf.int32
+    # )
+    # crop_height = tf.random.uniform(
+    #     [],
+    #     minval=min_crop_size[0],
+    #     maxval=max_crop_width,
+    #     dtype=tf.int32
+    # )
+    crop_width = crop_size
+    crop_height = crop_size
 
     # Now come up with crop offsets
     offset_width = tf.random.uniform(
@@ -326,62 +454,6 @@ def _perform_crop(image, bboxs, filename=None, min_crop_size=(400, 400)):
         dtype=tf.int32
     )
 
-    # If we ever split a box with our crop, increase the crop size to include.
-    #  Positives are already too scarce
-    # First convert bounding boxes to pixel coordinates (rather than percents)
-    bbox_convert_tensor = tf.stack([img_shape[0],
-                                    img_shape[1],
-                                    img_shape[0],
-                                    img_shape[1],
-                                    1], axis=0)
-    bbox_coords = bboxs * tf.cast(bbox_convert_tensor, dtype=tf.float32)
-    bbox_coords = tf.cast(bbox_coords, dtype=tf.int32)
-
-    # Need to figure out which boxes are totally within the crop, and which ones
-    #  are totally outside the crop
-    bbox_x_in_crop = tf.logical_and(tf.greater(bbox_coords[:, 1], offset_width),
-                                    tf.greater(offset_width + crop_width,
-                                               bbox_coords[:, 3]))
-    bbox_y_in_crop = tf.logical_and(tf.greater(bbox_coords[:, 0],
-                                               offset_height),
-                                    tf.greater(offset_height + crop_height,
-                                               bbox_coords[:, 2]))
-    bbox_in_crop = tf.logical_and(bbox_x_in_crop, bbox_y_in_crop)
-
-    bbox_x_out_of_crop = tf.logical_or(tf.greater(bbox_coords[:, 1],
-                                                  offset_width + crop_width),
-                                       tf.greater(offset_width,
-                                                  bbox_coords[:, 3]))
-    bbox_y_out_of_crop = tf.logical_or(tf.greater(bbox_coords[:, 0],
-                                                  offset_height + crop_height),
-                                       tf.greater(offset_height,
-                                                  bbox_coords[:, 2]))
-    bbox_out_of_crop = tf.logical_or(bbox_x_out_of_crop, bbox_y_out_of_crop)
-
-    # Boxes not at all in the crop should be changed to negatives
-    classes = bboxs[:, 4] * tf.cast(tf.logical_not(bbox_out_of_crop),
-                                    dtype=tf.float32)
-
-    # The problematic boxes are the ones that aren't either totally in the crop
-    #  or totally out of the crop
-    bboxes_split_mask = tf.logical_not(tf.logical_or(bbox_in_crop,
-                                                     bbox_out_of_crop))
-    bboxes_split = tf.boolean_mask(bbox_coords, bboxes_split_mask)
-    min_x = tf.reduce_min(bboxes_split[:, 1])
-    max_x = tf.reduce_max(bboxes_split[:, 3])
-    min_y = tf.reduce_min(bboxes_split[:, 0])
-    max_y = tf.reduce_max(bboxes_split[:, 2])
-
-    offset_width = tf.minimum(offset_width, min_x)
-    offset_height = tf.minimum(offset_height, min_y)
-
-    # A strange bug occurs when there were no split boxes. Have to make sure max
-    # _x and max_y are defined
-    max_x = tf.maximum(max_x, offset_width)
-    max_y = tf.maximum(max_y, offset_height)
-
-    crop_height = tf.maximum(crop_height, max_y - offset_height)
-    crop_width = tf.maximum(crop_width, max_x - offset_width)
 
     # The heavy lifting is done, time to make us a crop and transform our
     # bounding boxes to the new coordinates
@@ -391,24 +463,10 @@ def _perform_crop(image, bboxs, filename=None, min_crop_size=(400, 400)):
                                           crop_height,
                                           crop_width)
 
-    # Precision is an issue, need to cast to float before we start doing math
-    bbox_coords = tf.cast(bbox_coords, tf.float32)
-    offset_width = tf.cast(offset_width, tf.float32)
-    offset_height = tf.cast(offset_height, tf.float32)
-    crop_width = tf.cast(crop_width, tf.float32)
-    crop_height = tf.cast(crop_height, tf.float32)
-
-    ymin = (bbox_coords[:, 0] - offset_height) / crop_height
-    xmin = (bbox_coords[:, 1] - offset_width) / crop_width
-    ymax = (bbox_coords[:, 2] - offset_height) / crop_height
-    xmax = (bbox_coords[:, 3] - offset_width) / crop_width
-
-    bbox_new = tf.stack([ymin, xmin, ymax, xmax, classes], axis=1)
-
     if filename is not None:
-        return image, bbox_new, filename
+        return image, filename
     else:
-        return image, bbox_new
+        return image
 
 
 def _flip_left_right(image, bboxs, filename=None):
