@@ -1110,20 +1110,20 @@ def main(flags):
                                          cache_path="")
 
         # Manual debug here, to diagnose data problems.
-        plot_data = True
-        if plot_data:
-            train_dataset_batch = sess.run(train_dataset_batch)
-            plt.subplot(141)
-            plt.imshow(np.abs(np.fft.fft2(np.abs(train_dataset_batch[0]))))
-            # plt.subplot(142)
-            # plt.imshow(train_dataset_batch[1])
-            # plt.subplot(143)
-            # plt.imshow(train_dataset_batch[2])
-            # plt.subplot(144)
-            # plt.imshow(train_dataset_batch[3])
-            print(np.min(train_dataset_batch[0]))
-            print(np.max(train_dataset_batch[0]))
-            plt.show()
+        # plot_data = True
+        # if plot_data:
+        #     train_dataset_batch = sess.run(train_dataset_batch)
+        #     plt.subplot(141)
+        #     plt.imshow(np.abs(np.fft.fft2(np.abs(train_dataset_batch[0]))))
+        #     # plt.subplot(142)
+        #     # plt.imshow(train_dataset_batch[1])
+        #     # plt.subplot(143)
+        #     # plt.imshow(train_dataset_batch[2])
+        #     # plt.subplot(144)
+        #     # plt.imshow(train_dataset_batch[3])
+        #     print(np.min(train_dataset_batch[0]))
+        #     print(np.max(train_dataset_batch[0]))
+        #     plt.show()
 
         # We create a tf.data.Dataset object wrapping the valid dataset here.
         valid_dataset = DatasetGenerator(valid_data_dir,
