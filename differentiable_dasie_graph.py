@@ -166,7 +166,17 @@ class DASIEModel(object):
                  num_apertures=15,
                  spatial_quantization=256,
                  num_exposures=1,
-                 alpha=0.001,
+                 subap_alpha=0.001,
+                 monolithic_alpha=0.1,
+                 beta=10.0,
+                 recovery_model_filter_scale=16,
+                 diameter_meters=2.5,
+                 lock_ttp_values=False,
+                 output_ttp_from_model=False,
+                 randomize_initial_ttps=False,
+                 tip_std=1.0,
+                 tilt_std=1.0,
+                 piston_std=1.0,
                  writer=None):
 
         self.learning_rate = learning_rate
@@ -199,8 +209,18 @@ class DASIEModel(object):
                 inputs=dataset_batch,
                 spatial_quantization=spatial_quantization,
                 num_apertures=self.num_apertures,
-                alpha=alpha,
+                radius_meters=diameter_meters / 2,
+                subap_alpha=subap_alpha,
+                beta=beta,
                 num_exposures=num_exposures,
+                monolithic_alpha=monolithic_alpha,
+                recovery_model_filter_scale=recovery_model_filter_scale,
+                lock_ttp_values=lock_ttp_values,
+                output_ttp_from_model=output_ttp_from_model,
+                randomize_initial_ttps=randomize_initial_ttps,
+                tip_std=tip_std,
+                tilt_std=tilt_std,
+                piston_std=piston_std,
                 )
 
             # self.trainable_variables = tf.compat.v1.trainable_variables()
@@ -210,30 +230,32 @@ class DASIEModel(object):
                            num_apertures=15,
                            num_exposures=1,
                            radius_meters=1.25,
+                           supaperture_radius_meters=None,
                            field_of_view_arcsec=4.0,
                            spatial_quantization=256,
-                           alpha=0.01,
+                           subap_alpha=0.01,
+                           monolithic_alpha=0.1,
                            beta=10.0,
-                           filter_wavelength_micron=1.0):
+                           filter_wavelength_micron=1.0,
+                           recovery_model_filter_scale=16,
+                           lock_ttp_values=False,
+                           output_ttp_from_model=False,
+                           randomize_initial_ttps=False,
+                           tip_std=1.0,
+                           tilt_std=1.0,
+                           piston_std=1.0,):
+
+        # TODO: Migrate to constructor.
+        self.num_exposures = num_exposures
 
         # Construct placeholders for inputs.
-        # TODO: expand to batches as shown:
-        # batch_shape = (None,) + (spatial_quantization, spatial_quantization)
         batch_shape = (spatial_quantization, spatial_quantization)
         if inputs is not None:
-
-            # TODO: Add shape test here.
-            perfect_image_placeholder = inputs
-
+            self.perfect_image = inputs
         else:
-            perfect_image_placeholder = tf.compat.v1.placeholder(tf.float64,
-                                                                 shape=batch_shape,
-                                                                 name="perfect_image_batch")
-
-
-
-        # Maybe remove or move these.
-        self.perfect_image = perfect_image_placeholder
+            self.perfect_image = tf.compat.v1.placeholder(tf.float64,
+                                                          shape=batch_shape,
+                                                          name="perfect_image_batch")
 
         # Compute the pupil extent: 4.848 microradians / arcsec
         # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
@@ -249,54 +271,67 @@ class DASIEModel(object):
         Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
 
 
-        randomize_initial_states = True
-        tip_std = 1.0
-        tilt_std = 1.0
-        piston_std = 1.0
+        # Handle inconsistent initialization requestes.
+        if output_ttp_from_model and randomize_initial_ttps:
+            raise ValueError("You provided --output_ttp_from_model and \
+                              --randomize_initial_ttps, which are mutually \
+                             exclusive.")
 
-        self.num_exposures = num_exposures
+        if lock_ttp_values:
+            ttp_trainable = False
+        else:
+            ttp_trainable = True
 
-        # TODO: Migrate this out to a separate function.
-        output_ttp_from_model = True
-        target_output_shape = (num_exposures, num_apertures, 3)
-        target_output_size = np.prod(target_output_shape)
-        print(target_output_shape)
-        print(target_output_size)
+        # TODO: Refactor to _make_ttp_tensors function
+        with tf.name_scope("input_model"):
+            target_output_shape = (num_exposures, num_apertures, 3)
+            target_output_size = np.prod(target_output_shape)
+            print(target_output_shape)
+            print(target_output_size)
 
-        with tf.name_scope("hidden_layer_1"):
-            random_vector_size = target_output_size * 6
-            n_hidden_1 = target_output_size * 4
+            with tf.name_scope("hidden_layer_1"):
+                random_vector_size = target_output_size * 6
+                n_hidden_1 = target_output_size * 4
 
-            glorot_relu_init_std = np.sqrt(2 / (random_vector_size + n_hidden_1))
-            W = tf.Variable(tf.random.normal((random_vector_size, n_hidden_1), stddev=glorot_relu_init_std))
-            b = tf.Variable(tf.random.normal((n_hidden_1,), stddev=glorot_relu_init_std))
-            x = tf.matmul(tf.constant(np.random.normal(size=(1, random_vector_size)), dtype=tf.float32), W) + b
-            # net = tflearn.layers.normalization.batch_normalization(net)
-            x = tf.nn.relu(x)
-        with tf.name_scope("hidden_layer_2"):
-            n_hidden_2 = target_output_size * 2
-            glorot_relu_init_std = np.sqrt(2 / (n_hidden_1 + n_hidden_2))
-            W = tf.Variable(tf.random.normal((n_hidden_1, n_hidden_2), stddev=glorot_relu_init_std))
-            b = tf.Variable(tf.random.normal((n_hidden_2,), stddev=glorot_relu_init_std))
-            x = tf.matmul(x, W) + b
-            # net = tflearn.layers.normalization.batch_normalization(net)
-            x = tf.nn.relu(x)
-        with tf.name_scope("hidden_layer_3"):
-            n_hidden_3 = target_output_size
-            glorot_tanh_init_std = np.sqrt(2) * np.sqrt(2 / (n_hidden_2 + n_hidden_3))
-            W = tf.Variable(tf.random.normal((n_hidden_2, n_hidden_3), stddev=glorot_tanh_init_std))
-            b = tf.Variable(tf.random.normal((n_hidden_3,), stddev=glorot_tanh_init_std))
-            x = tf.matmul(x, W) + b
-            # net = tflearn.layers.normalization.batch_normalization(net)
-            # x = tf.nn.relu(x)
-            x = tf.math.tanh(x)
+                glorot_relu_init_std = np.sqrt(2 / (random_vector_size + n_hidden_1))
+                W = tf.Variable(tf.random.normal((random_vector_size, n_hidden_1),
+                                                 stddev=glorot_relu_init_std),
+                                                 trainable=ttp_trainable)
+                b = tf.Variable(tf.random.normal((n_hidden_1,),
+                                                 stddev=glorot_relu_init_std),
+                                                 trainable=ttp_trainable)
+                x = tf.matmul(tf.constant(np.random.normal(size=(1, random_vector_size)), dtype=tf.float32), W) + b
+                x = tf.nn.relu(x)
+            with tf.name_scope("hidden_layer_2"):
+                n_hidden_2 = target_output_size * 2
+                glorot_relu_init_std = np.sqrt(2 / (n_hidden_1 + n_hidden_2))
+                W = tf.Variable(tf.random.normal((n_hidden_1, n_hidden_2),
+                                                 stddev=glorot_relu_init_std),
+                                                 trainable=ttp_trainable)
+                b = tf.Variable(tf.random.normal((n_hidden_2,),
+                                                 stddev=glorot_relu_init_std),
+                                                 trainable=ttp_trainable)
+                x = tf.matmul(x, W) + b
+                x = tf.nn.relu(x)
+            with tf.name_scope("hidden_layer_3"):
+                n_hidden_3 = target_output_size
+                glorot_tanh_init_std = np.sqrt(2) * np.sqrt(2 / (n_hidden_2 + n_hidden_3))
+                W = tf.Variable(tf.random.normal((n_hidden_2, n_hidden_3),
+                                                 stddev=glorot_tanh_init_std),
+                                                 trainable=ttp_trainable)
+                b = tf.Variable(tf.random.normal((n_hidden_3,),
+                                                 stddev=glorot_tanh_init_std),
+                                                 trainable=ttp_trainable)
+                x = tf.matmul(x, W) + b
+                x = tf.math.tanh(x)
 
-        scale_factor = 0.1
-        x = scale_factor * x
-        x = tf.reshape(x, [num_exposures, num_apertures, 3])
-        x = tf.cast(x, dtype=tf.float64)
+            scale_factor = 0.1
+            x = scale_factor * x
+            x = tf.reshape(x, [num_exposures, num_apertures, 3])
+            x = tf.cast(x, dtype=tf.float64)
 
 
+        # For each exposure, build the input ttp for that exposure.
         self.pupil_planes = list()
         for exposure_num in range(num_exposures):
             with tf.name_scope("exposure_" + str(exposure_num)):
@@ -316,11 +351,11 @@ class DASIEModel(object):
                             # TODO: Add names to slices, somehow.
                             tip_variable_name = str(aperture_num) + "_tip"
 
-                            tip_parameter = x[exposure_num, aperture_num, 0]
+                            tip_variable = x[exposure_num, aperture_num, 0]
                             # tip_parameter = tf.Variable(tip_distribution,
                             #                             dtype=tf.float64,
                             #                             name=tip_variable_name)
-                            tip = tf.complex(tip_parameter,
+                            tip = tf.complex(tip_variable,
                                              tf.constant(0.0, dtype=tf.float64))
 
                             # microns / meter (not far off from microradian tilt)
@@ -330,8 +365,8 @@ class DASIEModel(object):
                             #                              dtype=tf.float64,
                             #                              name=tilt_variable_name)
 
-                            tilt_parameter = x[exposure_num, aperture_num, 1]
-                            tilt = tf.complex(tilt_parameter,
+                            tilt_variable = x[exposure_num, aperture_num, 1]
+                            tilt = tf.complex(tilt_variable,
                                               tf.constant(0.0, dtype=tf.float64))
                             # microns
                             # TODO: Add names to slices, somehow.
@@ -341,8 +376,8 @@ class DASIEModel(object):
                             #                                dtype=tf.float64,
                             #                                name=piston_variable_name)
 
-                            piston_parameter = x[exposure_num, aperture_num, 2]
-                            piston = tf.complex(piston_parameter,
+                            piston_variable = x[exposure_num, aperture_num, 2]
+                            piston = tf.complex(piston_variable,
                                                 tf.constant(0.0, dtype=tf.float64))
                             ttp_variables.append([tip, tilt, piston])
 
@@ -350,59 +385,80 @@ class DASIEModel(object):
                         else:
 
                             # We can either init each variable randomly...
-                            if randomize_initial_states:
+                            if randomize_initial_ttps:
 
-                                tip_distribution = np.random.normal(0.0, tip_std)
-                                tilt_distribution = np.random.normal(0.0, tilt_std)
-                                piston_distribution = 0.001 + np.abs(np.random.normal(0.0, piston_std))
+                                tip_value = np.random.normal(0.0, tip_std)
+                                tilt_value = np.random.normal(0.0, tilt_std)
+                                piston_value = 0.001 + np.abs(np.random.normal(0.0, piston_std))
 
                             # ...or init them to the same small values.
                             else:
 
-                                tip_distribution = 0.0
-                                tilt_distribution = 0.0
-                                piston_distribution = 0.001
+                                tip_value = 0.0
+                                tilt_value = 0.0
+                                piston_value = 0.001
 
                             # Use a constant real-valued complex number as a gradient stop to the
                             # imaginary part of the t/t/p variables.
 
                             # Construct the variables wrt which we differentiate.
                             tip_variable_name = str(aperture_num) + "_tip"
-                            tip_parameter = tf.Variable(tip_distribution,
-                                                        dtype=tf.float64,
-                                                        name=tip_variable_name)
-                            tip = tf.complex(tip_parameter,
+                            tip_variable = tf.Variable(tip_value,
+                                                       dtype=tf.float64,
+                                                       name=tip_variable_name,
+                                                       trainable=ttp_trainable)
+                            tip = tf.complex(tip_variable,
                                              tf.constant(0.0, dtype=tf.float64))
 
                             # microns / meter (not far off from microradian tilt)
                             tilt_variable_name = str(aperture_num) + "_tilt"
-                            tilt_parameter = tf.Variable(tilt_distribution,
-                                                         dtype=tf.float64,
-                                                         name=tilt_variable_name)
-                            tilt = tf.complex(tilt_parameter,
+                            tilt_variable = tf.Variable(tilt_value,
+                                                        dtype=tf.float64,
+                                                        name=tilt_variable_name,
+                                                        trainable=ttp_trainable)
+                            tilt = tf.complex(tilt_variable,
                                               tf.constant(0.0, dtype=tf.float64))
                             # microns
                             piston_variable_name = str(aperture_num) + "_piston"
 
-                            piston_parameter = tf.Variable(piston_distribution,
-                                                           dtype=tf.float64,
-                                                           name=piston_variable_name)
-                            piston = tf.complex(piston_parameter,
+                            piston_variable = tf.Variable(piston_value,
+                                                          dtype=tf.float64,
+                                                          name=piston_variable_name,
+                                                          trainable=ttp_trainable)
+                            piston = tf.complex(piston_variable,
                                                 tf.constant(0.0, dtype=tf.float64))
 
                             ttp_variables.append([tip, tilt, piston])
 
-                self.ttp_variables = ttp_variables
+                # Add some instrumentation for ttp.
+                tips = list()
+                tilts = list()
+                pistons = list()
+                for (tip, tilt, piston) in ttp_variables:
+                    tips.append(tip)
+                    tilts.append(tilt)
+                    pistons.append(piston)
+                with self.writer.as_default():
+                    tf.summary.histogram("tip", tips)
+                    tf.summary.histogram("tilt", tilts)
+                    tf.summary.histogram("piston", pistons)
+
+                # ttp_variables = self._make_ttp_variables()
+
+
+
 
                 # Construct the model of the pupil plane, conditioned on the Variables.
                 with tf.name_scope("pupil_plane_model"):
 
                     # Initialize the pupil plan grid.
-                    pupil_plane = tf.zeros((spatial_quantization, spatial_quantization),  dtype=tf.complex128)
+                    pupil_plane = tf.zeros((spatial_quantization,
+                                            spatial_quantization),
+                                           dtype=tf.complex128)
 
                     for aperture_num in range(num_apertures):
-
-                        with tf.name_scope("subaperture_model_" + str(aperture_num)):
+                        subap_name = "subaperture_model_" + str(aperture_num)
+                        with tf.name_scope(subap_name):
 
                             print("Building aperture number %d." % aperture_num)
 
@@ -420,7 +476,6 @@ class DASIEModel(object):
                             rotation = (aperture_num + 1) / self.num_apertures
 
                             # TODO: correct radius to place the edge, rather than the center, at radius
-
                             mu_u = radius_meters * tf.cos((2 * np.pi) * rotation)
                             mu_v = radius_meters * tf.sin((2 * np.pi) * rotation)
                             mu_u = tf.cast(mu_u, dtype=tf.complex128)
@@ -430,7 +485,7 @@ class DASIEModel(object):
                                                                 Y,
                                                                 mu_u,
                                                                 mu_v,
-                                                                alpha,
+                                                                subap_alpha,
                                                                 beta,
                                                                 tip_phase,
                                                                 tilt_phase,
@@ -492,7 +547,7 @@ class DASIEModel(object):
 
             with tf.name_scope("monolithic_aperture_pupil_plane"):
                 # TODO: Adjust this to be physically correct.
-                monolithic_alpha = np.pi * radius_meters / 1 / 4
+                # monolithic_alpha = np.pi * diameter_meters / 2 / 1 / 4
                 self.monolithic_pupil_plane = aperture_function_2d(X, Y, 0.0, 0.0, monolithic_alpha, beta, tip=0.0, tilt=0.0, piston=0.001)
 
                 # Compute the PSF from the pupil plane.
@@ -508,10 +563,6 @@ class DASIEModel(object):
                 with tf.name_scope("monolithic_mtf_model"):
                     self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
 
-                # with tf.name_scope("image_spectrum_model"):
-                #     # TODO: Maybe undo this????
-                #     self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(perfect_image_placeholder, axis=-1), dtype=tf.complex128))
-
                 with tf.name_scope("monolithic_image_plane_model"):
                     monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
                     monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
@@ -521,53 +572,38 @@ class DASIEModel(object):
         with tf.name_scope("distributed_aperture_image_recovery"):
 
             # Combine the ensemble of images with the restoration function.
-            self.recovered_image = self._build_recovery_model(self.distributed_aperture_images)
+            self.recovered_image = self._build_recovery_model(self.distributed_aperture_images,
+                                                              filter_scale=recovery_model_filter_scale)
 
-            # self.recovered_image = tf.math.reduce_mean(self.distributed_aperture_images, 0)
 
         with tf.name_scope("dasie_loss"):
-            # perfect_image_flipped = tf.squeeze(self.perfect_image, axis=-1)
-            # perfect_image_flipped = tf.reverse(perfect_image_flipped, [0])
-            # perfect_image_flipped = tf.reverse(perfect_image_flipped, [-1])
-            #
-            # self.perfect_image_flipped = tf.reverse(perfect_image_flipped, [1])
-            self.perfect_image_flipped = tf.reverse(tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
-            # perfect_image_flipped = tf.reverse(perfect_image_placeholder, [1])
-            # perfect_image_flipped = tf.reverse(perfect_image_placeholder, [0])
-            # perfect_image_flipped = perfect_image_placeholder
-            # perfect_image_flipped = tf.squeeze(perfect_image_flipped, axis=-1)
-            # self.distributed_aperture_image_cosine_similarity = cosine_similarity(self.recovered_image, perfect_image_flipped)
-            # self.loss = -tf.math.log(self.distributed_aperture_image_cosine_similarity)
 
-            # self.distributed_aperture_mtf_cosine_similarity = cosine_similarity(self.mtfs[0], self.perfect_image_spectrum)
-            # self.loss = -tf.math.log(self.distributed_aperture_mtf_cosine_similarity)
+            self.perfect_image_flipped = tf.reverse(tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
 
             # TODO: Explore other losses.
             self.image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2)
             self.loss = tf.math.log(self.image_mse)
-            # self.loss = self.image_difference
 
-            # self.distributed_aperture_mtf_product = tf.reduce_sum(tf.abs(tf.cast(self.mtfs[0], dtype=tf.complex128) * self.perfect_image_spectrum))
-            # self.loss = -tf.math.log(self.distributed_aperture_mtf_product)
-            # self.loss = -self.distributed_aperture_mtf_product
+        with tf.name_scope("dasie_metrics"):
+
+            # TODO: Explore other metrics.
+            self.monolithic_aperture_image_mse = tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2)
+            self.distributed_aperture_image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2)
+            self.da_mse_mono_mse_ratio = self.distributed_aperture_image_mse / self.monolithic_aperture_image_mse
+
 
         # I wonder if this works...
         with self.writer.as_default():
 
-            # TODO: replace all these endpoints with _batch...
+            # TODO: refactor all these endpoints to name *_batch.
             tf.summary.scalar("in_graph_loss", self.loss)
-            # tf.summary.scalar("monolithic_aperture_image_cosine_similarity", self.monolithic_aperture_image_cosine_similarity)
-            tf.summary.scalar("monolithic_aperture_image_mse", tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2))
-            # tf.summary.scalar("distributed_aperture_image_cosine_similarity", self.distributed_aperture_image_cosine_similarity)
-            # tf.summary.scalar("distributed_aperture_mtf_cosine_similarity", self.distributed_aperture_mtf_cosine_similarity)
-            tf.summary.scalar("distributed_aperture_image_mse", tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2))
-            tf.summary.scalar("da_mse_mono_mse_ratio", tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2) / tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2))
-
+            tf.summary.scalar("monolithic_aperture_image_mse", self.monolithic_aperture_image_mse)
+            tf.summary.scalar("distributed_aperture_image_mse", self.distributed_aperture_image_mse)
+            tf.summary.scalar("da_mse_mono_mse_ratio", self.da_mse_mono_mse_ratio)
+            # tf.compat.v1.summary.scalar("v1_test", self.loss)
         with tf.name_scope("dasie_optimizer"):
             # Build an op that applies the policy gradients to the model.
-            # self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).apply_gradients(zip(self.actor_gradients, self.network_params))
             self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
-            # self.optimize = tf.compat.v1.train.GradientDescentOptimizer(self.learning_rate).minimize(self.loss)
 
 
         output_batch = self.recovered_image
@@ -575,27 +611,26 @@ class DASIEModel(object):
         with tf.compat.v1.Graph().as_default():
             tf.summary.scalar("debug_metric", 0.5)
 
-        self.summaries = tf.compat.v1.summary.all_v2_summary_ops()
+        # self.summaries = tf.compat.v1.summary.all_v2_summary_ops()
+        # self.v1_summaries = tf.compat.v1.summary.merge_all()
 
         return self.perfect_image, output_batch
 
 
-    def _build_recovery_model(self, distributed_aperture_images_batch):
+    def _build_recovery_model(self,
+                              distributed_aperture_images_batch,
+                              filter_scale):
         """
 
-        :param distributed_aperture_images_batch: a batch of num_exposure
-        images.
+        :param distributed_aperture_images_batch: a batch of DASIE images.
+        :param filter_scale: the smallest filter scale to use.
         :return:
         """
-
-        filter_scale = 16
-
         with tf.name_scope("recovery_model"):
 
-            # # TODO: Validate the shape of this stack.
-            # # distributed_aperture_images_batch = tf.expand_dims(distributed_aperture_images, axis=-1)
             # Stack the the images in the ensemble to form a batch of inputs.
             distributed_aperture_images_batch = tf.stack(distributed_aperture_images_batch, axis=-1)
+
             with tf.name_scope("recovery_feature_extractor"):
                 input = distributed_aperture_images_batch
                 # down_l0 conv-c15-k7-s1-LRelu input
@@ -1023,9 +1058,6 @@ class DASIEModel(object):
             # Remove the now irrelevant channel dim.
             recovered_image_batch = tf.squeeze(conv_l0_k0)
 
-            # TODO: Correct this to output the batch shape - input less the ensemble dimension.
-            # recovered_image = tf.math.reduce_mean(recovered_image_batch, -1)
-
         return recovered_image_batch
 
     def convT_block(self,
@@ -1054,26 +1086,15 @@ class DASIEModel(object):
                                                    dtype=tf.float64))
 
             # Encode the strides for TensorFlow, and build the conv graph.
-
-            # print("make this shape match (8, 256, 256, 2)")
-            # print(input_feature_map.shape)
-            # nowdie
             strides = [1, stride, stride, 1]
-            # print(input_feature_map.shape)
 
-            # Given the base quantization, div the downsample, mul the kernel.
+            # Given the base quantization, div by downsample, mul by stride.
             output_scale = (self.spatial_quantization // input_downsample_factor) * stride
-
             output_shape = (self.batch_size,
                             output_scale,
                             output_scale,
                             output_channels)
 
-            print(input_feature_map.shape)
-            # if name == "hello":
-            #     ami120
-
-            # output_shape = input_feature_map.shape
             conv_output = tf.nn.conv2d_transpose(input_feature_map,
                                                  filters,
                                                  output_shape,
@@ -1082,7 +1103,6 @@ class DASIEModel(object):
                                                  data_format='NHWC',
                                                  dilations=None,
                                                  name=None)
-
 
             # Apply an activation function.
             output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
@@ -1133,7 +1153,7 @@ class DASIEModel(object):
         return output_feature_map
 
 
-    def plot(self, logdir=None, step=None):
+    def plot(self, show_plot=False, logdir=None, step=None):
 
         num_da_samples = len(self.pupil_planes)
         num_rows = num_da_samples + 2
@@ -1169,24 +1189,13 @@ class DASIEModel(object):
                             self.monolithic_aperture_image],
                            feed_dict={self.handle: self.valid_iterator_handle})
 
+        # These are actually batches, so just take the first element.
         perfect_image_flipped = perfect_image_flipped[0]
-        # perfect_image_flipped = np.abs(perfect_image_flipped)
-        perfect_image = perfect_image[0]
-        # perfect_image = perfect_image_flipped
-
         perfect_image_spectrum = perfect_image_spectrum[0]
-        # recovered_image = recovered_image[0]
-
+        monolithic_aperture_image = monolithic_aperture_image[0]
         recovered_image = np.squeeze(recovered_image[0])
 
-
-        # These are actually batches, so just take the first element.
-        monolithic_pupil_plane = monolithic_pupil_plane
-        monolithic_psf = monolithic_psf
-        monolithic_aperture_image = monolithic_aperture_image[0]
-
-
-
+        # Iterate over each element of the ensemble from the DA system.
         for i, (pupil_plane,
                 psf,
                 mtf,
@@ -1255,7 +1264,6 @@ class DASIEModel(object):
         plt.colorbar()
 
         # Plot the monolithic aperture outputs.
-
         plot_index = num_cols * (num_rows - 1)
         plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
         # Plot phase angle
@@ -1315,42 +1323,40 @@ class DASIEModel(object):
             fig_path = os.path.join(logdir, str(run_id) + '.png')
             plt.gcf().set_dpi(1200)
             plt.savefig(fig_path)
-            plt.close()
 
         else:
 
             fig_path = os.path.join('./', 'tmp.png')
             plt.savefig(fig_path)
-            plt.close()
 
-    # def train(self, inputs):
-    #     return self.sess.run([self.output_images, self.optimize], feed_dict={
-    #             self.inputs: inputs
-    #     })
+        if show_plot:
+            plt.show()
+        plt.close()
 
     def train(self):
-        return self.sess.run([self.loss, self.image_mse, self.optimize], feed_dict={self.handle: self.train_iterator_handle})
+
+        return self.sess.run([self.loss,
+                              self.monolithic_aperture_image_mse,
+                              self.distributed_aperture_image_mse,
+                              self.da_mse_mono_mse_ratio,
+                              self.optimize],
+                             feed_dict={self.handle: self.train_iterator_handle})
 
     def validate(self):
-        return self.sess.run([self.loss, self.image_mse], feed_dict={self.handle: self.valid_iterator_handle})
 
-    # def get_loss(self, inputs):
-    #     return self.sess.run([self.loss], feed_dict={
-    #             self.inputs: inputs
-    #     })
-    #
-    # def get_metric(self, inputs):
-    #     return self.sess.run([self.distributed_aperture_image_cosine_similarity], feed_dict={
-    #             self.inputs: inputs
-    #     })
+        return self.sess.run([self.loss,
+                              self.monolithic_aperture_image_mse,
+                              self.distributed_aperture_image_mse,
+                              self.da_mse_mono_mse_ratio,
+                              ],
+                             feed_dict={self.handle: self.valid_iterator_handle})
+
 
 
 def train(sess,
           dasie_model,
           train_dataset,
           valid_dataset,
-          spatial_quantization=256,
-          image_path='sample_image.png',
           num_steps=1,
           plot_periodicity=1,
           writer=None,
@@ -1358,7 +1364,9 @@ def train(sess,
           all_summary_ops=None,
           writer_flush=None,
           logdir=None,
-          save_plot=False):
+          save_plot=False,
+          show_plot=False,
+          results_dict=None):
     """
     This function realizes a DASIE model optimization loop.
 
@@ -1372,19 +1380,35 @@ def train(sess,
     """
 
     # Begin training by initializing the graph.
-    sess.run(tf.compat.v1.global_variables_initializer())
 
-    # TODO: replace this with a dataset interface.
-    # Read the target image only once.
-    # perfect_image = plt.imread(image_path)
-
-    # Normalize the image, just in case. You never know.
-    # perfect_image = perfect_image / np.max(perfect_image)
-
-    # Initialize with required Datasets
-
+    # Build the initializers for the required datasets.
     train_dataset_initializer = train_dataset.get_initializer()
     valid_dataset_initializer = valid_dataset.get_initializer()
+
+    # merged = tf.compat.v1.summary.merge_all()
+    # train_writer = tf.compat.v1.summary.FileWriter(os.path.join(logdir, '/train'), sess.graph)
+    # valid_writer = tf.compat.v1.summary.FileWriter(os.path.join(logdir, '/test'))
+
+    # If no results dict is provided, make a blank one.
+    if not results_dict:
+
+        results_dict = dict()
+
+
+    results_dict["results"] = dict()
+
+    # Initialize all the metrics we want to populate during training.
+    results_dict["results"]["train_loss_list"] = list()
+    results_dict["results"]["train_dist_mse_list"] = list()
+    results_dict["results"]["train_mono_mse_list"] = list()
+    results_dict["results"]["train_mse_ratio_list"] = list()
+    results_dict["results"]["valid_loss_list"] = list()
+    results_dict["results"]["valid_dist_mse_list"] = list()
+    results_dict["results"]["valid_mono_mse_list"] = list()
+    results_dict["results"]["valid_mse_ratio_list"] = list()
+    results_dict["results"]["train_epoch_time_list"] = list()
+
+    sess.run(tf.compat.v1.global_variables_initializer())
 
     # Enter the main training loop.
     for i in range(num_steps):
@@ -1397,63 +1421,115 @@ def train(sess,
             if (i % plot_periodicity) == 0:
 
                 sess.run(valid_dataset_initializer)
-
                 print("Plotting...")
-
-                dasie_model.plot(logdir=logdir, step=i)
-
+                dasie_model.plot(logdir=logdir,
+                                 show_plot=show_plot,
+                                 step=i)
                 print("Plotting completed.")
 
-
+        # Initialize the training dataset iterator to prepare for training.
         print("Training...")
-
         sess.run(train_dataset_initializer)
 
-
+        # Initialize the training display metrics.
         train_loss = 0.0
-        train_image_mse = 0.0
+        train_monolithic_aperture_image_mse = 0.0
+        train_distributed_aperture_image_mse = 0.0
+        train_da_mse_mono_mse_ratio = 0.0
         train_steps = 0.0
-        try:
 
+        # Run training steps until the iterator is exhausted.
+        start_time = time.time()
+        try:
             while True:
-                # Execute one gradient update step.
+
+                # Execute one gradient update and get our tracked results.
                 print("Starting train step %d..." % train_steps)
-                step_train_loss, step_train_image_mse, _ = dasie_model.train()
+
+                (step_train_loss,
+                 step_train_monolithic_aperture_image_mse,
+                 step_train_distributed_aperture_image_mse,
+                 step_train_da_mse_mono_mse_ratio,
+                 _) = dasie_model.train()
+
+                # Increment all of our metrics.
+                # TODO: Eventually refactor to summaries.
                 train_loss += step_train_loss
-                train_image_mse += step_train_image_mse
+                train_distributed_aperture_image_mse += step_train_distributed_aperture_image_mse
+                train_monolithic_aperture_image_mse += step_train_monolithic_aperture_image_mse
+                train_da_mse_mono_mse_ratio += step_train_da_mse_mono_mse_ratio
                 train_steps += 1.0
                 print("...train step %d complete." % train_steps)
 
+        # OutOfRangeError indicates we've finished the iterator, so report out.
         except tf.errors.OutOfRangeError:
 
-            print("Train Loss: %f" % (train_loss / train_steps))
-            print("Train MSE: %f" % (train_image_mse / train_steps))
+            end_time = time.time()
+            train_epoch_time = end_time - start_time
+            mean_train_loss = train_loss / train_steps
+            mean_train_distributed_aperture_image_mse = train_distributed_aperture_image_mse / train_steps
+            mean_train_monolithic_aperture_image_mse = train_monolithic_aperture_image_mse / train_steps
+            mean_train_da_mse_mono_mse_ratio = train_da_mse_mono_mse_ratio / train_steps
+
+            results_dict["results"]["train_loss_list"].append(mean_train_loss)
+            results_dict["results"]["train_dist_mse_list"].append(mean_train_distributed_aperture_image_mse)
+            results_dict["results"]["train_mono_mse_list"].append(mean_train_monolithic_aperture_image_mse)
+            results_dict["results"]["train_mse_ratio_list"].append(mean_train_da_mse_mono_mse_ratio)
+            results_dict["results"]["train_epoch_time_list"].append(train_epoch_time)
+
+            print("Train Loss: %f" % mean_train_loss)
+            print("Train DA MSE: %f" % mean_train_distributed_aperture_image_mse)
             print("Epoch %d Training Complete." % i)
+
             pass
 
+        # Initialize the validation dataset iterator to prepare for validation.
         print("Validating...")
-
         sess.run(valid_dataset_initializer)
 
+        # Initialize the validation display metrics.
         valid_loss = 0.0
-        valid_image_mse = 0.0
+        valid_monolithic_aperture_image_mse = 0.0
+        valid_distributed_aperture_image_mse = 0.0
+        valid_da_mse_mono_mse_ratio = 0.0
         valid_steps = 0.0
 
         # Validate by looping an calling validate batches, until...
         try:
             while True:
                 # Execute one gradient update step.
-                step_valid_loss, step_valid_image_mse = dasie_model.validate()
+                (step_valid_loss,
+                 step_valid_monolithic_aperture_image_mse,
+                 step_valid_distributed_aperture_image_mse,
+                 step_valid_da_mse_mono_mse_ratio) = dasie_model.validate()
 
+
+                # Increment all of our metrics.
+                # TODO: Eventually refactor to summaries.
                 valid_loss += step_valid_loss
-                valid_image_mse += step_valid_image_mse
+                valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
+                valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
+                valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
                 valid_steps += 1.0
 
-        # ...there are no more validate batches
+        # ...there are no more validate batches.
         except tf.errors.OutOfRangeError:
 
-            print("Validation Loss: %f" % (valid_loss / valid_steps))
-            print("Validation MSE: %f" % (valid_image_mse / valid_steps))
+            # Compute the epoch results.
+            mean_valid_loss = valid_loss / valid_steps
+            mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
+            mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
+            mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
+
+            # Store the epoch results.
+            results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
+            results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
+            results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
+            results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
+
+
+            print("Validation Loss: %f" % mean_valid_loss)
+            print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
 
             print("Epoch %d Validation Complete." % i)
             pass
@@ -1468,8 +1544,13 @@ def train(sess,
         #     tf.summary.scalar("run_metric", run_metric, step=i)
         # print(run_metric)
 
-        # Execute the summary writer ops to write their values.
+        # Write the results dict for this epoch.
+        json_file = os.path.join(logdir, "results_" + str(i) + ".json")
+        json.dump(results_dict, open(json_file, 'w'))
+        # data = json.load(open("file_name.json"))
 
+        # TODO: Refactor to report at the step scale for training.
+        # Execute the summary writer ops to write their values.
         sess.run(valid_dataset_initializer)
         sess.run(all_summary_ops, feed_dict={dasie_model.handle: dasie_model.valid_iterator_handle})
         sess.run(step_update, feed_dict={dasie_model.handle: dasie_model.valid_iterator_handle})
@@ -1515,6 +1596,10 @@ def speedplus_parse_function(example_proto):
 
 def main(flags):
 
+
+    beta = 32.0
+    subaperture_spacing_meters = 0.1
+
     # Set the GPUs we want the script to use/see
     os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
 
@@ -1523,17 +1608,41 @@ def main(flags):
     save_dir = os.path.join(".", "logs", timestamp)
     os.makedirs(save_dir, exist_ok=True)
 
-    # Radius of the telescope in meters.
-    # TODO: identify exact coordinates of measure.
-    radius = 1.25
-
     # TODO: Document how distance to the target is quantified implicitly.
-    # TODO: Document how extend of the target is quantified implicitly.
+    # TODO: Document how extent of the target is quantified implicitly.
 
-    # Completely BS alpha scaling factor again...
-    # TODO: Set alpha based on new subaperture radius flag.
-    # TODO: Add self-consistency check ensuring non-overlapping subapertures.
-    alpha = np.pi * radius / flags.num_subapertures / 4
+    # Compute the scaling factor from meters to alpha for a GG PDF over meters.
+    # alpha = np.log(-np.log(epsilon)) / np.log(beta) * ap_radius_meters
+    # alpha = alpha / (flags.num_subapertures)
+    epsilon = 1e-15
+    ap_radius_meters = (flags.aperture_diameter_meters / 2)
+    subap_radius_meters = ((ap_radius_meters * np.sin(np.pi / flags.num_subapertures)) - (subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
+    meters_to_alpha = 1 /  (2 * (np.log(-np.log(epsilon)) / np.log(beta)))
+    subap_alpha = subap_radius_meters * meters_to_alpha / 2
+    monolithic_alpha = flags.aperture_diameter_meters * meters_to_alpha * 2
+
+
+    # Map our dataset name to relative locations and parse functions.
+    if flags.dataset_name == "speedplus":
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
+
+    elif flags.dataset_name == "inria_holiday":
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "valid")
+
+    else:
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "valid")
+
+    # Set the crop size to the spatial quantization scale.
+    if flags.crop:
+        crop_size = flags.spatial_quantization
+    else:
+        crop_size = None
 
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
@@ -1550,32 +1659,22 @@ def main(flags):
         tf.summary.experimental.set_step(step)
         writer = tf.summary.create_file_writer(save_dir)
 
-        # Different datasets may require different parsers, so we choose one.
-        if flags.dataset_name == "speedplus":
-            parse_function = speedplus_parse_function
-            train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
-            valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
-
-        elif flags.dataset_name == "inria_holiday":
-            parse_function = speedplus_parse_function
-            train_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "train")
-            valid_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "valid")
-
-        else:
-            parse_function = speedplus_parse_function
-            train_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "train")
-            valid_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "valid")
-
-        # TODO: Force DatasetGenerators to fix the size of the batches.
-        # We create a tf.data.Dataset object wrapping the train dataset here.
-
-        # Check the dims of the input and manually crop.
-
-        crop_size = None
-        if flags.crop:
-            crop_size = flags.spatial_quantization
-
+        # Build our datasets.
         train_dataset = DatasetGenerator(train_data_dir,
+                                         parse_function=parse_function,
+                                         augment=False,
+                                         shuffle=False,
+                                         crop_size=crop_size,
+                                         batch_size=flags.batch_size,
+                                         num_threads=2,
+                                         buffer=32,
+                                         encoding_function=None,
+                                         cache_dataset_memory=False,
+                                         cache_dataset_file=False,
+                                         cache_path="")
+
+        # We create a tf.data.Dataset object wrapping the valid dataset here.
+        valid_dataset = DatasetGenerator(valid_data_dir,
                                          parse_function=parse_function,
                                          augment=False,
                                          shuffle=False,
@@ -1604,37 +1703,8 @@ def main(flags):
         #     print(np.max(train_dataset_batch[0]))
         #     plt.show()
 
-        # We create a tf.data.Dataset object wrapping the valid dataset here.
-        valid_dataset = DatasetGenerator(valid_data_dir,
-                                         parse_function=parse_function,
-                                         augment=False,
-                                         shuffle=False,
-                                         crop_size=crop_size,
-                                         batch_size=flags.batch_size,
-                                         num_threads=2,
-                                         buffer=32,
-                                         encoding_function=None,
-                                         cache_dataset_memory=False,
-                                         cache_dataset_file=False,
-                                         cache_path="")
-        # valid_dataset = None
-
-
-        # Make a template dataset to be initialized with train or val data.
-        # dataset_placeholder = tf.placeholder(tf.float32, [None, flags.spatial_quantization, flags.spatial_quantization, 1])
-        # dataset = tf.data.Dataset.from_tensor_slices((dataset_placeholder))
-        # dataset = dataset.batch(flags.batch_size)
-        # iterator = dataset.make_initializable_iterator()
-        # dataset_batch = iterator.get_next()
 
         # Build a DA model. Inputs: n p/t/t tensors. Output: n image tensors.
-        # dasie_model = DASIEModel(sess,
-        #                          inputs=train_dataset_batch,
-        #                          num_exposures=flags.num_exposures,
-        #                          spatial_quantization=flags.spatial_quantization,
-        #                          learning_rate=flags.learning_rate,
-        #                          writer=writer,
-        #                          alpha=alpha)
         dasie_model = DASIEModel(sess,
                                  batch_size=flags.batch_size,
                                  train_dataset=train_dataset,
@@ -1642,21 +1712,32 @@ def main(flags):
                                  num_exposures=flags.num_exposures,
                                  spatial_quantization=flags.spatial_quantization,
                                  learning_rate=flags.learning_rate,
+                                 diameter_meters=flags.aperture_diameter_meters,
+                                 num_apertures=flags.num_subapertures,
+                                 recovery_model_filter_scale=flags.recovery_model_filter_scale,
                                  writer=writer,
-                                 alpha=alpha)
+                                 subap_alpha=subap_alpha,
+                                 monolithic_alpha=monolithic_alpha,
+                                 beta=beta,
+                                 lock_ttp_values=flags.lock_ttp_values,
+                                 output_ttp_from_model=flags.output_ttp_from_model,
+                                 randomize_initial_ttps=flags.randomize_initial_ttps,
+                                 tip_std=flags.tip_std,
+                                 tilt_std=flags.tilt_std,
+                                 piston_std=flags.piston_std,)
 
         # Merge all the summaries from the graphs, flush and init the nodes.
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
         writer_flush = writer.flush()
         sess.run([writer.init(), step.initializer])
 
+        base_results_dict = vars(flags)
+
         # Optimize the DASIE model parameters.
         train(sess,
               dasie_model,
               train_dataset,
               valid_dataset,
-              spatial_quantization=flags.spatial_quantization,
-              image_path=flags.image_path,
               num_steps=flags.num_steps,
               plot_periodicity=flags.plot_periodicity,
               writer=writer,
@@ -1664,7 +1745,9 @@ def main(flags):
               all_summary_ops=all_summary_ops,
               writer_flush=writer_flush,
               logdir=save_dir,
-              save_plot=flags.save_plot)
+              save_plot=flags.save_plot,
+              show_plot=flags.show_plot,
+              results_dict=base_results_dict)
 
 
 
@@ -1695,11 +1778,6 @@ if __name__ == '__main__':
                         default=4096,
                         help='The number of optimization steps to perform..')
 
-    parser.add_argument('--image_path',
-                        type=str,
-                        default="sample_image.png",
-                        help='The path to the location of the image.')
-
     parser.add_argument('--random_seed',
                         type=int,
                         default=np.random.randint(0, 2048),
@@ -1714,6 +1792,11 @@ if __name__ == '__main__':
                         type=int,
                         default=15,
                         help='Number of DASIE subapertures.')
+
+    parser.add_argument('--aperture_diameter_meters',
+                        type=float,
+                        default=2.5,
+                        help='Diameter of DA and mono apertures in meters.')
 
     parser.add_argument('--learning_rate',
                         type=float,
@@ -1755,35 +1838,69 @@ if __name__ == '__main__':
                         default="onesat_example",
                         help='Path to the train data TFRecords directory.')
 
-    parser.add_argument('--distributed_aperture_diameter_start',
-                        type=float,
-                        default=1.0,
-                        help='Diameter of the distributed aperture system in meters.')
-
-    parser.add_argument('--filter_psf_extent',
-                        type=float,
-                        default=2.0,
-                        help='Angular extent of simulated PSF (arcsec)')
-
-    parser.add_argument('--monolithic_aperture_diameter_start',
-                        type=float,
-                        default=1.0,
-                        help='Diameter of the monolithic aperture system in meters.')
-
-    parser.add_argument('--distributed_aperture_diameter_stop',
-                        type=float,
-                        default=30.0,
-                        help='Diameter of the distributed aperture system in meters.')
-
-    parser.add_argument('--monolithic_aperture_diameter_stop',
-                        type=float,
-                        default=30.0,
-                        help='Diameter of the monolithic aperture system in meters.')
-
-    parser.add_argument('--aperture_diameter_num',
+    parser.add_argument('--recovery_model_filter_scale',
                         type=int,
-                        default=64,
-                        help='Number of linspaced aperture values to simulate')
+                        default=16,
+                        help='Base filter size for recovery model.')
+
+    parser.add_argument("--lock_ttp_values", action='store_true',
+                        default=False,
+                        help="If true, t/t/p are constants")
+
+    parser.add_argument("--output_ttp_from_model", action='store_true',
+                        default=False,
+                        help="If true, t/t/p are populated by an MLP.")
+
+    parser.add_argument("--randomize_initial_ttps", action='store_true',
+                        default=False,
+                        help="If true, t/t/p are populated randomly.")
+
+    parser.add_argument('--tip_std',
+                        type=float,
+                        default=1.0,
+                        help='std for the Gaussian from which tip is drawn.')
+
+    parser.add_argument('--tilt_std',
+                        type=float,
+                        default=1.0,
+                        help='std for the Gaussian from which tilt is drawn.')
+
+    parser.add_argument('--piston_std',
+                        type=float,
+                        default=1.0,
+                        help='std for the Gaussian from which pistons drawn.')
+
+    #
+    #
+    # parser.add_argument('--distributed_aperture_diameter_start',
+    #                     type=float,
+    #                     default=1.0,
+    #                     help='Diameter of the distributed aperture system in meters.')
+    #
+    # parser.add_argument('--filter_psf_extent',
+    #                     type=float,
+    #                     default=2.0,
+    #                     help='Angular extent of simulated PSF (arcsec)')
+    #
+    # parser.add_argument('--monolithic_aperture_diameter_start',
+    #                     type=float,
+    #                     default=1.0,
+    #                     help='Diameter of the monolithic aperture system in meters.')
+    #
+    # parser.add_argument('--distributed_aperture_diameter_stop',
+    #                     type=float,
+    #                     default=30.0,
+    #                     help='Diameter of the distributed aperture system in meters.')
+    #
+    # parser.add_argument('--monolithic_aperture_diameter_stop',
+    #                     type=float,
+    #                     default=30.0,
+    #                     help='Diameter of the monolithic aperture system in meters.')
+    #
+    # parser.add_argument('--aperture_diameter_num',
+    #                     type=int,
+    #                     default=64,
+    #                     help='Number of linspaced aperture values to simulate')
 
 
     # Parse known arguments.
