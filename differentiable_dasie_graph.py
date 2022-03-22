@@ -1617,7 +1617,8 @@ def main(flags):
 
     # Set up some log directories.
     timestamp = datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
-    save_dir = os.path.join(".", "logs", timestamp)
+    dir_name = timestamp + str(os.getpid())
+    save_dir = os.path.join(".", "logs", dir_name)
     os.makedirs(save_dir, exist_ok=True)
 
     # TODO: Document how distance to the target is quantified implicitly.
