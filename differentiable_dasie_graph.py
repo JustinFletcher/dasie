@@ -577,15 +577,15 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_loss"):
 
-            if self.loss_name is "mse":
+            if self.loss_name == "mse":
                 loss = self.image_mse
-            if self.loss_name is "log_mse":
+            if self.loss_name == "log_mse":
                 loss = tf.math.log(self.image_mse)
-            if self.loss_name is "mae":
+            if self.loss_name == "mae":
                 loss = tf.reduce_mean(tf.math.abs(self.recovered_image - self.perfect_image_flipped))
-            if self.loss_name is "l2":
+            if self.loss_name == "l2":
                 loss = tf.math.sqrt(tf.math.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
-            if self.loss_name is "cos":
+            if self.loss_name == "cos":
                 loss = cosine_similarity(self.recovered_image,
                                          self.perfect_image_flipped)
 
