@@ -1617,7 +1617,7 @@ def main(flags):
 
     # Set up some log directories.
     timestamp = datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
-    dir_name = timestamp + str(os.getpid())
+    dir_name = timestamp + "_" + str(os.getpid())
     save_dir = os.path.join(".", "logs", dir_name)
     os.makedirs(save_dir, exist_ok=True)
 
