@@ -584,7 +584,7 @@ class DASIEModel(object):
             if self.loss_name is "mae":
                 loss = tf.reduce_mean(tf.math.abs(self.recovered_image - self.perfect_image_flipped))
             if self.loss_name is "l2":
-                loss = tf.math.sqrt(tf.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
+                loss = tf.math.sqrt(tf.math.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
             if self.loss_name is "cos":
                 loss = cosine_similarity(self.recovered_image,
                                          self.perfect_image_flipped)
