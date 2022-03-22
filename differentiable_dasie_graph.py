@@ -1791,11 +1791,6 @@ if __name__ == '__main__':
                         default="mse",
                         help='The loss function used.')
 
-    parser.add_argument('--batch_size',
-                        type=int,
-                        default=4,
-                        help='Number of perfect images per batch.')
-
     parser.add_argument('--num_steps',
                         type=int,
                         default=4096,
