@@ -162,6 +162,7 @@ class DASIEModel(object):
                  valid_dataset,
                  batch_size,
                  inputs=None,
+                 loss_name="mse",
                  learning_rate=1.0,
                  num_apertures=15,
                  spatial_quantization=256,
@@ -185,6 +186,7 @@ class DASIEModel(object):
         self.spatial_quantization = spatial_quantization
         self.sess = sess
         self.writer = writer
+        self.loss_name = loss_name
 
 
         train_iterator = train_dataset.get_iterator()
@@ -402,6 +404,7 @@ class DASIEModel(object):
                             # imaginary part of the t/t/p variables.
 
                             # Construct the variables wrt which we differentiate.
+                            # microns / meter (~microradian tilt)
                             tip_variable_name = str(aperture_num) + "_tip"
                             tip_variable = tf.Variable(tip_value,
                                                        dtype=tf.float64,
@@ -410,7 +413,7 @@ class DASIEModel(object):
                             tip = tf.complex(tip_variable,
                                              tf.constant(0.0, dtype=tf.float64))
 
-                            # microns / meter (not far off from microradian tilt)
+                            # microns / meter (~microradian tilt)
                             tilt_variable_name = str(aperture_num) + "_tilt"
                             tilt_variable = tf.Variable(tilt_value,
                                                         dtype=tf.float64,
@@ -443,15 +446,10 @@ class DASIEModel(object):
                     tf.summary.histogram("tilt", tilts)
                     tf.summary.histogram("piston", pistons)
 
-                # ttp_variables = self._make_ttp_variables()
-
-
-
-
                 # Construct the model of the pupil plane, conditioned on the Variables.
                 with tf.name_scope("pupil_plane_model"):
 
-                    # Initialize the pupil plan grid.
+                    # Initialize the pupil plane quantization grid.
                     pupil_plane = tf.zeros((spatial_quantization,
                                             spatial_quantization),
                                            dtype=tf.complex128)
@@ -501,10 +499,9 @@ class DASIEModel(object):
         # Iterate over each pupil plane, one per exposure.
         for pupil_plane in self.pupil_planes:
 
-
             # Basically the following is the loss function of the pupil plane.
-            # The pupil plan here can be thought of an estimator, parameterized by
-            # t/t/p values, of the true image.
+            # The pupil plan here can be thought of an estimator, parameterized
+            # by t/t/p values, of the true image. I think...
 
             # Compute the PSF from the pupil plane.
             # TODO: ask for advice, should I NOT be taking the ABS here?
@@ -575,14 +572,24 @@ class DASIEModel(object):
             self.recovered_image = self._build_recovery_model(self.distributed_aperture_images,
                                                               filter_scale=recovery_model_filter_scale)
 
+        self.perfect_image_flipped = tf.reverse(tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
+        self.image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped) ** 2)
 
         with tf.name_scope("dasie_loss"):
-
-            self.perfect_image_flipped = tf.reverse(tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
-
             # TODO: Explore other losses.
-            self.image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2)
-            self.loss = tf.math.log(self.image_mse)
+            if self.loss_name is "mse":
+                loss = self.image_mse
+            if self.loss_name is "log_mse":
+                loss = tf.math.log(self.image_mse)
+            if self.loss_name is "mae":
+                loss = tf.reduce_mean(tf.abs(self.recovered_image - self.perfect_image_flipped))
+            if self.loss_name is "l2":
+                loss = tf.math.sqrt(tf.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
+            if self.loss_name is "cos":
+                loss = cosine_similarity(self.recovered_image,
+                                         self.perfect_image_flipped)
+
+            self.loss = loss
 
         with tf.name_scope("dasie_metrics"):
 
@@ -1446,11 +1453,14 @@ def train(sess,
                 # Execute one gradient update and get our tracked results.
                 print("Starting train step %d..." % train_steps)
 
+                step_start_time = time.time()
                 (step_train_loss,
                  step_train_monolithic_aperture_image_mse,
                  step_train_distributed_aperture_image_mse,
                  step_train_da_mse_mono_mse_ratio,
                  _) = dasie_model.train()
+                step_end_time = time.time()
+                step_time = step_end_time - step_start_time
 
                 # Increment all of our metrics.
                 # TODO: Eventually refactor to summaries.
@@ -1459,7 +1469,9 @@ def train(sess,
                 train_monolithic_aperture_image_mse += step_train_monolithic_aperture_image_mse
                 train_da_mse_mono_mse_ratio += step_train_da_mse_mono_mse_ratio
                 train_steps += 1.0
-                print("...train step %d complete." % train_steps)
+                print("...step_train_loss = %f..." % step_train_loss)
+                print("...step_train_da_mse_mono_mse_ratio = %f..." % step_train_da_mse_mono_mse_ratio)
+                print("...train step %d complete in %f sec." % (train_steps, step_time))
 
         # OutOfRangeError indicates we've finished the iterator, so report out.
         except tf.errors.OutOfRangeError:
@@ -1715,6 +1727,7 @@ def main(flags):
                                  diameter_meters=flags.aperture_diameter_meters,
                                  num_apertures=flags.num_subapertures,
                                  recovery_model_filter_scale=flags.recovery_model_filter_scale,
+                                 loss_name=flags.loss_name,
                                  writer=writer,
                                  subap_alpha=subap_alpha,
                                  monolithic_alpha=monolithic_alpha,
@@ -1772,6 +1785,16 @@ if __name__ == '__main__':
                         type=str,
                         default=datetime.datetime.today().strftime('%Y%m%d_%H%M%S'),
                         help='The name of this run')
+
+    parser.add_argument('--loss_name',
+                        type=str,
+                        default="mse",
+                        help='The loss function used.')
+
+    parser.add_argument('--batch_size',
+                        type=int,
+                        default=4,
+                        help='Number of perfect images per batch.')
 
     parser.add_argument('--num_steps',
                         type=int,
