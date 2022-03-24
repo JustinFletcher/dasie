@@ -10,7 +10,6 @@ import copy
 import json
 import math
 import glob
-import hcipy
 import codecs
 import joblib
 import datetime
@@ -504,7 +503,6 @@ class DASIEModel(object):
             # by t/t/p values, of the true image. I think...
 
             # Compute the PSF from the pupil plane.
-            # TODO: ask for advice, should I NOT be taking the ABS here?
             with tf.name_scope("psf_model"):
 
                 psf = tf.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(pupil_plane)))) ** 2
@@ -543,12 +541,11 @@ class DASIEModel(object):
         with tf.name_scope("monolithic_aperture"):
 
             with tf.name_scope("monolithic_aperture_pupil_plane"):
-                # TODO: Adjust this to be physically correct.
+
                 # monolithic_alpha = np.pi * diameter_meters / 2 / 1 / 4
                 self.monolithic_pupil_plane = aperture_function_2d(X, Y, 0.0, 0.0, monolithic_alpha, beta, tip=0.0, tilt=0.0, piston=0.001)
 
                 # Compute the PSF from the pupil plane.
-                # TODO: ask for advice, should I NOT be taking the ABS here?
                 with tf.name_scope("monolithic_psf_model"):
                     self.monolithic_psf = tf.math.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
 
@@ -565,7 +562,7 @@ class DASIEModel(object):
                     monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
                     self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
 
-        # TODO: refactor reconstruction out of this model
+        # TODO: refactor reconstruction out of this model.
         with tf.name_scope("distributed_aperture_image_recovery"):
 
             # Combine the ensemble of images with the restoration function.
@@ -586,8 +583,8 @@ class DASIEModel(object):
             if self.loss_name == "l2":
                 loss = tf.math.sqrt(tf.math.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
             if self.loss_name == "cos":
-                loss = cosine_similarity(self.recovered_image,
-                                         self.perfect_image_flipped)
+                loss = -cosine_similarity(self.recovered_image,
+                                          self.perfect_image_flipped)
 
             self.loss = loss
 
@@ -647,6 +644,7 @@ class DASIEModel(object):
                                     kernel_size=7,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # down_l0 conv-c15-k7-s1-LRelu down_l0
                 down_l0 = self.conv_block(down_l0,
@@ -655,6 +653,7 @@ class DASIEModel(object):
                                     kernel_size=7,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # down_l1 conv-c30-k5-s2-LRelu down_l0
                 down_l1_0 = self.conv_block(down_l0,
@@ -663,6 +662,7 @@ class DASIEModel(object):
                                     kernel_size=5,
                                     stride=2,
                                     activation="LRelu")
+                #
 
                 # down_l1 conv-c30-k3-s1-LRelu down_l1
                 down_l1 = self.conv_block(down_l1_0,
@@ -671,6 +671,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # down_l1 conv-c30-k3-s1-LRelu down_l1
                 down_l1 = self.conv_block(down_l1,
                                     input_channels=filter_scale * 2,
@@ -678,6 +680,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # down_l2 conv-c60-k5-s2-LRelu down_l1
                 down_l2 = self.conv_block(down_l1_0,
                                     input_channels=filter_scale,
@@ -685,6 +689,8 @@ class DASIEModel(object):
                                     kernel_size=5,
                                     stride=2,
                                     activation="LRelu")
+                #
+
                 # down_l2 conv-c60-k3-s1-LRelu down_l2
                 down_l2 = self.conv_block(down_l2,
                                     input_channels=filter_scale * 4,
@@ -692,6 +698,9 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
+
                 # down_l2 conv-c60-k3-s1-LRelu down_l2
                 down_l2 = self.conv_block(down_l2,
                                     input_channels=filter_scale * 4,
@@ -699,6 +708,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # End of downsample and pre-skip.
 
 
@@ -709,6 +719,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k1 conv-c60-k3-s1-LRelu conv_l2_k0
                 conv_l2_k1 = self.conv_block(conv_l2_k0,
                                     input_channels=filter_scale * 4,
@@ -716,6 +728,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k2 conv-c60-k3-s1-LRelu Concat([conv_l2_k0, conv_l2_k1])
                 conv_l2_k2 = self.conv_block(tf.concat([conv_l2_k0, conv_l2_k1], axis=-1),
                                     input_channels=filter_scale * 8,
@@ -723,6 +737,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k3 conv-c60-k3-s1-LRelu conv_l2_k2
                 conv_l2_k3 = self.conv_block(conv_l2_k2,
                                     input_channels=filter_scale * 4,
@@ -730,6 +746,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k4 conv-c60-k3-s1-LRelu conv_l2_k3
                 conv_l2_k4 = self.conv_block(conv_l2_k3,
                                     input_channels=filter_scale * 4,
@@ -737,6 +755,9 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
+
                 # conv_l2_k5 conv-c60-k3-s1-LRelu conv_l2_k4
                 conv_l2_k5 = self.conv_block(conv_l2_k4,
                                     input_channels=filter_scale * 4,
@@ -744,6 +765,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # End of bottom pipe.
 
 
@@ -755,6 +777,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # conv_l1_k1 conv-c30-k3-s1-LRelu conv_l1_k0
                 conv_l1_k1 = self.conv_block(conv_l1_k0,
@@ -763,6 +786,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # conv_l1_k2 conv-c30-k3-s1-LRelu Concat([conv_l1_k0, conv_l1_k1])
                 conv_l1_k2 = self.conv_block(tf.concat([conv_l1_k0, conv_l1_k1], axis=-1),
                                     input_channels=filter_scale * 4,
@@ -770,6 +794,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l1_k3 conv-c30-k3-s1-LRelu conv_l1_k2
                 conv_l1_k3 = self.conv_block(conv_l1_k2,
                                     input_channels=filter_scale * 2,
@@ -777,6 +803,9 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
+
                 # conv_l1_k4 conv-c30-k3-s1-LRelu conv_l1_k3
                 conv_l1_k4 = self.conv_block(conv_l1_k3,
                                     input_channels=filter_scale * 2,
@@ -784,6 +813,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l1_k5 conv-c30-k3-s1-LRelu conv_l1_k4
                 conv_l1_k5 = self.conv_block(conv_l1_k4,
                                     input_channels=filter_scale * 2,
@@ -791,6 +822,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # up_l2 convT-c30-k2-s2-LRelu conv_l2_k5
                 # modded to: up_l2 convT-c60-k2-s2-LRelu conv_l2_k5
                 # pull the bottom pipe up.
@@ -801,6 +834,8 @@ class DASIEModel(object):
                                     kernel_size=2,
                                     stride=2,
                                     activation="LRelu")
+                #
+
                 # conv_l1_k6 conv-c30-k3-s1-LRelu Concat([up_l2, conv_l1_k5])
                 # modded to: input 60
                 conv_l1_k6 = self.conv_block(tf.concat([up_l2, conv_l1_k5], axis=-1),
@@ -809,6 +844,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # conv_l1_k7 conv-c30-k3-s1-LRelu conv_l1_k6
                 conv_l1_k7 = self.conv_block(conv_l1_k6,
@@ -817,6 +853,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # End of mid-resolution pipe.
 
                 # High Resolution.
@@ -827,6 +864,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # conv_l0_k1 conv-c15-k3-s1-LRelu conv_l0_k0
                 conv_l0_k1 = self.conv_block(conv_l0_k0,
                                     input_channels=filter_scale,
@@ -834,17 +872,20 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l0_k2 conv-c15-k3-s1-LRelu Concat([conv_l1_k0, conv_l0_k1])c
                 # halv the input size = conv_l1_k0
-                # This is wronf in tseng2021neural! The sizes don't match!
+                # This is wrong in tseng2021neural! The sizes don't match!
                 # Modded to: conv_l0_k2 conv-c15-k3-s1-LRelu Concat([conv_l0_k0, conv_l0_k1])
-                # THen I moved the whole concat down to be consistent with fig 5
+                # Then I moved the whole concat down to be consistent with fig 5
                 conv_l0_k2 = self.conv_block(conv_l0_k1,
                                     input_channels=filter_scale,
                                     output_channels=filter_scale,
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # conv_l0_k3 conv-c15-k3-s1-LRelu conv_l0_k2
                 conv_l0_k3 = self.conv_block(conv_l0_k2,
@@ -853,6 +894,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # conv_l0_k4 conv-c15-k3-s1-LRelu conv_l0_k3
                 # Move the skip connection here to be consistent with Fig 5.
@@ -862,6 +904,9 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
+
                 # conv_l0_k5 conv-c15-k3-s1-LRelu conv_l0_k4
                 conv_l0_k5 = self.conv_block(conv_l0_k4,
                                     input_channels=filter_scale,
@@ -869,6 +914,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # up_l1 convT-c15-k2-s2-LRelu conv_l1_k5
                 # modded to: up_l1 convT-c30-k2-s2-LRelu conv_l1_k5
                 up_l1 = self.convT_block(conv_l1_k5,
@@ -878,6 +925,9 @@ class DASIEModel(object):
                                     kernel_size=2,
                                     stride=2,
                                     activation="LRelu")
+                #
+
+
                 # conv_l0_k6 conv-c15-k3-s1-LRelu Concat([up_l1, conv_l0_k5])
                 conv_l0_k6 = self.conv_block(tf.concat([up_l1, conv_l0_k5], axis=-1),
                                     input_channels=filter_scale * 3,
@@ -885,6 +935,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l0_k7 conv-c15-k3-s1-LRelu conv_l0_k6
                 conv_l0_k7 = self.conv_block(conv_l0_k6,
                                     input_channels=filter_scale,
@@ -913,6 +965,8 @@ class DASIEModel(object):
                                     kernel_size=5,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l0_k1 conv-c30-k5-s1-LRelu conv_l0_k0
                 conv_l0_k1 = self.conv_block(conv_l0_k0,
                                     input_channels=filter_scale,
@@ -920,6 +974,7 @@ class DASIEModel(object):
                                     kernel_size=5,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # down_l0 conv-c30-k5-s2-LRelu conv_l0_k1
                 down_l0 = self.conv_block(conv_l0_k1,
                                     input_channels=filter_scale,
@@ -927,6 +982,7 @@ class DASIEModel(object):
                                     kernel_size=5,
                                     stride=2,
                                     activation="LRelu")
+                #
 
                 # conv_l1_k0 conv-c60-k3-s1-LRelu Concat([fp_l1, down_l0])
                 conv_l1_k0 = self.conv_block(tf.concat([fp_l1, down_l0], axis=-1),
@@ -935,6 +991,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
                 # conv_l1_k1 conv-c60-k3-s1-LRelu conv_l1_k0
                 conv_l1_k1 = self.conv_block(conv_l1_k0,
                                     input_channels=filter_scale * 4,
@@ -942,6 +999,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # down_l1 conv-c60-k3-s2-LRelu conv_l1_k1
                 down_l1 = self.conv_block(conv_l1_k1,
                                     input_channels=filter_scale * 4,
@@ -949,6 +1008,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=2,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k0 conv-c120-k3-s1-LRelu Concat([fp_l2, down_l1])
                 # Modded to 60.
                 conv_l2_k0 = self.conv_block(tf.concat([fp_l2, down_l1], axis=-1),
@@ -957,6 +1018,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k1 conv-c120-k3-s1-LRelu conv_l2_k0
                 # Report error - this is never used, even in the paper.
                 conv_l2_k1 = self.conv_block(conv_l2_k0,
@@ -965,6 +1028,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k2 conv-c120-k3-s1-LRelu Concat([conv_l2_k0, fp_l2, down_l1])
                 # NOTE: This was wrong in the tseng2021neural! conv_l2_k0 -> conv_l2_k1
                 conv_l2_k2 = self.conv_block(tf.concat([conv_l2_k1, fp_l2, down_l1], axis=-1),
@@ -974,6 +1039,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l2_k3 conv-c120-k3-s1-LRelu conv_l2_k2
                 # modded to: conv_l2_k3 conv-c60-k3-s1-LRelu conv_l2_k2
                 conv_l2_k3 = self.conv_block(conv_l2_k2,
@@ -982,6 +1049,7 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
 
                 # up_l2 convT-c60-k2-s2-LRelu conv_l2_k3
                 # modded to 60 input
@@ -992,6 +1060,8 @@ class DASIEModel(object):
                                     kernel_size=2,
                                     stride=2,
                                     activation="LRelu")
+                #
+
                 # conv_l1_k2 conv-c60-k3-s1-LRelu Concat([conv_l1_k1, up_l2])
                 # modded to 30.
                 conv_l1_k2 = self.conv_block(tf.concat([conv_l1_k1, up_l2], axis=-1),
@@ -1000,6 +1070,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # conv_l1_k3 conv-c60-k3-s1-LRelu conv_l1_k2
                 conv_l1_k3 = self.conv_block(conv_l1_k2,
                                     input_channels=filter_scale * 2,
@@ -1007,6 +1079,8 @@ class DASIEModel(object):
                                     kernel_size=3,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # up_l1 convT-c60-k2-s2-LRelu conv_l2_k3
                 # NOTE: This was wrong in the tseng2021neural! conv_l2_k3 -> conv_l1_k3
                 up_l1 = self.convT_block(conv_l1_k3,
@@ -1016,6 +1090,8 @@ class DASIEModel(object):
                                     kernel_size=2,
                                     stride=2,
                                     activation="LRelu")
+                #
+
                 # conv_l0_k2 conv-c30-k5-s1-LRelu Concat([conv_l0_k1, up_l1])
                 conv_l0_k2 = self.conv_block(tf.concat([conv_l0_k1, up_l1], axis=-1),
                                     input_channels=filter_scale * 3,
@@ -1023,6 +1099,8 @@ class DASIEModel(object):
                                     kernel_size=5,
                                     stride=1,
                                     activation="LRelu")
+                #
+
                 # Output RGB conv_l0_k2
                 # NOTE: This was underspecified in tseng2021neural!
                 conv_l0_k3 = self.conv_block(conv_l0_k2,
@@ -1031,6 +1109,7 @@ class DASIEModel(object):
                                     kernel_size=2,
                                     stride=1,
                                     activation="LRelu")
+                #
                 conv_l0_k4 = self.conv_block(conv_l0_k3,
                                     input_channels=filter_scale,
                                     output_channels=filter_scale,
@@ -1701,20 +1780,39 @@ def main(flags):
                                          cache_path="")
 
         # Manual debug here, to diagnose data problems.
-        # plot_data = True
-        # if plot_data:
-        #     train_dataset_batch = sess.run(train_dataset_batch)
-        #     plt.subplot(141)
-        #     plt.imshow(np.abs(np.fft.fft2(np.abs(train_dataset_batch[0]))))
-        #     # plt.subplot(142)
-        #     # plt.imshow(train_dataset_batch[1])
-        #     # plt.subplot(143)
-        #     # plt.imshow(train_dataset_batch[2])
-        #     # plt.subplot(144)
-        #     # plt.imshow(train_dataset_batch[3])
-        #     print(np.min(train_dataset_batch[0]))
-        #     print(np.max(train_dataset_batch[0]))
-        #     plt.show()
+        plot_data = False
+        if plot_data:
+            train_iterator = train_dataset.get_iterator()
+            train_dataset_batch = train_iterator.get_next()
+            train_dataset_initializer = train_dataset.get_initializer()
+            sess.run(train_dataset_initializer)
+
+            valid_iterator = valid_dataset.get_iterator()
+            valid_dataset_batch = valid_iterator.get_next()
+            valid_dataset_initializer = valid_dataset.get_initializer()
+            sess.run(valid_dataset_initializer)
+
+            np_train_dataset_batch = sess.run(train_dataset_batch)
+            np_valid_dataset_batch = sess.run(valid_dataset_batch)
+
+            plt.subplot(241)
+            plt.imshow(np_train_dataset_batch[0])
+            plt.subplot(242)
+            plt.imshow(np_train_dataset_batch[1])
+            plt.subplot(243)
+            plt.imshow(np_train_dataset_batch[2])
+            plt.subplot(244)
+            plt.imshow(np_train_dataset_batch[3])
+
+            plt.subplot(245)
+            plt.imshow(np_valid_dataset_batch[0])
+            plt.subplot(246)
+            plt.imshow(np_valid_dataset_batch[1])
+            plt.subplot(247)
+            plt.imshow(np_valid_dataset_batch[2])
+            plt.subplot(248)
+            plt.imshow(np_valid_dataset_batch[3])
+            plt.show()
 
 
         # Build a DA model. Inputs: n p/t/t tensors. Output: n image tensors.
@@ -1854,7 +1952,7 @@ if __name__ == '__main__':
                         help='Path to a directory holding all datasetss.')
 
     parser.add_argument('--dataset_name', type=str,
-                        default="onesat_example",
+                        default="speedplus",
                         help='Path to the train data TFRecords directory.')
 
     parser.add_argument('--recovery_model_filter_scale',
