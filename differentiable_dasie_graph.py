@@ -1392,12 +1392,12 @@ class DASIEModel(object):
             plt.savefig(fig_path)
             plt.close()
 
-        num_da_samples = len(self.pupil_planes)
-        num_rows = num_da_samples + 2
-        num_cols = 6
-
-        scale = 6
-        plt.figure(figsize=[scale * 4, scale])
+        # num_da_samples = len(self.pupil_planes)
+        # num_rows = num_da_samples + 2
+        # num_cols = 6
+        #
+        # scale = 6
+        # plt.figure(figsize=[scale * 4, scale])
 
         # Do a single sess.run to get all the values from a single batch.
         (pupil_planes,
@@ -1508,118 +1508,6 @@ class DASIEModel(object):
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
 
-
-        # Iterate over each element of the ensemble from the DA system.
-        # for i, (pupil_plane,
-        #         psf,
-        #         mtf,
-        #         distributed_aperture_image) in enumerate(zip(pupil_planes,
-        #                                                      psfs,
-        #                                                      mtfs,
-        #                                                      distributed_aperture_images)):
-        #
-        #     # These are actually batches, so just take the first one.
-        #     distributed_aperture_image = distributed_aperture_image[0]
-        #
-        #     plot_index = (num_cols * i)
-        #
-        #     plt.subplot(num_rows, num_cols, plot_index + 1)
-        #     # Plot phase angle
-        #     plt.imshow(np.angle(pupil_plane), cmap='twilight_shifted')
-        #     plt.colorbar()
-        #     # Overlay aperture mask
-        #     plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2)
-        #
-        #     plt.subplot(num_rows, num_cols, plot_index + 2)
-        #     plt.imshow(np.log10(psf), cmap='inferno')
-        #     plt.colorbar()
-        #
-        #     plt.subplot(num_rows, num_cols, plot_index + 3)
-        #     plt.imshow(np.log10(mtf), cmap='inferno')
-        #     plt.colorbar()
-        #
-        #     plt.subplot(num_rows, num_cols, plot_index + 4)
-        #     plt.imshow(distributed_aperture_image, cmap='inferno')
-        #     plt.colorbar()
-        #
-        #     plt.subplot(num_rows, num_cols, plot_index + 5)
-        #     plt.imshow(perfect_image_flipped, cmap='inferno')
-        #     plt.colorbar()
-        #
-        #     plt.subplot(num_rows, num_cols, plot_index + 6)
-        #     plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
-        #     plt.colorbar()
-        #
-        # # Plot the reconstructed image multiple times, just for ease.
-        # plot_index = num_cols * (num_rows - 2)
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
-        #
-        # plt.colorbar()
-        # plt.imshow(recovered_image, cmap='inferno')
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 2))
-        # plt.imshow(recovered_image, cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 3))
-        # plt.imshow(recovered_image, cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 4))
-        # plt.imshow(recovered_image, cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 5))
-        # plt.imshow(recovered_image, cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(num_rows, num_cols, plot_index + 6)
-        # plt.imshow(recovered_image, cmap='inferno')
-        # plt.colorbar()
-        #
-        # # Plot the monolithic aperture outputs.
-        # plot_index = num_cols * (num_rows - 1)
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 1))
-        # # Plot phase angle
-        # plt.imshow(np.angle(monolithic_pupil_plane), cmap='twilight_shifted')
-        # plt.colorbar()
-        # # Overlay aperture mask
-        # plt.imshow(np.abs(monolithic_pupil_plane), cmap='Greys', alpha=.2)
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 2))
-        # plt.imshow(np.log10(monolithic_psf), cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 3))
-        # plt.imshow(np.log10(monolithic_mtf), cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 4))
-        # plt.imshow(monolithic_aperture_image, cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(plt.subplot(num_rows, num_cols, plot_index + 5))
-        # plt.imshow(perfect_image_flipped, cmap='inferno')
-        # plt.colorbar()
-        #
-        # plt.subplot(num_rows, num_cols, plot_index + 6)
-        # plt.imshow(np.log10(np.abs(perfect_image_spectrum)), cmap='inferno')
-        # plt.colorbar()
-        #
-        # if logdir:
-        #     run_id = step
-        #     fig_path = os.path.join(step_plot_dir, str(run_id) + '.png')
-        #     plt.gcf().set_dpi(1200)
-        #     plt.savefig(fig_path)
-        #
-        # else:
-        #
-        #     fig_path = os.path.join('./', 'tmp.png')
-        #     plt.savefig(fig_path)
-        #
-        # if show_plot:
-        #     plt.show()
-        # plt.close()
 
     def train(self):
 
