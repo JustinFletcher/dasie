@@ -73,6 +73,11 @@ def generalized_gaussian(X, mu, alpha, beta):
 def plane_2d(x, y, x_0, y_0, slope_x, slope_y, height):
     return ((x - x_0) * slope_x) + ((y - y_0) * slope_y) + height
 
+def zernike_disc(x, y, x_0, y_0, zernike_coefficients):
+
+    # TODO: Produce zernike cartesian patch at x_0, y_0.
+    return ((x - x_0) * slope_x) + ((y - y_0) * slope_y) + height
+
 
 @np.vectorize
 def generalized_gaussian_2d(u, v, mu_u, mu_v, alpha, beta):
@@ -141,7 +146,7 @@ def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
     print("Ending aperture function.")
     return aperture_sample
 
-def zernike_aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, zernike_coefficients):
+def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients):
 
     # TODO: Use the zernike_coefficients to produce a unit disc at mu_u, mu_v
 
@@ -149,13 +154,13 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, zernike_coeffici
     # generalized_gaussian_2d_sample = tf.vectorized_map(generalized_gaussian_2d, X, Y, mu_u, mu_v, alpha, beta)
     T_mu_u = tf.ones_like(X) * mu_u
     T_mu_v = tf.ones_like(X) * mu_v
-    T_alpha = tf.ones_like(X) * alpha
-    T_beta = tf.ones_like(X) * beta
-    T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
+    T_aperture_radius = tf.ones_like(X) * aperture_radius
+    T_subaperture_radius = tf.ones_like(X) * subaperture_radius
+    T = (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
     generalized_gaussian_2d_sample = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
 
     print("getting plane.")
-    plane_2d_sample = plane_2d(X, Y, mu_u, mu_v, tip, tilt, piston)
+    zernike_coefficients = zernike_disc(X, Y, mu_u, mu_v, zernike_coefficients)
 
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("generating phase angle field.")
@@ -163,7 +168,7 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, zernike_coeffici
 
     print("multiplying.")
     generalized_gaussian_2d_sample = generalized_gaussian_2d_sample
-    aperture_sample = plane_2d_field * generalized_gaussian_2d_sample
+    aperture_sample = zernike_coefficients * generalized_gaussian_2d_sample
 
     # print(aperture_sample)
 
@@ -419,7 +424,7 @@ class DASIEModel(object):
 
                 # Iterate over each aperture and build the TF variables needed.
                 # TODO: Depricate once replaced.
-                use_zernikes = False
+                use_zernikes = True
                 for aperture_num in range(num_apertures):
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
@@ -478,7 +483,7 @@ class DASIEModel(object):
                                 variable_name = "a" + str(
                                     aperture_num) + "_z_j=" + str(
                                     zernike_index)
-                                variable = tf.complex(tf.Variable(0.0,
+                                variable = tf.complex(tf.Variable(0.1,
                                                                   dtype=tf.float64,
                                                                   name=variable_name,
                                                                   trainable=trainable),
@@ -617,11 +622,9 @@ class DASIEModel(object):
                                                                             Y,
                                                                             mu_u,
                                                                             mu_v,
-                                                                            subap_alpha,
-                                                                            beta,
-                                                                            tip,
-                                                                            tilt,
-                                                                            piston)
+                                                                            radius_meters,
+                                                                            supaperture_radius_meters,
+                                                                            zernike_coefficients)
 
 
 
@@ -713,9 +716,6 @@ class DASIEModel(object):
 
             if self.loss_name == "mse":
                 loss = self.image_mse
-            if self.loss_name == "log_mse":
-                this_is_depricated
-                loss = tf.math.log(self.image_mse)
             if self.loss_name == "mae":
                 loss = tf.reduce_mean(tf.math.abs(self.recovered_image - self.perfect_image_flipped))
             if self.loss_name == "l2":
@@ -1379,9 +1379,7 @@ class DASIEModel(object):
 
     def plot(self, show_plot=False, logdir=None, step=None):
 
-        print("This is a test print.")
-
-
+        # Create the directory for the plots
         step_plot_dir = os.path.join(logdir, 'step_' + str(step) + '_plots')
         if not os.path.exists(step_plot_dir):
             os.makedirs(step_plot_dir)
@@ -1391,13 +1389,6 @@ class DASIEModel(object):
             plt.gcf().set_dpi(1200)
             plt.savefig(fig_path)
             plt.close()
-
-        # num_da_samples = len(self.pupil_planes)
-        # num_rows = num_da_samples + 2
-        # num_cols = 6
-        #
-        # scale = 6
-        # plt.figure(figsize=[scale * 4, scale])
 
         # Do a single sess.run to get all the values from a single batch.
         (pupil_planes,
@@ -1962,7 +1953,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--loss_name',
                         type=str,
-                        default="mse",
+                        default="mae",
                         help='The loss function used.')
 
     parser.add_argument('--num_steps',
