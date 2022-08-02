@@ -114,34 +114,6 @@ def tensor_generalized_gaussian_2d(T):
 
     return z
 
-def tensor_zernike_gaussian_2d(T):
-
-    # Unpack the input tensor.
-    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius,
-    #              T_term_number)
-    u, v, mu_u, mu_v, aperture_radius, subaperture_radius, term_number = T
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    u = tf.cast(u, dtype=tf.float64)
-    v = tf.cast(v, dtype=tf.float64)
-    mu_u = tf.cast(mu_u, dtype=tf.float64)
-    mu_v = tf.cast(mu_v, dtype=tf.float64)
-    aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
-    subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
-
-
-    # TODO: Cartesian Zernike goes here.
-
-    scale_constant = beta / (2 * alpha * tf.exp(tf.math.lgamma((1 / beta))))
-    exponent = -(((u - mu_u) ** 2 + (v - mu_v) ** 2) / alpha) ** beta
-    value = tf.exp(exponent)
-    z = scale_constant * value
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    z = tf.cast(z, dtype=tf.complex128)
-
-    return z
-
 @np.vectorize
 def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
@@ -213,7 +185,7 @@ def zernike_1(T):
     u_field = u - mu_u
     v_field = v - mu_v
     # TODO: Cartesian Zernike goes here.
-    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.sin(tf.math.atan2(u_field, v_field))
+    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.sin(tf.math.atan2(v_field, u_field))
 
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
     z = tf.cast(z, dtype=tf.complex128)
@@ -239,7 +211,7 @@ def zernike_2(T):
     u_field = u - mu_u
     v_field = v - mu_v
     # TODO: Cartesian Zernike goes here.
-    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.cos(tf.math.atan2(u_field, v_field))
+    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.cos(tf.math.atan2(v_field, u_field))
 
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
     z = tf.cast(z, dtype=tf.complex128)
@@ -247,8 +219,6 @@ def zernike_2(T):
     return z
 
 def select_zernike_function(term_number):
-
-    function_name = None
 
     if term_number == 0:
 
@@ -281,23 +251,27 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     T_mu_v = tf.ones_like(X) * mu_v
     T_aperture_radius = tf.ones_like(X) * aperture_radius
     T_subaperture_radius = tf.ones_like(X) * subaperture_radius
+    T = (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
 
     for term_number, zernike_coefficient in enumerate(zernike_coefficients):
 
+        print("Starting Term " + str(term_number) + ".")
 
-        T = (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
         if tensor_zernike_2d_sample_initialized:
             zernike_term_map = select_zernike_function(term_number=term_number)
+            print(zernike_term_map)
             tensor_zernike_2d_sample += zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
         else:
             tensor_zernike_2d_sample_initialized = True
             zernike_term_map = select_zernike_function(term_number=term_number)
             tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
+            print(zernike_term_map)
 
+        print("End of Zernike Term.")
 
 
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
-    print("generating phase angle field.")
+    print("Generating phase angle field.")
     tensor_zernike_2d_field = tf.exp(tensor_zernike_2d_sample)
 
     # print(aperture_sample)
@@ -613,7 +587,7 @@ class DASIEModel(object):
                                 variable_name = "a" + str(
                                     aperture_num) + "_z_j=" + str(
                                     zernike_index)
-                                variable = tf.complex(tf.Variable(0.5,
+                                variable = tf.complex(tf.Variable(1.0,
                                                                   dtype=tf.float64,
                                                                   name=variable_name,
                                                                   trainable=trainable),
