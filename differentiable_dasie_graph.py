@@ -1586,11 +1586,24 @@ class DASIEModel(object):
             plt.imshow(np.angle(pupil_plane),
                        cmap='twilight_shifted',
                        extent=[left,right,bottom,top])
-            plt.colorbar()
             # Overlay aperture mask
-            plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2)
+            plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2,
+                       extent=[left,right,bottom,top])
+            plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="pupil_plane_" + str(i))
+
+            # Plot phase angle
+            left = self.pupil_dimension_x[0]
+            right = self.pupil_dimension_x[-1]
+            bottom = self.pupil_dimension_y[0]
+            top = self.pupil_dimension_y[-1]
+            # Overlay aperture mask
+            plt.imshow(pupil_plane, cmap='Greys', alpha=.2,
+                       extent=[left,right,bottom,top])
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="raw_pupil_plane_" + str(i))
 
             plt.imshow(np.log10(psf), cmap='inferno')
             plt.colorbar()
