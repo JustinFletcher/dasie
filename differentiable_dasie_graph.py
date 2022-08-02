@@ -600,7 +600,10 @@ class DASIEModel(object):
                                 # Scale this variable.
                                 variable = variable * phase_scale
                                 subap_zernike_indices_variables.append(variable)
+                            print(len(subap_zernike_indices_variables))
                             phase_variables.append(subap_zernike_indices_variables)
+                            print(phase_variables)
+                            die
 
 
                         # If we don't have a model, then ttp are the variables.
