@@ -276,6 +276,7 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     print("Starting Zernike aperture function.")
     # generalized_gaussian_2d_sample = tf.vectorized_map(generalized_gaussian_2d, X, Y, mu_u, mu_v, alpha, beta)
     tensor_zernike_2d_sample = None
+    tensor_zernike_2d_sample_initialized  = False
     T_mu_u = tf.ones_like(X) * mu_u
     T_mu_v = tf.ones_like(X) * mu_v
     T_aperture_radius = tf.ones_like(X) * aperture_radius
@@ -285,10 +286,11 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
 
 
         T = (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
-        if tensor_zernike_2d_sample:
+        if tensor_zernike_2d_sample_initialized:
             zernike_term_map = select_zernike_function(term_number=term_number)
             tensor_zernike_2d_sample += zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
         else:
+            tensor_zernike_2d_sample_initialized = True
             zernike_term_map = select_zernike_function(term_number=term_number)
             tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
 
