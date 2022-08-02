@@ -129,11 +129,9 @@ def tensor_circle_mask_2d(T):
     v = tf.cast(v, dtype=tf.float64)
     mu_u = tf.cast(mu_u, dtype=tf.float64)
     mu_v = tf.cast(mu_v, dtype=tf.float64)
-    alpha = tf.cast(alpha, dtype=tf.float64)
-    beta = tf.cast(beta, dtype=tf.float64)
 
 
-    r = tf.math.sqrt((u - mu_u) ** 2 + (u - mu_u) ** 2)
+    r = tf.math.sqrt((u - mu_u) ** 2 + (v - mu_v) ** 2)
 
     # z = tf.map_fn(fn=lambda t: 1.0 if t < radius else 0.0, elems=r)
     z = tf.cast(r < radius, dtype=tf.float64)
