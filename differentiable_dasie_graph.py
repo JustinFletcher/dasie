@@ -1599,14 +1599,16 @@ class DASIEModel(object):
             bottom = self.pupil_dimension_y[0]
             top = self.pupil_dimension_y[-1]
             # Overlay aperture mask
-            plt.subplot(2, 1, 1)
+            ax1 = plt.subplot(2, 1, 1)
+            ax1.set_title('np.angle')
             plt.imshow(np.angle(pupil_plane), cmap='Greys',
-                       title="np.angle",
                        extent=[left,right,bottom,top])
             plt.colorbar()
+
+            ax2 = plt.subplot(2, 1, 2)
             plt.imshow(np.abs(pupil_plane), cmap='Greys',
-                       title="np.abs",
                        extent=[left,right,bottom,top])
+            ax2.set_title('np.abs')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="raw_pupil_plane_" + str(i))
