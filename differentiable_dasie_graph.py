@@ -585,7 +585,7 @@ class DASIEModel(object):
 
                             # TODO: Build Zernike representations.
                             # TODO: Externalize.
-                            num_zernike_indices = 3
+                            num_zernike_indices = 1
                             subap_zernike_indices_variables = list()
                             for zernike_index in range(num_zernike_indices):
                                 variable_name = "a" + str(
