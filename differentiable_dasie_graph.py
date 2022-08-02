@@ -303,7 +303,7 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     # print(aperture_sample)
 
     print("Ending aperture function.")
-    return aperture_sample
+    return tensor_zernike_2d_field
 
 class DASIEModel(object):
 
