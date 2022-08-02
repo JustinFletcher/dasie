@@ -239,7 +239,7 @@ def select_zernike_function(term_number):
 
     return function_name
 
-def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients):
+def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients, alpha, beta):
 
     # TODO: Use the zernike_coefficients to produce a unit disc at mu_u, mu_v
 
@@ -732,7 +732,10 @@ class DASIEModel(object):
                                                                             mu_v,
                                                                             radius_meters,
                                                                             supaperture_radius_meters,
-                                                                            zernike_coefficients)
+                                                                            zernike_coefficients,
+                                                                            subap_alpha,
+                                                                            beta,
+                                                                            )
 
 
 
