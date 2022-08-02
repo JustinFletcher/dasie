@@ -603,7 +603,7 @@ class DASIEModel(object):
                             print(len(subap_zernike_indices_variables))
                             phase_variables.append(subap_zernike_indices_variables)
                             print(phase_variables)
-                            die
+
 
 
                         # If we don't have a model, then ttp are the variables.
