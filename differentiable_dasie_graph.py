@@ -732,10 +732,10 @@ class DASIEModel(object):
                             rotation = (aperture_num + 1) / self.num_apertures
 
                             # TODO: correct radius to place the edge, rather than the center, at radius
-                            mu_u = radius_meters * tf.cos((2 * np.pi) * rotation)
-                            mu_u = tf.cast(mu_u, dtype=tf.complex128)
-                            mu_v = radius_meters * tf.sin((2 * np.pi) * rotation)
-                            mu_v = tf.cast(mu_v, dtype=tf.complex128)
+                            mu_u = radius_meters * np.cos((2 * np.pi) * rotation)
+                            # mu_u = tf.cast(mu_u, dtype=tf.complex128)
+                            mu_v = radius_meters * np.sin((2 * np.pi) * rotation)
+                            # mu_v = tf.cast(mu_v, dtype=tf.complex128)
 
                             # Parse the tip, tilt, & piston variables for the aperture.
                             # TODO: Edit this line to take zernikes.
