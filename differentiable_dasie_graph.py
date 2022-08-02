@@ -594,7 +594,7 @@ class DASIEModel(object):
                                 variable = tf.complex(tf.Variable(1.0,
                                                                   dtype=tf.float64,
                                                                   name=variable_name,
-                                                                  trainable=trainable),
+                                                                  trainable=ttp_trainable),
                                                       tf.constant(0.0,
                                                                   dtype=tf.float64))
                                 # Scale this variable.
