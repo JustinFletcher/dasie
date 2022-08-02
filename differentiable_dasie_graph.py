@@ -149,7 +149,9 @@ def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
     T_mu_v = tf.ones_like(X) * mu_v
     T_alpha = tf.ones_like(X) * alpha
     T_beta = tf.ones_like(X) * beta
-    T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
+    T_X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
+    T_Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
+    T = (T_X, T_Y, T_mu_u, T_mu_v, T_alpha, T_beta)
     generalized_gaussian_2d_sample = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
 
     print("getting plane.")
