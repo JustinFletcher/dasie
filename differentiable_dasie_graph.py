@@ -155,7 +155,7 @@ def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
     generalized_gaussian_2d_sample = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
 
     print("getting plane.")
-    plane_2d_sample = plane_2d(X, Y, mu_u, mu_v, tip, tilt, piston)
+    plane_2d_sample = plane_2d(T_X, T_Y, mu_u, mu_v, tip, tilt, piston)
 
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("generating phase angle field.")
