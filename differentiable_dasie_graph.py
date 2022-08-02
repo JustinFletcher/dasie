@@ -135,7 +135,7 @@ def tensor_circle_mask_2d(T):
 
     r = tf.math.sqrt((u - mu_u) ** 2 + (u - mu_u) ** 2)
 
-    z = tf.map_fn(fn=lambda t: t < radius, elems=r)
+    z = tf.map_fn(fn=lambda t: 1.0 if t < radius  else 0.0, elems=r)
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
     z = tf.cast(z, dtype=tf.complex128)
 
@@ -296,6 +296,9 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     T_beta = tf.ones_like(X) * beta
     T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
     pupil_mask = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
+
+    T = (X, Y, T_mu_u, T_mu_v, subaperture_radius)
+    pupil_mask = tf.vectorized_map(tensor_circle_mask_2d, T)
     tensor_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("Generating phase angle field.")
