@@ -274,8 +274,8 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     T_aperture_radius = tf.ones_like(X) * aperture_radius
     T_subaperture_radius = tf.ones_like(X) * subaperture_radius
 
-    T_X = tf.complex(tf.constant(X_grid), tf.constant(0.0, dtype=tf.float64))
-    T_Y = tf.complex(tf.constant(Y_grid), tf.constant(0.0, dtype=tf.float64))
+    T_X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
+    T_Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
     T = (T_X, T_Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
 
     for term_number, zernike_coefficient in enumerate(zernike_coefficients):
