@@ -269,7 +269,7 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
 
         print("End of Zernike Term.")
 
-    T_alpha = tf.ones_like(X) * alpha
+    T_alpha = tf.ones_like(X) * alpha * 4
     T_beta = tf.ones_like(X) * beta
     T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
     pupil_mask = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
