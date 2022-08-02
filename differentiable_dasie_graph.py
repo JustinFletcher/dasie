@@ -182,10 +182,10 @@ def zernike_1(T):
     aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
     subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
 
-    u_field = u - mu_u
-    v_field = v - mu_v
+    u_field = mu_u - u
+    v_field = mu_v - v
     # TODO: Cartesian Zernike goes here.
-    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.sin(tf.math.atan2(v_field, u_field))
+    z = tf.math.sqrt((u_field**2) + (v_field**2)) * tf.math.sin(tf.math.atan2(v_field, u_field))
 
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
     z = tf.cast(z, dtype=tf.complex128)
