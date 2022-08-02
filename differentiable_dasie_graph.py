@@ -119,6 +119,29 @@ def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
     return r < radius
 
+def tensor_circle_mask_2d(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, radius = T
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    u = tf.cast(u, dtype=tf.float64)
+    v = tf.cast(v, dtype=tf.float64)
+    mu_u = tf.cast(mu_u, dtype=tf.float64)
+    mu_v = tf.cast(mu_v, dtype=tf.float64)
+    alpha = tf.cast(alpha, dtype=tf.float64)
+    beta = tf.cast(beta, dtype=tf.float64)
+
+
+    r = tf.math.sqrt((u - mu_u) ** 2 + (u - mu_u) ** 2)
+
+    z = tf.map_fn(fn=lambda t: t < radius, elems=r)
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+
 def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
 
     print("Starting aperture function.")
@@ -382,12 +405,16 @@ class DASIEModel(object):
         self.num_exposures = num_exposures
         # Compute the pupil extent: 4.848 microradians / arcsec
         # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
-        # pupil_extent = [count] [m] / [microradian]
-        # pixel_extent = [m] / [microradian]
+        # pupil_extent = [count] [micrometers] / [microradian]
+        # pupil_extent = [micrometers] / [microradian]
+        # pupil_extent = [micrometers] / [microradian]
+        # pupil_extent = [meters] / [radian]
         # TODO: Ask Ryan for help: What are these units?
         pupil_extent = filter_wavelength_micron * spatial_quantization / (4.848 * field_of_view_arcsec)
-        print(pupil_extent)
+        self.pupil_extent = pupil_extent
+        print("pupil_extent=" + str(pupil_extent))
         phase_scale = 2 * np.pi / filter_wavelength_micron
+        self.phase_scale = phase_scale
 
         # Construct placeholders for inputs.
         batch_shape = (spatial_quantization, spatial_quantization)
@@ -400,10 +427,12 @@ class DASIEModel(object):
 
         # Build the simulation mesh grid.
         # TODO: Verify these physical coordinates; clarify pupil vs radius.
-        # x = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
-        # y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
-        x = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
-        y = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
+        x = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        self.pupil_dimension_x = x
+        self.pupil_dimension_y = y
+        # x = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
+        # y = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
         X, Y = np.meshgrid(x, y)
         X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
         Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
@@ -1550,7 +1579,13 @@ class DASIEModel(object):
             distributed_aperture_image = distributed_aperture_image[0]
 
             # Plot phase angle
-            plt.imshow(np.angle(pupil_plane), cmap='twilight_shifted')
+            left = self.pupil_dimension_x[0]
+            right = self.pupil_dimension_x[-1]
+            bottom = self.pupil_dimension_y[0]
+            top = self.pupil_dimension_y[-1]
+            plt.imshow(np.angle(pupil_plane),
+                       cmap='twilight_shifted',
+                       extent=[left,right,bottom,top])
             plt.colorbar()
             # Overlay aperture mask
             plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2)
