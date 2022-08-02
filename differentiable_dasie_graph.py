@@ -589,7 +589,7 @@ class DASIEModel(object):
                             subap_zernike_indices_variables = list()
                             for zernike_index in range(num_zernike_indices):
                                 variable_name = "a" + str(
-                                    aperture_num) + "_z_j=" + str(
+                                    aperture_num) + "_z_j_" + str(
                                     zernike_index)
                                 variable = tf.complex(tf.Variable(1.0,
                                                                   dtype=tf.float64,
