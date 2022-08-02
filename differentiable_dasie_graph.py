@@ -114,6 +114,34 @@ def tensor_generalized_gaussian_2d(T):
 
     return z
 
+def tensor_zernike_gaussian_2d(T):
+
+    # Unpack the input tensor.
+    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius,
+    #              T_term_number)
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius, term_number = T
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    u = tf.cast(u, dtype=tf.float64)
+    v = tf.cast(v, dtype=tf.float64)
+    mu_u = tf.cast(mu_u, dtype=tf.float64)
+    mu_v = tf.cast(mu_v, dtype=tf.float64)
+    aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
+    subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
+
+
+    # TODO: Cartesian Zernike goes here.
+
+    scale_constant = beta / (2 * alpha * tf.exp(tf.math.lgamma((1 / beta))))
+    exponent = -(((u - mu_u) ** 2 + (v - mu_v) ** 2) / alpha) ** beta
+    value = tf.exp(exponent)
+    z = scale_constant * value
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
 @np.vectorize
 def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
@@ -146,29 +174,128 @@ def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
     print("Ending aperture function.")
     return aperture_sample
 
+def zernike_0(T):
+
+    # Unpack the input tensor.
+    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
+    # u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    # u = tf.cast(u, dtype=tf.float64)
+    # v = tf.cast(v, dtype=tf.float64)
+    # mu_u = tf.cast(mu_u, dtype=tf.float64)
+    # mu_v = tf.cast(mu_v, dtype=tf.float64)
+    # aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
+    # subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
+
+    # TODO: Cartesian Zernike goes here.
+    z = 1.0
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_1(T):
+
+    # Unpack the input tensor.
+    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    u = tf.cast(u, dtype=tf.float64)
+    v = tf.cast(v, dtype=tf.float64)
+    mu_u = tf.cast(mu_u, dtype=tf.float64)
+    mu_v = tf.cast(mu_v, dtype=tf.float64)
+    aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
+    subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
+
+    u_field = u - mu_u
+    v_field = v - mu_v
+    # TODO: Cartesian Zernike goes here.
+    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.sin(tf.math.atan2(u_field, v_field))
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_2(T):
+
+    # Unpack the input tensor.
+    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    u = tf.cast(u, dtype=tf.float64)
+    v = tf.cast(v, dtype=tf.float64)
+    mu_u = tf.cast(mu_u, dtype=tf.float64)
+    mu_v = tf.cast(mu_v, dtype=tf.float64)
+    aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
+    subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
+
+
+    # TODO: Cartesian Zernike goes here.
+    u_field = u - mu_u
+    v_field = v - mu_v
+    # TODO: Cartesian Zernike goes here.
+    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.cos(tf.math.atan2(u_field, v_field))
+
+    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def select_zernike_function(term_number):
+
+    function_name = None
+
+    if term_number == 0:
+
+        function_name = zernike_0
+
+    elif term_number == 1:
+
+        function_name = zernike_1
+
+    elif term_number == 2:
+
+        function_name = zernike_2
+
+    else:
+        raise ValueError("You provided a Zernike coefficient for a term (" \
+                         + str(term_number) +") that is not supported by this \
+                         library. Limit your terms to no more than 15.")
+
+    return function_name
+
 def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients):
 
     # TODO: Use the zernike_coefficients to produce a unit disc at mu_u, mu_v
 
-    print("Starting aperture function.")
+    print("Starting Zernike aperture function.")
     # generalized_gaussian_2d_sample = tf.vectorized_map(generalized_gaussian_2d, X, Y, mu_u, mu_v, alpha, beta)
+    tensor_zernike_2d_sample = None
     T_mu_u = tf.ones_like(X) * mu_u
     T_mu_v = tf.ones_like(X) * mu_v
     T_aperture_radius = tf.ones_like(X) * aperture_radius
     T_subaperture_radius = tf.ones_like(X) * subaperture_radius
-    T = (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
-    generalized_gaussian_2d_sample = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
 
-    print("getting plane.")
-    zernike_coefficients = zernike_disc(X, Y, mu_u, mu_v, zernike_coefficients)
+    for term_number, zernike_coefficient in enumerate(zernike_coefficients):
+
+
+        T = (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
+        if tensor_zernike_2d_sample:
+            zernike_term_map = select_zernike_function(term_number=term_number)
+            tensor_zernike_2d_sample += zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
+        else:
+            tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
+
+
 
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("generating phase angle field.")
-    plane_2d_field = tf.exp(plane_2d_sample)
-
-    print("multiplying.")
-    generalized_gaussian_2d_sample = generalized_gaussian_2d_sample
-    aperture_sample = zernike_coefficients * generalized_gaussian_2d_sample
+    tensor_zernike_2d_field = tf.exp(plane_2d_sample)
 
     # print(aperture_sample)
 
@@ -477,13 +604,13 @@ class DASIEModel(object):
 
                             # TODO: Build Zernike representations.
                             # TODO: Externalize.
-                            num_zernike_indices = 12
+                            num_zernike_indices = 3
                             subap_zernike_indices_variables = list()
                             for zernike_index in range(num_zernike_indices):
                                 variable_name = "a" + str(
                                     aperture_num) + "_z_j=" + str(
                                     zernike_index)
-                                variable = tf.complex(tf.Variable(0.1,
+                                variable = tf.complex(tf.Variable(0.5,
                                                                   dtype=tf.float64,
                                                                   name=variable_name,
                                                                   trainable=trainable),
