@@ -135,7 +135,7 @@ def tensor_circle_mask_2d(T):
 
     r = tf.math.sqrt((u - mu_u) ** 2 + (u - mu_u) ** 2)
 
-    z = tf.map_fn(fn=lambda t: 1.0 if t < radius else 0.0, elems=r)
+    # z = tf.map_fn(fn=lambda t: 1.0 if t < radius else 0.0, elems=r)
     z = tf.cast(r < radius, dtype=tf.float64)
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
     z = tf.cast(z, dtype=tf.complex128)
