@@ -400,8 +400,10 @@ class DASIEModel(object):
 
         # Build the simulation mesh grid.
         # TODO: Verify these physical coordinates; clarify pupil vs radius.
-        x = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
-        y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        # x = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        # y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        x = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
+        y = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
         X, Y = np.meshgrid(x, y)
         X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
         Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
@@ -660,8 +662,6 @@ class DASIEModel(object):
                             piston = piston * phase_scale
                             phase_variables.append([tip, tilt, piston])
 
-
-
                 # Add some instrumentation for ttp.
                 # tips = list()
                 # tilts = list()
@@ -701,8 +701,8 @@ class DASIEModel(object):
 
                             # TODO: correct radius to place the edge, rather than the center, at radius
                             mu_u = radius_meters * tf.cos((2 * np.pi) * rotation)
-                            mu_v = radius_meters * tf.sin((2 * np.pi) * rotation)
                             mu_u = tf.cast(mu_u, dtype=tf.complex128)
+                            mu_v = radius_meters * tf.sin((2 * np.pi) * rotation)
                             mu_v = tf.cast(mu_v, dtype=tf.complex128)
 
                             # Parse the tip, tilt, & piston variables for the aperture.
