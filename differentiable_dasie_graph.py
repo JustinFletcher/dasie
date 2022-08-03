@@ -269,13 +269,14 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
 
         print("End of Zernike Term.")
 
-    # T_alpha = tf.ones_like(X) * alpha * 4
-    # T_beta = tf.ones_like(X) * beta
-    # T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
-    # pupil_mask = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
 
-    pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
-    pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
+    T_alpha = tf.ones_like(X) * alpha
+    T_beta = tf.ones_like(X) * beta
+    T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
+    pupil_mask = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
+
+    # pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
+    # pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
 
     tensor_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
@@ -573,13 +574,16 @@ class DASIEModel(object):
             with tf.name_scope("monolithic_aperture_pupil_plane"):
 
                 # monolithic_alpha = np.pi * diameter_meters / 2 / 1 / 4
-                zernike_aperture_function_2d
+                # zernike_aperture_function_2d
                 # self.monolithic_pupil_plane = aperture_function_2d(X, Y, 0.0, 0.0, monolithic_alpha, beta, tip=0.0, tilt=0.0, piston=0.001)
 
-                self.monolithic_pupil_plane = zernike_aperture_function_2d(X, Y, 0.0, 0.0,
+                self.monolithic_pupil_plane = zernike_aperture_function_2d(X,
+                                                                           Y,
+                                                                           0.0,
+                                                                           0.0,
                                                                            radius_meters,
                                                                            radius_meters,
-                                                                           zernike_coefficients=[0.001],
+                                                                           zernike_coefficients=[0.001 * self.phase_scale],
                                                                            )
 
                 # Compute the PSF from the pupil plane.
