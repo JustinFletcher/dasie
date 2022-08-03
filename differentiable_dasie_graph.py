@@ -450,15 +450,13 @@ class DASIEModel(object):
                 for aperture_num in range(num_apertures):
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
-                            # Make TF Variables for each subaperture Zernike index.
-
-                        # TODO: Build Zernike representations.
                         # TODO: Externalize.
                         num_zernike_indices = 3
+                        # Make TF Variables for each subaperture Zernike index.
                         subap_zernike_indices_variables = list()
                         zernike_indices = range(num_zernike_indices)
                         for zernike_index in zernike_indices:
-                            variable_name = "a" + str(perture_num) + "_z_j_" + str(zernike_index)
+                            variable_name = "a" + str(aperture_num) + "_z_j_" + str(zernike_index)
                             variable = tf.complex(tf.Variable(0.1,
                                                               dtype=tf.float64,
                                                               name=variable_name,
