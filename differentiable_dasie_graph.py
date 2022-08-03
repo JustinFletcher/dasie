@@ -236,7 +236,7 @@ def select_zernike_function(term_number):
 
     return function_name
 
-def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients, alpha, beta):
+def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients):
 
     # TODO: Use the zernike_coefficients to produce a unit disc at mu_u, mu_v
 
@@ -746,8 +746,6 @@ class DASIEModel(object):
                                                                             radius_meters,
                                                                             supaperture_radius_meters,
                                                                             zernike_coefficients,
-                                                                            subap_alpha,
-                                                                            beta,
                                                                             )
 
 
@@ -808,7 +806,14 @@ class DASIEModel(object):
             with tf.name_scope("monolithic_aperture_pupil_plane"):
 
                 # monolithic_alpha = np.pi * diameter_meters / 2 / 1 / 4
-                self.monolithic_pupil_plane = aperture_function_2d(X, Y, 0.0, 0.0, monolithic_alpha, beta, tip=0.0, tilt=0.0, piston=0.001)
+                zernike_aperture_function_2d
+                # self.monolithic_pupil_plane = aperture_function_2d(X, Y, 0.0, 0.0, monolithic_alpha, beta, tip=0.0, tilt=0.0, piston=0.001)
+
+                self.monolithic_pupil_plane = zernike_aperture_function_2d(X, Y, 0.0, 0.0,
+                                                                           radius_meters,
+                                                                           radius_meters,
+                                                                           zernike_coefficients=[0.1],
+                                                                           )
 
                 # Compute the PSF from the pupil plane.
                 with tf.name_scope("monolithic_psf_model"):
