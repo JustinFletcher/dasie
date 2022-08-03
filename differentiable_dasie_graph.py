@@ -73,12 +73,6 @@ def generalized_gaussian(X, mu, alpha, beta):
 def plane_2d(x, y, x_0, y_0, slope_x, slope_y, height):
     return ((x - x_0) * slope_x) + ((y - y_0) * slope_y) + height
 
-def zernike_disc(x, y, x_0, y_0, zernike_coefficients):
-
-    # TODO: Produce zernike cartesian patch at x_0, y_0.
-    return ((x - x_0) * slope_x) + ((y - y_0) * slope_y) + height
-
-
 @np.vectorize
 def generalized_gaussian_2d(u, v, mu_u, mu_v, alpha, beta):
     scale_constant = (beta / (2 * alpha * tf.exp(tf.math.lgamma((1 / beta)))))
@@ -118,27 +112,6 @@ def tensor_generalized_gaussian_2d(T):
 def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
     return r < radius
-
-def tensor_circle_mask_2d(T):
-
-    # Unpack the input tensor.
-    u, v, mu_u, mu_v, radius = T
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    u = tf.cast(u, dtype=tf.float64)
-    v = tf.cast(v, dtype=tf.float64)
-    mu_u = tf.cast(mu_u, dtype=tf.float64)
-    mu_v = tf.cast(mu_v, dtype=tf.float64)
-
-
-    r = tf.math.sqrt((u - mu_u) ** 2 + (v - mu_v) ** 2)
-
-    # z = tf.map_fn(fn=lambda t: 1.0 if t < radius else 0.0, elems=r)
-    z = tf.cast(r < radius, dtype=tf.float64)
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    z = tf.cast(z, dtype=tf.complex128)
-
-    return z
 
 
 def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
@@ -624,13 +597,13 @@ class DASIEModel(object):
 
                             # TODO: Build Zernike representations.
                             # TODO: Externalize.
-                            num_zernike_indices = 2
+                            num_zernike_indices = 3
                             subap_zernike_indices_variables = list()
                             for zernike_index in range(num_zernike_indices):
                                 variable_name = "a" + str(
                                     aperture_num) + "_z_j_" + str(
                                     zernike_index)
-                                variable = tf.complex(tf.Variable(1.0,
+                                variable = tf.complex(tf.Variable(0.1,
                                                                   dtype=tf.float64,
                                                                   name=variable_name,
                                                                   trainable=dm_trainable),
