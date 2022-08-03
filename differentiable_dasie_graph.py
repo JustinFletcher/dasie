@@ -396,6 +396,9 @@ class DASIEModel(object):
         print("pupil_extent=" + str(pupil_extent))
         phase_scale = 2 * np.pi / filter_wavelength_micron
         self.phase_scale = phase_scale
+        # Compute the subaperture pixel extent.
+        self.pupil_meters_per_pixel = radius_meters / spatial_quantization
+        self.subaperture_size_pixels = int(supaperture_radius_meters // self.pupil_meters_per_pixel)
 
         # Construct placeholders for inputs.
         batch_shape = (spatial_quantization, spatial_quantization)
@@ -413,7 +416,6 @@ class DASIEModel(object):
         self.pupil_dimension_x = x
         self.pupil_dimension_y = y
         X, Y = np.meshgrid(x, y)
-
 
         # Handle inconsistent initialization requestes.
         if output_ttp_from_model and randomize_initial_ttps:
@@ -434,9 +436,6 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
-        # Compute the subaperture pixel extent.
-        pupil_meters_per_pixel = radius_meters / spatial_quantization
-        subaperture_size_pixels = int(supaperture_radius_meters // pupil_meters_per_pixel)
 
         # For each exposure, build the pupil function for that exposure.
         self.pupil_planes = list()
@@ -457,7 +456,7 @@ class DASIEModel(object):
                         zernike_indices = range(num_zernike_indices)
                         for zernike_index in zernike_indices:
                             variable_name = "a" + str(aperture_num) + "_z_j_" + str(zernike_index)
-                            variable = tf.complex(tf.Variable(0.1,
+                            variable = tf.complex(tf.Variable(0.001,
                                                               dtype=tf.float64,
                                                               name=variable_name,
                                                               trainable=dm_trainable),
@@ -501,15 +500,11 @@ class DASIEModel(object):
 
                             print("Building aperture number %d." % aperture_num)
 
-                            # tilt_phase = 2 * np.pi * tilt / filter_wavelength_micron
-
                             rotation = (aperture_num + 1) / self.num_apertures
 
                             # TODO: correct radius to place the edge, rather than the center, at radius
                             mu_u = radius_meters * np.cos((2 * np.pi) * rotation)
-                            # mu_u = tf.cast(mu_u, dtype=tf.complex128)
                             mu_v = radius_meters * np.sin((2 * np.pi) * rotation)
-                            # mu_v = tf.cast(mu_v, dtype=tf.complex128)
 
                             # Select the phase variables for the aperture.
                             zernike_coefficients = phase_variables[aperture_num]
@@ -521,8 +516,6 @@ class DASIEModel(object):
                                                                         supaperture_radius_meters,
                                                                         zernike_coefficients,
                                                                         )
-
-
 
                 self.pupil_planes.append(pupil_plane)
 
@@ -586,7 +579,7 @@ class DASIEModel(object):
                 self.monolithic_pupil_plane = zernike_aperture_function_2d(X, Y, 0.0, 0.0,
                                                                            radius_meters,
                                                                            radius_meters,
-                                                                           zernike_coefficients=[0.1],
+                                                                           zernike_coefficients=[0.001],
                                                                            )
 
                 # Compute the PSF from the pupil plane.
@@ -1343,12 +1336,12 @@ class DASIEModel(object):
             right = self.pupil_dimension_x[-1]
             bottom = self.pupil_dimension_y[0]
             top = self.pupil_dimension_y[-1]
-            plt.imshow(np.angle(pupil_plane),
-                       cmap='twilight_shifted',
-                       extent=[left,right,bottom,top])
+            # plt.imshow(np.angle(pupil_plane),
+            #            cmap='twilight_shifted',
+            #            extent=[left,right,bottom,top])
             # Overlay aperture mask
-            plt.imshow(np.abs(pupil_plane), cmap='Greys', alpha=.2,
-                       extent=[left,right,bottom,top])
+            plt.imshow(np.abs(pupil_plane), cmap='twilight_shifted',
+                       extent=[left, right, bottom, top])
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="pupil_plane_" + str(i))
@@ -1396,11 +1389,17 @@ class DASIEModel(object):
                                     plot_name="recovered_image")
 
         # Plot phase angle
-        plt.imshow(np.angle(monolithic_pupil_plane), cmap='twilight_shifted')
+        left = self.pupil_dimension_x[0]
+        right = self.pupil_dimension_x[-1]
+        bottom = self.pupil_dimension_y[0]
+        top = self.pupil_dimension_y[-1]
+        plt.imshow(np.angle(monolithic_pupil_plane), cmap='twilight_shifted',
+                   extent=[left, right, bottom, top])
         plt.colorbar()
 
         # Overlay aperture mask
-        plt.imshow(np.abs(monolithic_pupil_plane), cmap='Greys', alpha=.2)
+        plt.imshow(np.abs(monolithic_pupil_plane), cmap='Greys', alpha=.2,
+                   extent=[left, right, bottom, top])
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="monolithic_pupil_plane")
 
