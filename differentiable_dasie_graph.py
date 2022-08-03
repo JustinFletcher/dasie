@@ -412,11 +412,7 @@ class DASIEModel(object):
         y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
         self.pupil_dimension_x = x
         self.pupil_dimension_y = y
-        # x = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
-        # y = np.linspace(-pupil_extent, pupil_extent, spatial_quantization)
         X, Y = np.meshgrid(x, y)
-        # X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
-        # Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
 
 
         # Handle inconsistent initialization requestes.
@@ -438,54 +434,6 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
-        # TODO: Refactor to _make_ttp_tensors function
-        with tf.name_scope("input_model"):
-            target_output_shape = (num_exposures, num_apertures, 3)
-            target_output_size = np.prod(target_output_shape)
-            print(target_output_shape)
-            print(target_output_size)
-
-            with tf.name_scope("hidden_layer_1"):
-                random_vector_size = target_output_size * 6
-                n_hidden_1 = target_output_size * 4
-
-                glorot_relu_init_std = np.sqrt(2 / (random_vector_size + n_hidden_1))
-                W = tf.Variable(tf.random.normal((random_vector_size, n_hidden_1),
-                                                 stddev=glorot_relu_init_std),
-                                trainable=ttp_trainable)
-                b = tf.Variable(tf.random.normal((n_hidden_1,),
-                                                 stddev=glorot_relu_init_std),
-                                trainable=ttp_trainable)
-                x = tf.matmul(tf.constant(np.random.normal(size=(1, random_vector_size)), dtype=tf.float32), W) + b
-                x = tf.nn.relu(x)
-            with tf.name_scope("hidden_layer_2"):
-                n_hidden_2 = target_output_size * 2
-                glorot_relu_init_std = np.sqrt(2 / (n_hidden_1 + n_hidden_2))
-                W = tf.Variable(tf.random.normal((n_hidden_1, n_hidden_2),
-                                                 stddev=glorot_relu_init_std),
-                                trainable=ttp_trainable)
-                b = tf.Variable(tf.random.normal((n_hidden_2,),
-                                                 stddev=glorot_relu_init_std),
-                                trainable=ttp_trainable)
-                x = tf.matmul(x, W) + b
-                x = tf.nn.relu(x)
-            with tf.name_scope("hidden_layer_3"):
-                n_hidden_3 = target_output_size
-                glorot_tanh_init_std = np.sqrt(2) * np.sqrt(2 / (n_hidden_2 + n_hidden_3))
-                W = tf.Variable(tf.random.normal((n_hidden_2, n_hidden_3),
-                                                 stddev=glorot_tanh_init_std),
-                                trainable=ttp_trainable)
-                b = tf.Variable(tf.random.normal((n_hidden_3,),
-                                                 stddev=glorot_tanh_init_std),
-                                trainable=ttp_trainable)
-                x = tf.matmul(x, W) + b
-                x = tf.math.tanh(x)
-
-            scale_factor = 0.1
-            x = scale_factor * x
-            x = tf.reshape(x, [num_exposures, num_apertures, 3])
-            x = tf.cast(x, dtype=tf.float64)
-
         # Compute the subaperture pixel extent.
         pupil_meters_per_pixel = radius_meters / spatial_quantization
         subaperture_size_pixels = int(supaperture_radius_meters // pupil_meters_per_pixel)
@@ -495,182 +443,32 @@ class DASIEModel(object):
         for exposure_num in range(num_exposures):
             with tf.name_scope("exposure_" + str(exposure_num)):
 
-                # Initialize the pupil plane quantization grid.
-                pupil_plane = tf.zeros((spatial_quantization,
-                                        spatial_quantization),
-                                       dtype=tf.complex128)
-
-
                 # Construct subaperture TF Variables.
                 phase_variables = list()
 
-                # Iterate over each aperture and build the TF variables needed.
-                # # TODO: Build Zernike representations.
-                # for aperture_num in range(num_apertures):
-                #     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
-                #
-                #         # Make TF Variables for each subaperture Zernike index.
-                #         # TODO: Externalize.
-                #         num_zernike_indices = 12
-                #         subap_zernike_indices_variables = list()
-                #         for zernike_index in range(num_zernike_indices):
-                #             variable_name = "a" + str(aperture_num) + "_z_j=" + str(zernike_index)
-                #             variable = tf.complex(tf.Variable(0.0,
-                #                                               dtype=tf.float64,
-                #                                               name=variable_name,
-                #                                               trainable=trainable),
-                #                                   tf.constant(0.0,
-                #                                               dtype=tf.float64))
-                #             subap_zernike_indices_variables.append(variable)
-                #
-                #         # Now that we have the indices, we can build the disc.
-                #         subap_phase_map = None
-                #
-                #         # Compute the phase angle encoded scale, in microns.
-                #         phase_scale = 2 * np.pi / filter_wavelength_micron
-                #
-                #         # Compute subaperture angular position in the pupil.
-                #         rotation = (aperture_num + 1) / self.num_apertures
-                #
-                #         # TODO: correct radius to place the edge, rather than the center, at radius
-                #         # Compute the spatial position of the subaperture.
-                #         mu_u = radius_meters * tf.cos((2 * np.pi) * rotation)
-                #         mu_v = radius_meters * tf.sin((2 * np.pi) * rotation)
-                #         mu_u = tf.cast(mu_u, dtype=tf.complex128)
-                #         mu_v = tf.cast(mu_v, dtype=tf.complex128)
-                #
-                #         # TODO: Add the patch to the radial location.
-
-
-                # Iterate over each aperture and build the TF variables needed.
-                # TODO: Depricate once replaced.
                 use_zernikes = True
                 for aperture_num in range(num_apertures):
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
-                        # If we have a model, use it's outputs as the ttp.
-                        if output_ttp_from_model:
-
-                            # TODO: Rename model output space or depricate.
-                            # Construct the variables wrt which we differentiate.
-                            # TODO: Add names to slices, somehow.
-                            tip_variable_name = str(aperture_num) + "_tip"
-
-                            tip_variable = x[exposure_num, aperture_num, 0]
-                            # tip_parameter = tf.Variable(tip_distribution,
-                            #                             dtype=tf.float64,
-                            #                             name=tip_variable_name)
-                            tip = tf.complex(tip_variable,
-                                             tf.constant(0.0, dtype=tf.float64))
-
-                            # microns / meter (not far off from microradian tilt)
-                            # TODO: Add names to slices, somehow.
-                            tilt_variable_name = str(aperture_num) + "_tilt"
-                            # tilt_parameter = tf.Variable(tilt_distribution,
-                            #                              dtype=tf.float64,
-                            #                              name=tilt_variable_name)
-
-                            tilt_variable = x[exposure_num, aperture_num, 1]
-                            tilt = tf.complex(tilt_variable,
-                                              tf.constant(0.0, dtype=tf.float64))
-                            # microns
-                            # TODO: Add names to slices, somehow.
-                            piston_variable_name = str(aperture_num) + "_piston"
-
-                            # piston_parameter = tf.Variable(piston_distribution,
-                            #                                dtype=tf.float64,
-                            #                                name=piston_variable_name)
-
-                            piston_variable = x[exposure_num, aperture_num, 2]
-                            piston = tf.complex(piston_variable,
-                                                tf.constant(0.0, dtype=tf.float64))
-
-                            # Scale this variable.
-                            tip = tip * phase_scale
-                            tilt = tilt * phase_scale
-                            piston = piston * phase_scale
-                            phase_variables.append([tip, tilt, piston])
-
-                        elif use_zernikes:
-
                             # Make TF Variables for each subaperture Zernike index.
 
-                            # TODO: Build Zernike representations.
-                            # TODO: Externalize.
-                            num_zernike_indices = 3
-                            subap_zernike_indices_variables = list()
-                            for zernike_index in range(num_zernike_indices):
-                                variable_name = "a" + str(
-                                    aperture_num) + "_z_j_" + str(
-                                    zernike_index)
-                                variable = tf.complex(tf.Variable(0.1,
-                                                                  dtype=tf.float64,
-                                                                  name=variable_name,
-                                                                  trainable=dm_trainable),
-                                                      tf.constant(0.0,
-                                                                  dtype=tf.float64))
-                                # Scale this variable.
-                                variable = variable * phase_scale
-                                subap_zernike_indices_variables.append(variable)
-                            print(len(subap_zernike_indices_variables))
-                            phase_variables.append(subap_zernike_indices_variables)
-                            print(phase_variables)
-
-
-
-                        # If we don't have a model, then ttp are the variables.
-                        else:
-
-                            # We can either init each variable randomly...
-                            if randomize_initial_ttps:
-
-                                tip_value = np.random.normal(0.0, tip_std)
-                                tilt_value = np.random.normal(0.0, tilt_std)
-                                piston_value = 0.001 + np.abs(np.random.normal(0.0, piston_std))
-
-                            # ...or init them to the same small values.
-                            else:
-
-                                tip_value = 0.0
-                                tilt_value = 0.0
-                                piston_value = 0.001
-
-                            # Use a constant real-valued complex number as a gradient stop to the
-                            # imaginary part of the t/t/p variables.
-
-                            # Construct the variables wrt which we differentiate.
-                            # microns / meter (~microradian tilt)
-                            tip_variable_name = str(aperture_num) + "_tip"
-                            tip_variable = tf.Variable(tip_value,
-                                                       dtype=tf.float64,
-                                                       name=tip_variable_name,
-                                                       trainable=ttp_trainable)
-                            tip = tf.complex(tip_variable,
-                                             tf.constant(0.0, dtype=tf.float64))
-
-                            # microns / meter (~microradian tilt)
-                            tilt_variable_name = str(aperture_num) + "_tilt"
-                            tilt_variable = tf.Variable(tilt_value,
-                                                        dtype=tf.float64,
-                                                        name=tilt_variable_name,
-                                                        trainable=ttp_trainable)
-                            tilt = tf.complex(tilt_variable,
-                                              tf.constant(0.0, dtype=tf.float64))
-                            # microns
-                            piston_variable_name = str(aperture_num) + "_piston"
-
-                            piston_variable = tf.Variable(piston_value,
+                    # TODO: Build Zernike representations.
+                    # TODO: Externalize.
+                    num_zernike_indices = 3
+                    subap_zernike_indices_variables = list()
+                    zernike_indices = range(num_zernike_indices)
+                    for zernike_index in zernike_indices:
+                        variable_name = "a" + str(perture_num) + "_z_j_" + str(zernike_index)
+                        variable = tf.complex(tf.Variable(0.1,
                                                           dtype=tf.float64,
-                                                          name=piston_variable_name,
-                                                          trainable=ttp_trainable)
-                            piston = tf.complex(piston_variable,
-                                                tf.constant(0.0, dtype=tf.float64))
-
-                            # Scale this variable.
-                            tip = tip * phase_scale
-                            tilt = tilt * phase_scale
-                            piston = piston * phase_scale
-                            phase_variables.append([tip, tilt, piston])
+                                                          name=variable_name,
+                                                          trainable=dm_trainable),
+                                              tf.constant(0.0,
+                                                          dtype=tf.float64))
+                        # Scale this variable.
+                        variable = variable * phase_scale
+                        subap_zernike_indices_variables.append(variable)
+                    phase_variables.append(subap_zernike_indices_variables)
 
                 # Add some instrumentation for ttp.
                 # tips = list()
@@ -715,38 +513,16 @@ class DASIEModel(object):
                             mu_v = radius_meters * np.sin((2 * np.pi) * rotation)
                             # mu_v = tf.cast(mu_v, dtype=tf.complex128)
 
-                            # Parse the tip, tilt, & piston variables for the aperture.
-                            # TODO: Edit this line to take zernikes.
-                            if not use_zernikes:
-                                tip, tilt, piston = phase_variables[aperture_num]
-
-                                # Set piston, in microns, encoded in phase angle.
-                                # pison_phase = 2 * np.pi * piston / filter_wavelength_micron
-                                #
-                                # # Set tip & tilt, in microns/meter, encoded in phase angle.
-                                # # (micron/meter) ~= (microradians of tilt)
-                                # tip_phase = 2 * np.pi * tip / filter_wavelength_micron
-
-                                pupil_plane += aperture_function_2d(X,
-                                                                    Y,
-                                                                    mu_u,
-                                                                    mu_v,
-                                                                    subap_alpha,
-                                                                    beta,
-                                                                    tip,
-                                                                    tilt,
-                                                                    piston)
-                            else:
-                                zernike_coefficients = phase_variables[aperture_num]
-
-                                pupil_plane += zernike_aperture_function_2d(X,
-                                                                            Y,
-                                                                            mu_u,
-                                                                            mu_v,
-                                                                            radius_meters,
-                                                                            supaperture_radius_meters,
-                                                                            zernike_coefficients,
-                                                                            )
+                            # Select the phase variables for the aperture.
+                            zernike_coefficients = phase_variables[aperture_num]
+                            pupil_plane += zernike_aperture_function_2d(X,
+                                                                        Y,
+                                                                        mu_u,
+                                                                        mu_v,
+                                                                        radius_meters,
+                                                                        supaperture_radius_meters,
+                                                                        zernike_coefficients,
+                                                                        )
 
 
 
