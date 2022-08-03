@@ -452,23 +452,23 @@ class DASIEModel(object):
 
                             # Make TF Variables for each subaperture Zernike index.
 
-                    # TODO: Build Zernike representations.
-                    # TODO: Externalize.
-                    num_zernike_indices = 3
-                    subap_zernike_indices_variables = list()
-                    zernike_indices = range(num_zernike_indices)
-                    for zernike_index in zernike_indices:
-                        variable_name = "a" + str(perture_num) + "_z_j_" + str(zernike_index)
-                        variable = tf.complex(tf.Variable(0.1,
-                                                          dtype=tf.float64,
-                                                          name=variable_name,
-                                                          trainable=dm_trainable),
-                                              tf.constant(0.0,
-                                                          dtype=tf.float64))
-                        # Scale this variable.
-                        variable = variable * phase_scale
-                        subap_zernike_indices_variables.append(variable)
-                    phase_variables.append(subap_zernike_indices_variables)
+                        # TODO: Build Zernike representations.
+                        # TODO: Externalize.
+                        num_zernike_indices = 3
+                        subap_zernike_indices_variables = list()
+                        zernike_indices = range(num_zernike_indices)
+                        for zernike_index in zernike_indices:
+                            variable_name = "a" + str(perture_num) + "_z_j_" + str(zernike_index)
+                            variable = tf.complex(tf.Variable(0.1,
+                                                              dtype=tf.float64,
+                                                              name=variable_name,
+                                                              trainable=dm_trainable),
+                                                  tf.constant(0.0,
+                                                              dtype=tf.float64))
+                            # Scale this variable.
+                            variable = variable * phase_scale
+                            subap_zernike_indices_variables.append(variable)
+                        phase_variables.append(subap_zernike_indices_variables)
 
                 # Add some instrumentation for ttp.
                 # tips = list()
