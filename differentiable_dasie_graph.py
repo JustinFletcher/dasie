@@ -459,7 +459,7 @@ class DASIEModel(object):
                         zernike_indices = range(num_zernike_indices)
                         for zernike_index in zernike_indices:
                             variable_name = "a" + str(aperture_num) + "_z_j_" + str(zernike_index)
-                            variable = tf.complex(tf.Variable(0.001,
+                            variable = tf.complex(tf.Variable(1.0,
                                                               dtype=tf.float64,
                                                               name=variable_name,
                                                               trainable=dm_trainable),
@@ -1287,7 +1287,7 @@ class DASIEModel(object):
 
         def save_and_close_current_plot(logdir, plot_name="default"):
             fig_path = os.path.join(logdir, str(plot_name) + '.png')
-            plt.gcf().set_dpi(1200)
+            plt.gcf().set_dpi(600)
             plt.savefig(fig_path)
             plt.close()
 
@@ -1398,13 +1398,14 @@ class DASIEModel(object):
         right = self.pupil_dimension_x[-1]
         bottom = self.pupil_dimension_y[0]
         top = self.pupil_dimension_y[-1]
-        plt.imshow(np.angle(monolithic_pupil_plane), cmap='twilight_shifted',
-                   extent=[left, right, bottom, top])
-        plt.colorbar()
+        # plt.imshow(np.angle(monolithic_pupil_plane), cmap='twilight_shifted',
+        #            extent=[left, right, bottom, top])
+        # plt.colorbar()
 
         # Overlay aperture mask
-        plt.imshow(np.abs(monolithic_pupil_plane), cmap='Greys', alpha=.2,
+        plt.imshow(np.abs(monolithic_pupil_plane), cmap='inferno',
                    extent=[left, right, bottom, top])
+        plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="monolithic_pupil_plane")
 
