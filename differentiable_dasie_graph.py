@@ -192,24 +192,14 @@ def zernike_1(T):
 def zernike_2(T):
 
     # Unpack the input tensor.
-    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
     u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
 
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    # u = tf.cast(u, dtype=tf.float64)
-    # v = tf.cast(v, dtype=tf.float64)
-    # mu_u = tf.cast(mu_u, dtype=tf.float64)
-    # mu_v = tf.cast(mu_v, dtype=tf.float64)
-
-
-    u_field = u - tf.cast(mu_u, dtype=tf.complex128)
-    v_field = v - tf.cast(mu_v, dtype=tf.complex128)
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     cartesian_azmuth = tf.math.atan2(v_field, u_field)
     z = cartesian_radial* tf.math.cos(cartesian_azmuth)
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    # z = tf.cast(z, dtype=tf.complex128)
+    z = tf.cast(z, dtype=tf.complex128)
 
     return z
 
