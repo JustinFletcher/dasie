@@ -450,6 +450,7 @@ class DASIEModel(object):
 
                 # Construct subaperture TF Variables.
                 phase_variables = list()
+                subap_zernike_coefficients = [0.1, 0.1, 0.1]
 
                 for aperture_num in range(num_apertures):
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
@@ -459,7 +460,7 @@ class DASIEModel(object):
                         zernike_indices = range(num_zernike_indices)
                         for zernike_index in zernike_indices:
                             variable_name = "a" + str(aperture_num) + "_z_j_" + str(zernike_index)
-                            variable = tf.complex(tf.Variable(1.0,
+                            variable = tf.complex(tf.Variable(subap_zernike_coefficients[zernike_index],
                                                               dtype=tf.float64,
                                                               name=variable_name,
                                                               trainable=dm_trainable),
