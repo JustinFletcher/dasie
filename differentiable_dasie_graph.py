@@ -197,8 +197,22 @@ def zernike_2(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    cartesian_azmuth = tf.math.atan2(v_field, u_field)
-    z = cartesian_radial* tf.math.cos(cartesian_azmuth)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = cartesian_radial* tf.math.cos(cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_3(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(6 * cartesian_radial**2) * tf.math.sin(2 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
 
     return z
@@ -448,6 +462,7 @@ class DASIEModel(object):
 
                     # Construct subaperture TF Variables.
                     subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
                                                   np.random.normal(0.01, 0.001),
                                                   np.random.normal(0.01, 0.001),]
 
