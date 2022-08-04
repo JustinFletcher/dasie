@@ -315,6 +315,7 @@ class DASIEModel(object):
                  tip_std=1.0,
                  tilt_std=1.0,
                  piston_std=1.0,
+                 num_zernike_indices=1,
                  writer=None):
 
         self.learning_rate = learning_rate
@@ -361,6 +362,7 @@ class DASIEModel(object):
                 tip_std=tip_std,
                 tilt_std=tilt_std,
                 piston_std=piston_std,
+                num_zernike_indices=num_zernike_indices,
                 )
 
             # self.trainable_variables = tf.compat.v1.trainable_variables()
@@ -381,6 +383,7 @@ class DASIEModel(object):
                            lock_ttp_values=False,
                            output_ttp_from_model=False,
                            randomize_initial_ttps=False,
+                           num_zernike_indices=1,
                            tip_std=1.0,
                            tilt_std=1.0,
                            piston_std=1.0,):
@@ -451,8 +454,6 @@ class DASIEModel(object):
                 for aperture_num in range(num_apertures):
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
-                        # TODO: Externalize.
-                        num_zernike_indices = 1
                         # Make TF Variables for each subaperture Zernike index.
                         subap_zernike_indices_variables = list()
                         zernike_indices = range(num_zernike_indices)
@@ -1835,7 +1836,8 @@ def main(flags):
                                  randomize_initial_ttps=flags.randomize_initial_ttps,
                                  tip_std=flags.tip_std,
                                  tilt_std=flags.tilt_std,
-                                 piston_std=flags.piston_std,)
+                                 piston_std=flags.piston_std,
+                                 num_zernike_indices=flags.num_zernike_indices,)
 
         # Merge all the summaries from the graphs, flush and init the nodes.
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
@@ -1908,6 +1910,11 @@ if __name__ == '__main__':
                         type=int,
                         default=15,
                         help='Number of DASIE subapertures.')
+
+    parser.add_argument('--num_zernike_indices',
+                        type=int,
+                        default=1,
+                        help='Number of Zernike terms to simulate.')
 
     parser.add_argument('--aperture_diameter_meters',
                         type=float,
