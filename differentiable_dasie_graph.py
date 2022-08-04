@@ -448,13 +448,21 @@ class DASIEModel(object):
         for exposure_num in range(num_exposures):
             with tf.name_scope("exposure_" + str(exposure_num)):
 
-                # Construct subaperture TF Variables.
-                phase_variables = list()
-                subap_zernike_coefficients = [np.random.normal(0.1, 0.01),
-                                              np.random.normal(0.01, 0.01),
-                                              np.random.normal(0.01, 0.01),]
+
+
 
                 for aperture_num in range(num_apertures):
+                    # debug_zernikes = True
+                    # if debug_zernikes:
+                    #     subap_zernike_coefficients = list()
+
+                    # Construct subaperture TF Variables.
+                    phase_variables = list()
+                    subap_zernike_coefficients = [np.random.normal(0.1, 0.01),
+                                                  np.random.normal(0.01, 0.01),
+                                                  np.random.normal(0.01,
+                                                                   0.01), ]
+
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
                         # Make TF Variables for each subaperture Zernike index.
