@@ -450,7 +450,9 @@ class DASIEModel(object):
 
                 # Construct subaperture TF Variables.
                 phase_variables = list()
-                subap_zernike_coefficients = [0.1, 0.1, 0.1]
+                subap_zernike_coefficients = [np.random.normal(0.1, 0.01),
+                                              np.random.normal(0.01, 0.01),
+                                              np.random.normal(0.01, 0.01),]
 
                 for aperture_num in range(num_apertures):
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
