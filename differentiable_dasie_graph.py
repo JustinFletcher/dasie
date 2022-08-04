@@ -196,22 +196,20 @@ def zernike_2(T):
     u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
 
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    u = tf.cast(u, dtype=tf.float64)
-    v = tf.cast(v, dtype=tf.float64)
-    mu_u = tf.cast(mu_u, dtype=tf.float64)
-    mu_v = tf.cast(mu_v, dtype=tf.float64)
-    aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
-    subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
+    # u = tf.cast(u, dtype=tf.float64)
+    # v = tf.cast(v, dtype=tf.float64)
+    # mu_u = tf.cast(mu_u, dtype=tf.float64)
+    # mu_v = tf.cast(mu_v, dtype=tf.float64)
 
 
-    # TODO: Cartesian Zernike goes here.
     u_field = u - mu_u
     v_field = v - mu_v
-    # TODO: Cartesian Zernike goes here.
-    z = tf.math.sqrt(u_field**2 + v_field**2) * tf.math.cos(tf.math.atan2(v_field, u_field))
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azmuth = tf.math.atan2(v_field, u_field)
+    z = cartesian_radial* tf.math.cos(cartesian_azmuth)
 
     # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    z = tf.cast(z, dtype=tf.complex128)
+    # z = tf.cast(z, dtype=tf.complex128)
 
     return z
 
@@ -228,6 +226,10 @@ def select_zernike_function(term_number):
     elif term_number == 2:
 
         function_name = zernike_2
+
+    elif term_number == 3:
+
+        function_name = zernike_3
 
     else:
         raise ValueError("You provided a Zernike coefficient for a term (" \
@@ -455,10 +457,9 @@ class DASIEModel(object):
                     #     subap_zernike_coefficients = list()
 
                     # Construct subaperture TF Variables.
-                    subap_zernike_coefficients = [np.random.normal(0.1, 0.01),
-                                                  np.random.normal(0.01, 0.01),
-                                                  np.random.normal(0.01,
-                                                                   0.01), ]
+                    subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),]
 
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
