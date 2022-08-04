@@ -202,8 +202,8 @@ def zernike_2(T):
     # mu_v = tf.cast(mu_v, dtype=tf.float64)
 
 
-    u_field = u - mu_u
-    v_field = v - mu_v
+    u_field = u - tf.cast(mu_u, dtype=tf.complex128)
+    v_field = v - tf.cast(mu_v, dtype=tf.complex128)
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     cartesian_azmuth = tf.math.atan2(v_field, u_field)
     z = cartesian_radial* tf.math.cos(cartesian_azmuth)
