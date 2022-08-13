@@ -659,21 +659,37 @@ class DASIEModel(object):
                 for aperture_num in range(num_apertures):
 
                     # Construct subaperture TF Variables.
-                    subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),]
+                    # subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),
+                    #                               np.random.normal(0.01, 0.001),]
+                    subap_zernike_coefficients = [0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  0.01,
+                                                  ]
 
                     zernike_debug = True
                     # If a zernike debug is indicated...
