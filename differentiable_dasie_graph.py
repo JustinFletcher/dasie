@@ -217,6 +217,164 @@ def zernike_3(T):
 
     return z
 
+
+def zernike_4(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(3)  * (cartesian_radial - 1)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_5(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(6) * (cartesian_radial ** 2) * tf.math.cos(2 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_6(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(8) * (cartesian_radial ** 3) * tf.math.sin(3 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_7(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(8) * ((3 * (cartesian_radial**3)) - (2 * cartesian_radial)) * tf.math.sin(cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+
+def zernike_8(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(8) * ((3 * (cartesian_radial**3)) - (2 * cartesian_radial)) * tf.math.cos(cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_9(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(8) * (cartesian_radial ** 3) * tf.math.cos(3 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+
+def zernike_10(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(10) * (cartesian_radial ** 4) * tf.math.sin(4 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_11(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(10) * ((4 * (cartesian_radial ** 4)) - (3 * (cartesian_radial ** 2))) * tf.math.sin(2 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_12(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(10) * ((6 * (cartesian_radial ** 4)) - (6 * (cartesian_radial ** 2)) + 1)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_13(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(10) * ((4 * (cartesian_radial ** 4)) - (3 * (cartesian_radial ** 2))) * tf.math.cos(2 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+def zernike_14(T):
+
+    # Unpack the input tensor.
+    u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
+
+    u_field = tf.cast(u, dtype=tf.float64) - mu_u
+    v_field = tf.cast(v, dtype=tf.float64) - mu_v
+    cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
+    cartesian_azimuth = tf.math.atan2(v_field, u_field)
+    z = tf.math.sqrt(10) * (cartesian_radial ** 4) * tf.math.cos(4 * cartesian_azimuth)
+    z = tf.cast(z, dtype=tf.complex128)
+
+    return z
+
+
 def select_zernike_function(term_number):
 
     if term_number == 0:
@@ -235,10 +393,54 @@ def select_zernike_function(term_number):
 
         function_name = zernike_3
 
+    elif term_number == 4:
+
+        function_name = zernike_4
+
+    elif term_number == 5:
+
+        function_name = zernike_5
+
+    elif term_number == 6:
+
+        function_name = zernike_6
+
+    elif term_number == 7:
+
+        function_name = zernike_7
+
+    elif term_number == 8:
+
+        function_name = zernike_8
+
+    elif term_number == 9:
+
+        function_name = zernike_9
+
+    elif term_number == 10:
+
+        function_name = zernike_10
+
+    elif term_number == 11:
+
+        function_name = zernike_11
+
+    elif term_number == 12:
+
+        function_name = zernike_12
+
+    elif term_number == 13:
+
+        function_name = zernike_13
+
+    elif term_number == 14:
+
+        function_name = zernike_14
+
     else:
         raise ValueError("You provided a Zernike coefficient for a term (" \
                          + str(term_number) +") that is not supported by this \
-                         library. Limit your terms to no more than 15.")
+                         library. Limit your terms to [0, 14].")
 
     return function_name
 
@@ -396,6 +598,7 @@ class DASIEModel(object):
 
         # TODO: Migrate to constructor.
         self.num_exposures = num_exposures
+
         # Compute the pupil extent: 4.848 microradians / arcsec
         # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
         # pupil_extent = [count] [micrometers] / [microradian]
@@ -441,7 +644,6 @@ class DASIEModel(object):
             ttp_trainable = True
 
         # TODO: Externalize.
-        dm_trainable = False
         lock_dm_values = False
         if lock_dm_values:
             dm_trainable = False
@@ -456,15 +658,33 @@ class DASIEModel(object):
 
                 phase_variables = list()
                 for aperture_num in range(num_apertures):
-                    # debug_zernikes = True
-                    # if debug_zernikes:
-                    #     subap_zernike_coefficients = list()
 
                     # Construct subaperture TF Variables.
                     subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
                                                   np.random.normal(0.01, 0.001),
                                                   np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
                                                   np.random.normal(0.01, 0.001),]
+
+                    zernike_debug = True
+                    # If a zernike debug is indicated...
+                    if zernike_debug:
+
+                        # ...make exactly one coefficient non-zero per subap.
+                        for i in range(len(subap_zernike_coefficients)):
+                            if i != aperture_num:
+                                subap_zernike_coefficients[i] = 0.0
+
 
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
 
@@ -516,7 +736,6 @@ class DASIEModel(object):
                         with tf.name_scope(subap_name):
 
                             print("Building aperture number %d." % aperture_num)
-
                             rotation = (aperture_num + 1) / self.num_apertures
 
                             # TODO: correct radius to place the edge, rather than the center, at radius
@@ -643,10 +862,11 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_metrics"):
 
-            # TODO: Explore other metrics.
             self.monolithic_aperture_image_mse = tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2)
             self.distributed_aperture_image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2)
             self.da_mse_mono_mse_ratio = self.distributed_aperture_image_mse / self.monolithic_aperture_image_mse
+            # TODO: Implement SSIM
+            # TODO: Implement PSNR
 
 
         # I wonder if this works...
@@ -1276,7 +1496,6 @@ class DASIEModel(object):
 
             # print("make this shape match (8, 256, 256, 2)")
             # print(input_feature_map.shape)
-            # nowdie
             strides = [1, stride, stride, 1]
             conv_output = tf.nn.conv2d(input_feature_map,
                                        filters,
@@ -1705,9 +1924,7 @@ def main(flags):
     os.makedirs(save_dir, exist_ok=True)
 
     # TODO: Document how distance to the target is quantified implicitly.
-
     # TODO: Document how extent of the target is quantified implicitly.
-
     # Compute the scaling factor from meters to alpha for a GG PDF over meters.
     # alpha = np.log(-np.log(epsilon)) / np.log(beta) * ap_radius_meters
     # alpha = alpha / (flags.num_subapertures)
@@ -1971,7 +2188,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataset_root', type=str,
                         default="..\\data",
-                        help='Path to a directory holding all datasetss.')
+                        help='Path to a directory hol ding all datasetss.')
 
     parser.add_argument('--dataset_name', type=str,
                         default="speedplus",
