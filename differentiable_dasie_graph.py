@@ -402,7 +402,7 @@ def select_zernike_function(term_number):
 
     elif term_number == 6:
 
-        function_name = zernike_6
+        function_name = zernike_5
 
     elif term_number == 7:
 
