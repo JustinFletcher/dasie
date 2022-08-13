@@ -255,7 +255,7 @@ def zernike_6(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
-    z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * (cartesian_radial ** 3) * tf.math.sin(3 * cartesian_azimuth)
+    z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * (tf.math.pow(cartesian_radial, 3.0) * tf.math.sin(3.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
 
     return z
@@ -402,7 +402,7 @@ def select_zernike_function(term_number):
 
     elif term_number == 6:
 
-        function_name = zernike_5
+        function_name = zernike_6
 
     elif term_number == 7:
 
