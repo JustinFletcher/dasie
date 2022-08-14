@@ -724,7 +724,7 @@ class DASIEModel(object):
                                                   tf.constant(0.0,
                                                               dtype=tf.float64))
                             # Scale this variable.
-                            variable = variable * phase_scale
+                            # variable = variable * phase_scale
                             subap_zernike_indices_variables.append(variable)
                         phase_variables.append(subap_zernike_indices_variables)
 
