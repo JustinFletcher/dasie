@@ -337,7 +337,7 @@ def zernike_11(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
+    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((4.0 * (cartesian_radial ** 4)) - (3.0 * (cartesian_radial ** 2))) * tf.math.sin(2.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -353,7 +353,7 @@ def zernike_12(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
+    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((6.0 * (cartesian_radial ** 4)) - (6.0 * (cartesian_radial ** 2)) + 1.0)
     z = tf.cast(z, dtype=tf.complex128)
@@ -369,7 +369,7 @@ def zernike_13(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
+    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((4.0 * (cartesian_radial ** 4)) - (3.0 * (cartesian_radial ** 2))) * tf.math.cos(2.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -384,7 +384,7 @@ def zernike_14(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
+    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * (cartesian_radial ** 4) * tf.math.cos(4 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -502,14 +502,16 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
 
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("Generating phase angle field.")
-    tensor_zernike_2d_field = tf.exp(tensor_zernike_2d_sample)
     pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
+    pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
+    tensor_masked_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
+
+
+    tensor_zernike_2d_field = tf.exp(tensor_masked_zernike_2d_sample)
 
     # plt.imshow(pupil_mask)
     # plt.colorbar()
     # plt.show()
-    pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
-    tensor_zernike_2d_field = tensor_zernike_2d_field * pupil_mask
     # print(aperture_sample)
 
     print("Ending aperture function.")
