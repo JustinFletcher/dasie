@@ -332,7 +332,7 @@ def zernike_12(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
-    z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((6.0 * (cartesian_radial ** 4)) - (6.0 * (cartesian_radial ** 2)) + 1.0)
+    z = tf.math.sqrt(tf.constant(5.0, dtype=tf.float64)) * ((6.0 * (cartesian_radial ** 4)) - (6.0 * (cartesian_radial ** 2)) + 1.0)
     z = tf.cast(z, dtype=tf.complex128)
 
     return z
