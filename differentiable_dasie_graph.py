@@ -173,6 +173,7 @@ def zernike_1(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
 
     z = cartesian_radial * tf.math.sin(cartesian_azimuth)
@@ -188,6 +189,7 @@ def zernike_2(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = cartesian_radial* tf.math.cos(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -202,6 +204,7 @@ def zernike_3(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(6 * cartesian_radial**2) * tf.math.sin(2 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -217,6 +220,7 @@ def zernike_4(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(3.0, dtype=tf.float64))  * (cartesian_radial - 1.0)
     z = tf.cast(z, dtype=tf.complex128)
@@ -231,6 +235,7 @@ def zernike_5(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(6.0, dtype=tf.float64)) * (cartesian_radial ** 2) * tf.math.cos(2 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -245,6 +250,7 @@ def zernike_6(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * (cartesian_radial ** 3.0) * tf.math.sin(3.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -259,6 +265,7 @@ def zernike_7(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * ((3.0 * (cartesian_radial**3)) - (2.0 * cartesian_radial)) * tf.math.sin(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -274,6 +281,7 @@ def zernike_8(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * ((3.0 * (cartesian_radial**3)) - (2.0 * cartesian_radial)) * tf.math.cos(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -288,6 +296,7 @@ def zernike_9(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * (cartesian_radial ** 3) * tf.math.cos(3.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -303,6 +312,7 @@ def zernike_10(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * (cartesian_radial ** 4) * tf.math.sin(4.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -317,6 +327,7 @@ def zernike_11(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((4.0 * (cartesian_radial ** 4)) - (3.0 * (cartesian_radial ** 2))) * tf.math.sin(2.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -331,6 +342,7 @@ def zernike_12(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(5.0, dtype=tf.float64)) * ((6.0 * (cartesian_radial ** 4)) - (6.0 * (cartesian_radial ** 2)) + 1.0)
     z = tf.cast(z, dtype=tf.complex128)
@@ -345,6 +357,7 @@ def zernike_13(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((4.0 * (cartesian_radial ** 4)) - (3.0 * (cartesian_radial ** 2))) * tf.math.cos(2.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -358,6 +371,7 @@ def zernike_14(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
+    cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * (cartesian_radial ** 4) * tf.math.cos(4 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -473,7 +487,7 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     # T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
     # pupil_mask = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
 
-    pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius * 0.9)
+    pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius * 0.8)
     pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
     tensor_masked_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
 
