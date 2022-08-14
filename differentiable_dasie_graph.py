@@ -254,8 +254,6 @@ def zernike_6(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * (cartesian_radial ** 3.0) * tf.math.sin(3.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -270,8 +268,6 @@ def zernike_7(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * ((3.0 * (cartesian_radial**3)) - (2.0 * cartesian_radial)) * tf.math.sin(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -287,8 +283,6 @@ def zernike_8(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * ((3.0 * (cartesian_radial**3)) - (2.0 * cartesian_radial)) * tf.math.cos(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -303,8 +297,6 @@ def zernike_9(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(8.0, dtype=tf.float64)) * (cartesian_radial ** 3) * tf.math.cos(3.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -320,8 +312,6 @@ def zernike_10(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * (cartesian_radial ** 4) * tf.math.sin(4.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -336,8 +326,6 @@ def zernike_11(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((4.0 * (cartesian_radial ** 4)) - (3.0 * (cartesian_radial ** 2))) * tf.math.sin(2.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -352,8 +340,6 @@ def zernike_12(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((6.0 * (cartesian_radial ** 4)) - (6.0 * (cartesian_radial ** 2)) + 1.0)
     z = tf.cast(z, dtype=tf.complex128)
@@ -368,8 +354,6 @@ def zernike_13(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * ((4.0 * (cartesian_radial ** 4)) - (3.0 * (cartesian_radial ** 2))) * tf.math.cos(2.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -383,8 +367,6 @@ def zernike_14(T):
     u_field = tf.cast(u, dtype=tf.float64) - mu_u
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
-    # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(3.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * (cartesian_radial ** 4) * tf.math.cos(4 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
@@ -700,17 +682,18 @@ class DASIEModel(object):
                                                   0.01,
                                                   0.01,
                                                   0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
-                                                  0.01,
+                                                  0.001,
+                                                  0.001,
+                                                  0.001,
+                                                  0.001,
+                                                  0.0001,
+                                                  0.0001,
+                                                  0.0001,
+                                                  0.0001,
+                                                  0.0001,
                                                   ]
 
+                    # TODO: Externalize
                     zernike_debug = True
                     # If a zernike debug is indicated...
                     if zernike_debug:
