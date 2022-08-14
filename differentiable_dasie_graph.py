@@ -321,8 +321,7 @@ def zernike_10(T):
     v_field = tf.cast(v, dtype=tf.float64) - mu_v
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2)
     # Numerically condition the radial field to prevent NaNs.
-    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(10.0, dtype=tf.float64))
-    cartesian_radial = tf.math.maximum(cartesian_radial, tf.constant(1.0, dtype=tf.float64))
+    cartesian_radial = tf.math.minimum(cartesian_radial, tf.constant(5.0, dtype=tf.float64))
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
     z = tf.math.sqrt(tf.constant(10.0, dtype=tf.float64)) * (cartesian_radial ** 4) * tf.math.sin(4.0 * cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
