@@ -495,8 +495,9 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("Generating phase angle field.")
     # TODO: Reinstate after debug.
+    tensor_zernike_2d_field = tensor_masked_zernike_2d_sample
     # tensor_zernike_2d_field = tf.exp(tensor_masked_zernike_2d_sample)
-    tensor_zernike_2d_field = tensor_zernike_2d_field * pupil_mask
+    # tensor_zernike_2d_field = tensor_zernike_2d_field * pupil_mask
 
     # plt.imshow(pupil_mask)
     # plt.colorbar()
