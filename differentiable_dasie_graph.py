@@ -145,22 +145,7 @@ def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
 
 def zernike_0(T):
 
-    # Unpack the input tensor.
-    # (X, Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
-    # u, v, mu_u, mu_v, aperture_radius, subaperture_radius = T
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    # u = tf.cast(u, dtype=tf.float64)
-    # v = tf.cast(v, dtype=tf.float64)
-    # mu_u = tf.cast(mu_u, dtype=tf.float64)
-    # mu_v = tf.cast(mu_v, dtype=tf.float64)
-    # aperture_radius = tf.cast(aperture_radius, dtype=tf.float64)
-    # subaperture_radius = tf.cast(subaperture_radius, dtype=tf.float64)
-
-    # TODO: Cartesian Zernike goes here.
     z = 1.0
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
     z = tf.cast(z, dtype=tf.complex128)
 
     return z
@@ -660,51 +645,55 @@ class DASIEModel(object):
                 phase_variables = list()
                 for aperture_num in range(num_apertures):
 
-                    # Construct subaperture TF Variables.
-                    subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),
-                                                  np.random.normal(0.01, 0.001),]
-
-                    # If a zernike debug is indicated...
-                    if zernike_debug:
-
-                        subap_zernike_coefficients = [
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                        ]
-
-                        # ...make exactly one coefficient non-zero per subap.
-                        for i in range(len(subap_zernike_coefficients)):
-                            if i != aperture_num:
-                                subap_zernike_coefficients[i] = 0.0
-
-
                     with tf.name_scope("subaperture_variables_" + str(aperture_num)):
+
+                        # Construct subaperture TF Variables.
+                        subap_zernike_coefficients = [
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            np.random.normal(1.0, 0.1),
+                            ]
+                        print(aperture_num)
+                        print(subap_zernike_coefficients)
+
+
+                        # If a zernike debug is indicated...
+                        if zernike_debug:
+
+                            subap_zernike_coefficients = [
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                                1.0,
+                            ]
+
+                            # ...make exactly one coefficient non-zero per subap.
+                            for i in range(len(subap_zernike_coefficients)):
+                                if i != aperture_num:
+                                    subap_zernike_coefficients[i] = 0.0
 
                         # Make TF Variables for each subaperture Zernike index.
                         subap_zernike_indices_variables = list()
