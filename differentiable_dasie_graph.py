@@ -1593,7 +1593,7 @@ class DASIEModel(object):
             #            cmap='twilight_shifted',
             #            extent=[left,right,bottom,top])
             # Overlay aperture mask
-            plt.imshow(np.abs(pupil_plane), cmap='inferno',
+            plt.imshow(pupil_plane, cmap='inferno',
                        extent=[left, right, bottom, top])
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
