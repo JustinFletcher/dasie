@@ -176,7 +176,7 @@ def zernike_1(T):
     cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
 
-    z = cartesian_radial * tf.math.sin(cartesian_azimuth)
+    z = 2 * cartesian_radial * tf.math.sin(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
 
     return z
@@ -191,7 +191,7 @@ def zernike_2(T):
     cartesian_radial = tf.math.sqrt(u_field**2 + v_field**2) / subaperture_radius
     cartesian_radial = tf.math.minimum(cartesian_radial, 1.0)
     cartesian_azimuth = tf.math.atan2(v_field, u_field)
-    z = cartesian_radial* tf.math.cos(cartesian_azimuth)
+    z = 2 * cartesian_radial* tf.math.cos(cartesian_azimuth)
     z = tf.cast(z, dtype=tf.complex128)
 
     return z
@@ -450,61 +450,50 @@ def select_zernike_function(term_number):
 
 def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients):
 
-    # TODO: Use the zernike_coefficients to produce a unit disc at mu_u, mu_v
-
-    print("Starting Zernike aperture function.")
-    # generalized_gaussian_2d_sample = tf.vectorized_map(generalized_gaussian_2d, X, Y, mu_u, mu_v, alpha, beta)
+    print("-Starting Zernike aperture function.")
     tensor_zernike_2d_sample = None
-    tensor_zernike_2d_sample_initialized  = False
+    # tensor_zernike_2d_sample_initialized  = False
+
+    # Build tensors upon which to perform a vectorized map.
     T_mu_u = tf.ones_like(X) * mu_u
     T_mu_v = tf.ones_like(X) * mu_v
     T_aperture_radius = tf.ones_like(X) * aperture_radius
     T_subaperture_radius = tf.ones_like(X) * subaperture_radius
-
     T_X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
     T_Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
     T = (T_X, T_Y, T_mu_u, T_mu_v, T_aperture_radius, T_subaperture_radius)
 
+    # Iterate over each zernike term-coefficient pair, adding its contribution.
     for term_number, zernike_coefficient in enumerate(zernike_coefficients):
 
-        print("Starting Term " + str(term_number) + ".")
+        print("--Building Zernike Term " + str(term_number) + ".")
 
-        if tensor_zernike_2d_sample_initialized:
-            zernike_term_map = select_zernike_function(term_number=term_number)
-            print(zernike_term_map)
-            tensor_zernike_2d_sample += zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
+        # Select the function corresponding to this term number.
+        zernike_term_function = select_zernike_function(term_number=term_number)
+
+        # Either initialize the aperture disk, or add this contribution to it.
+        if tensor_zernike_2d_sample:
+            tensor_zernike_2d_sample += zernike_coefficient * tf.vectorized_map(zernike_term_function, T)
         else:
-            tensor_zernike_2d_sample_initialized = True
-            zernike_term_map = select_zernike_function(term_number=term_number)
-            tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_map, T)
-            print(zernike_term_map)
+            tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_function, T)
+            # tensor_zernike_2d_sample_initialized = True
 
-        print("End of Zernike Term.")
+        print("--End of Zernike Term.")
 
-
-    # T_alpha = tf.ones_like(X) * alpha
-    # T_beta = tf.ones_like(X) * beta
-    # T = (X, Y, T_mu_u, T_mu_v, T_alpha, T_beta)
-    # pupil_mask = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
-
-    print("Masking subaperture.")
+    # Apply a circle mask to set all non-aperture pixels to 0.0.
+    print("-Masking subaperture.")
     pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
     pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
     tensor_masked_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
 
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
-    print("Generating phase angle field.")
-    # TODO: Reinstate after debug.
+    print("-Generating phase angle field.")
+    # TODO: Reinstate after debug? Talk to Ryan: Why should I do this?
     tensor_zernike_2d_field = tensor_masked_zernike_2d_sample
     # tensor_zernike_2d_field = tf.exp(tensor_masked_zernike_2d_sample)
     # tensor_zernike_2d_field = tensor_zernike_2d_field * pupil_mask
 
-    # plt.imshow(pupil_mask)
-    # plt.colorbar()
-    # plt.show()
-    # print(aperture_sample)
-
-    print("Ending aperture function.")
+    print("-Ending aperture function.")
     return tensor_zernike_2d_field
 
 class DASIEModel(object):
@@ -747,7 +736,6 @@ class DASIEModel(object):
 
 
                 # Construct the model of the pupil plane, conditioned on the Variables.
-                # TODO: modify to consume Zernikes, not ttp.
                 with tf.name_scope("pupil_plane_model"):
 
                     # Initialize the pupil plane quantization grid.
