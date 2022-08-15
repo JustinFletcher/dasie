@@ -452,7 +452,7 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
 
     print("-Starting Zernike aperture function.")
     tensor_zernike_2d_sample = None
-    # tensor_zernike_2d_sample_initialized  = False
+    tensor_zernike_2d_sample_initialized  = False
 
     # Build tensors upon which to perform a vectorized map.
     T_mu_u = tf.ones_like(X) * mu_u
@@ -472,11 +472,11 @@ def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_
         zernike_term_function = select_zernike_function(term_number=term_number)
 
         # Either initialize the aperture disk, or add this contribution to it.
-        if tensor_zernike_2d_sample:
+        if tensor_zernike_2d_sample_initialized:
             tensor_zernike_2d_sample += zernike_coefficient * tf.vectorized_map(zernike_term_function, T)
         else:
             tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_function, T)
-            # tensor_zernike_2d_sample_initialized = True
+            tensor_zernike_2d_sample_initialized = True
 
         print("--End of Zernike Term.")
 
