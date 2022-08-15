@@ -665,6 +665,23 @@ class DASIEModel(object):
                             np.random.normal(1.0, 0.1),
                             np.random.normal(1.0, 0.1),
                             ]
+                        subap_zernike_coefficients = [
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                        ]
                         print(aperture_num)
                         print(subap_zernike_coefficients)
 
@@ -700,7 +717,10 @@ class DASIEModel(object):
                         zernike_indices = range(num_zernike_indices)
                         for zernike_index in zernike_indices:
                             variable_name = "a" + str(aperture_num) + "_z_j_" + str(zernike_index)
-                            variable = tf.complex(tf.Variable(subap_zernike_coefficients[zernike_index],
+                            variable_value = subap_zernike_coefficients[zernike_index]
+                            print(zernike_index)
+                            print(variable_value)
+                            variable = tf.complex(tf.Variable(variable_value,
                                                               dtype=tf.float64,
                                                               name=variable_name,
                                                               trainable=dm_trainable),
