@@ -522,6 +522,7 @@ class DASIEModel(object):
                  tilt_std=1.0,
                  piston_std=1.0,
                  num_zernike_indices=1,
+                 zernike_debug=False,
                  writer=None):
 
         self.learning_rate = learning_rate
@@ -569,6 +570,7 @@ class DASIEModel(object):
                 tilt_std=tilt_std,
                 piston_std=piston_std,
                 num_zernike_indices=num_zernike_indices,
+                zernike_debug=zernike_debug,
                 )
 
             # self.trainable_variables = tf.compat.v1.trainable_variables()
@@ -590,6 +592,7 @@ class DASIEModel(object):
                            output_ttp_from_model=False,
                            randomize_initial_ttps=False,
                            num_zernike_indices=1,
+                           zernike_debug=False,
                            tip_std=1.0,
                            tilt_std=1.0,
                            piston_std=1.0,):
@@ -658,43 +661,42 @@ class DASIEModel(object):
                 for aperture_num in range(num_apertures):
 
                     # Construct subaperture TF Variables.
-                    # subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),
-                    #                               np.random.normal(0.01, 0.001),]
-                    subap_zernike_coefficients = [
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  1.0,
-                                                  ]
+                    subap_zernike_coefficients = [np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),
+                                                  np.random.normal(0.01, 0.001),]
 
-                    # TODO: Externalize
-                    zernike_debug = True
                     # If a zernike debug is indicated...
                     if zernike_debug:
+
+                        subap_zernike_coefficients = [
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0,
+                        ]
 
                         # ...make exactly one coefficient non-zero per subap.
                         for i in range(len(subap_zernike_coefficients)):
@@ -2084,7 +2086,8 @@ def main(flags):
                                  tip_std=flags.tip_std,
                                  tilt_std=flags.tilt_std,
                                  piston_std=flags.piston_std,
-                                 num_zernike_indices=flags.num_zernike_indices,)
+                                 num_zernike_indices=flags.num_zernike_indices,
+                                 zernike_debug=flags.zernike_debug)
 
         # Merge all the summaries from the graphs, flush and init the nodes.
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
@@ -2217,6 +2220,13 @@ if __name__ == '__main__':
     parser.add_argument("--lock_ttp_values", action='store_true',
                         default=False,
                         help="If true, t/t/p are constants")
+
+    parser.add_argument("--zernike_debug", action='store_true',
+                        default=False,
+                        help="If true, each subaperture is constrained such \
+                              that only the Zernike coefficient with the same \
+                              index as the subaperture index is none-zero.")
+
 
     parser.add_argument("--output_ttp_from_model", action='store_true',
                         default=False,
