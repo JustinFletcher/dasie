@@ -1593,7 +1593,7 @@ class DASIEModel(object):
             #            cmap='twilight_shifted',
             #            extent=[left,right,bottom,top])
             # Overlay aperture mask
-            plt.imshow(pupil_plane, cmap='inferno',
+            plt.imshow(np.real(pupil_plane), cmap='inferno',
                        extent=[left, right, bottom, top])
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
@@ -1606,15 +1606,15 @@ class DASIEModel(object):
             top = self.pupil_dimension_y[-1]
             # Overlay aperture mask
             ax1 = plt.subplot(1, 2, 1)
-            ax1.set_title('np.angle')
-            plt.imshow(np.angle(pupil_plane), cmap='Greys',
+            ax1.set_title('np.imag')
+            plt.imshow(np.imag(pupil_plane), cmap='Greys',
                        extent=[left,right,bottom,top])
             plt.colorbar()
 
             ax2 = plt.subplot(1, 2, 2)
-            plt.imshow(np.abs(pupil_plane), cmap='Greys',
+            plt.imshow(np.real(pupil_plane), cmap='Greys',
                        extent=[left,right,bottom,top])
-            ax2.set_title('np.abs')
+            ax2.set_title('np.real')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="raw_pupil_plane_" + str(i))
