@@ -649,41 +649,22 @@ class DASIEModel(object):
 
                         # Construct subaperture TF Variables.
                         subap_zernike_coefficients = [
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
-                            np.random.normal(1.0, 0.1),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
+                            np.random.uniform(0.0, 1.0),
                             ]
-                        subap_zernike_coefficients = [
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                            1.0,
-                        ]
-                        print(aperture_num)
-                        print(subap_zernike_coefficients)
 
 
                         # If a zernike debug is indicated...
