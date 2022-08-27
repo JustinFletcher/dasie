@@ -433,7 +433,31 @@ def select_zernike_function(term_number):
 
     return function_name
 
-def zernike_aperture_function_2d(X, Y, mu_u, mu_v, aperture_radius, subaperture_radius, zernike_coefficients):
+def init_zernike_coefficients(num_zernike_indices=1,
+                              zernike_init_type="constant"):
+    zernike_coefficients = list()
+
+    for _ in range(num_zernike_indices):
+        if zernike_init_type == "constant":
+            zernike_coefficient = 1.0
+        elif zernike_init_type == "np.random.uniform":
+            zernike_coefficient = np.random.uniform(0.0, 1.0)
+        else:
+            raise ValueError("You provided --zernike_init_type of %s, but \
+                             only 'constant' and 'np.random.uniform' are \
+                             supported")
+
+        zernike_coefficients.append(zernike_coefficient)
+    return zernike_coefficients
+
+
+def zernike_aperture_function_2d(X,
+                                 Y,
+                                 mu_u,
+                                 mu_v,
+                                 aperture_radius,
+                                 subaperture_radius,
+                                 zernike_coefficients):
 
     print("-Starting Zernike aperture function.")
     tensor_zernike_2d_sample = None
@@ -488,24 +512,16 @@ class DASIEModel(object):
                  train_dataset,
                  valid_dataset,
                  batch_size,
-                 inputs=None,
                  loss_name="mse",
                  learning_rate=1.0,
                  num_apertures=15,
                  spatial_quantization=256,
                  supaperture_radius_meters=None,
                  num_exposures=1,
-                 subap_alpha=0.001,
                  monolithic_alpha=0.1,
                  beta=10.0,
                  recovery_model_filter_scale=16,
                  diameter_meters=2.5,
-                 lock_ttp_values=False,
-                 output_ttp_from_model=False,
-                 randomize_initial_ttps=False,
-                 tip_std=1.0,
-                 tilt_std=1.0,
-                 piston_std=1.0,
                  num_zernike_indices=1,
                  zernike_debug=False,
                  writer=None):
@@ -517,7 +533,6 @@ class DASIEModel(object):
         self.sess = sess
         self.writer = writer
         self.loss_name = loss_name
-
 
         train_iterator = train_dataset.get_iterator()
         self.train_iterator_handle = sess.run(train_iterator.string_handle())
@@ -543,17 +558,10 @@ class DASIEModel(object):
                 num_apertures=self.num_apertures,
                 radius_meters=diameter_meters / 2,
                 supaperture_radius_meters=supaperture_radius_meters,
-                subap_alpha=subap_alpha,
                 beta=beta,
                 num_exposures=num_exposures,
                 monolithic_alpha=monolithic_alpha,
                 recovery_model_filter_scale=recovery_model_filter_scale,
-                lock_ttp_values=lock_ttp_values,
-                output_ttp_from_model=output_ttp_from_model,
-                randomize_initial_ttps=randomize_initial_ttps,
-                tip_std=tip_std,
-                tilt_std=tilt_std,
-                piston_std=piston_std,
                 num_zernike_indices=num_zernike_indices,
                 zernike_debug=zernike_debug,
                 )
@@ -568,19 +576,12 @@ class DASIEModel(object):
                            supaperture_radius_meters=None,
                            field_of_view_arcsec=4.0,
                            spatial_quantization=256,
-                           subap_alpha=0.01,
                            monolithic_alpha=0.1,
                            beta=10.0,
                            filter_wavelength_micron=1.0,
                            recovery_model_filter_scale=16,
-                           lock_ttp_values=False,
-                           output_ttp_from_model=False,
-                           randomize_initial_ttps=False,
                            num_zernike_indices=1,
-                           zernike_debug=False,
-                           tip_std=1.0,
-                           tilt_std=1.0,
-                           piston_std=1.0,):
+                           zernike_debug=False,):
 
         # TODO: Migrate to constructor.
         self.num_exposures = num_exposures
@@ -618,17 +619,6 @@ class DASIEModel(object):
         self.pupil_dimension_y = y
         X, Y = np.meshgrid(x, y)
 
-        # Handle inconsistent initialization requestes.
-        if output_ttp_from_model and randomize_initial_ttps:
-            raise ValueError("You provided --output_ttp_from_model and \
-                              --randomize_initial_ttps, which are mutually \
-                             exclusive.")
-
-        if lock_ttp_values:
-            ttp_trainable = False
-        else:
-            ttp_trainable = True
-
         # TODO: Externalize.
         lock_dm_values = False
         if lock_dm_values:
@@ -636,36 +626,25 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
-
         # For each exposure, build the pupil function for that exposure.
         self.pupil_planes = list()
         for exposure_num in range(num_exposures):
             with tf.name_scope("exposure_" + str(exposure_num)):
 
+                # Build a list to populated with trainable variables.
                 phase_variables = list()
                 for aperture_num in range(num_apertures):
 
-                    with tf.name_scope("subaperture_variables_" + str(aperture_num)):
+                    with tf.name_scope("subaperture_variables_" \
+                                       + str(aperture_num)):
 
-                        # Construct subaperture TF Variables.
-                        subap_zernike_coefficients = [
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            np.random.uniform(0.0, 1.0),
-                            ]
 
+                        # TODO: Externalize
+                        zernike_init_type = "np.random.uniform"
+                        subap_zernike_coefficients = init_zernike_coefficients(
+                            num_zernike_indices=num_zernike_indices,
+                            zernike_init_type=zernike_init_type
+                        )
 
                         # If a zernike debug is indicated...
                         if zernike_debug:
@@ -694,23 +673,25 @@ class DASIEModel(object):
                                     subap_zernike_coefficients[i] = 0.0
 
                         # Make TF Variables for each subaperture Zernike index.
-                        subap_zernike_indices_variables = list()
-                        zernike_indices = range(num_zernike_indices)
-                        for zernike_index in zernike_indices:
-                            variable_name = "a" + str(aperture_num) + "_z_j_" + str(zernike_index)
-                            variable_value = subap_zernike_coefficients[zernike_index]
-                            print(zernike_index)
-                            print(variable_value)
-                            variable = tf.complex(tf.Variable(variable_value,
-                                                              dtype=tf.float64,
-                                                              name=variable_name,
-                                                              trainable=dm_trainable),
-                                                  tf.constant(0.0,
-                                                              dtype=tf.float64))
+                        subap_zernike_coefficients_variables = list()
+                        zernike_term_indices = range(num_zernike_indices)
+                        for zernike_term_index in zernike_term_indices:
+
+                            # Construct the tf.Variable for this coefficient.
+                            variable_name = "a" + str(aperture_num) + \
+                                            "_z_j_" + str(zernike_index)
+                            real_var = tf.Variable(subap_zernike_coefficients[zernike_term_index],
+                                                   dtype=tf.float64,
+                                                   name=variable_name,
+                                                   trainable=dm_trainable)
+
+                            # Construct a complex tensor from real Variable.
+                            imag_var = tf.constant(0.0, dtype=tf.float64)
+                            variable = tf.complex(real_var, imag_var)
                             # Scale this variable.
                             # variable = variable * phase_scale
-                            subap_zernike_indices_variables.append(variable)
-                        phase_variables.append(subap_zernike_indices_variables)
+                            subap_zernike_coefficients_variables.append(variable)
+                        phase_variables.append(subap_zernike_coefficients_variables)
 
                 # Add some instrumentation for ttp.
                 # tips = list()
@@ -772,7 +753,7 @@ class DASIEModel(object):
 
             # Basically the following is the loss function of the pupil plane.
             # The pupil plan here can be thought of an estimator, parameterized
-            # by t/t/p values, of the true image. I think...
+            # by z values, of the true image. I think...
 
             # Compute the PSF from the pupil plane.
             with tf.name_scope("psf_model"):
@@ -815,8 +796,15 @@ class DASIEModel(object):
 
             with tf.name_scope("monolithic_aperture_pupil_plane"):
 
-                # monolithic_alpha = np.pi * diameter_meters / 2 / 1 / 4
-                self.monolithic_pupil_plane = aperture_function_2d(X, Y, 0.0, 0.0, monolithic_alpha, beta, tip=0.0, tilt=0.0, piston=0.001)
+                self.monolithic_pupil_plane = aperture_function_2d(X,
+                                                                   Y,
+                                                                   0.0,
+                                                                   0.0,
+                                                                   monolithic_alpha,
+                                                                   beta,
+                                                                   tip=0.0,
+                                                                   tilt=0.0,
+                                                                   piston=0.001)
 
                 # self.monolithic_pupil_plane = zernike_aperture_function_2d(X,
                 #                                                            Y,
@@ -1500,9 +1488,6 @@ class DASIEModel(object):
                                                    dtype=tf.float64))
 
             # Encode the strides for TensorFlow, and build the conv graph.
-
-            # print("make this shape match (8, 256, 256, 2)")
-            # print(input_feature_map.shape)
             strides = [1, stride, stride, 1]
             conv_output = tf.nn.conv2d(input_feature_map,
                                        filters,
@@ -1693,8 +1678,6 @@ class DASIEModel(object):
                               ],
                              feed_dict={self.handle: self.valid_iterator_handle})
 
-
-
 def train(sess,
           dasie_model,
           train_dataset,
@@ -1833,7 +1816,6 @@ def train(sess,
                  step_valid_distributed_aperture_image_mse,
                  step_valid_da_mse_mono_mse_ratio) = dasie_model.validate()
 
-
                 # Increment all of our metrics.
                 # TODO: Eventually refactor to summaries.
                 valid_loss += step_valid_loss
@@ -1856,7 +1838,6 @@ def train(sess,
             results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
             results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
             results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
-
 
             print("Validation Loss: %f" % mean_valid_loss)
             print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
@@ -1998,7 +1979,6 @@ def main(flags):
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
                                          cache_path="")
-
 
         # We create a tf.data.Dataset object wrapping the valid dataset here.
         valid_dataset = DatasetGenerator(valid_data_dir,
