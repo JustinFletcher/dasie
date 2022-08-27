@@ -679,7 +679,7 @@ class DASIEModel(object):
 
                             # Construct the tf.Variable for this coefficient.
                             variable_name = "a" + str(aperture_num) + \
-                                            "_z_j_" + str(zernike_index)
+                                            "_z_j_" + str(zernike_term_index)
                             real_var = tf.Variable(subap_zernike_coefficients[zernike_term_index],
                                                    dtype=tf.float64,
                                                    name=variable_name,
