@@ -2198,7 +2198,7 @@ if __name__ == '__main__':
                         help='If true, crop images to spatial_quantization.')
 
     parser.add_argument("--hadamard_image_formation", action='store_true',
-                        default=True,
+                        default=False,
                         help='If true, use MTF, image spectrum product, else \
                               use PSF convolution.')
 
