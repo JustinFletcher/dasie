@@ -524,6 +524,7 @@ class DASIEModel(object):
                  diameter_meters=2.5,
                  num_zernike_indices=1,
                  zernike_debug=False,
+                 hadamard_image_formation=True,
                  writer=None):
 
         self.learning_rate = learning_rate
@@ -564,6 +565,7 @@ class DASIEModel(object):
                 recovery_model_filter_scale=recovery_model_filter_scale,
                 num_zernike_indices=num_zernike_indices,
                 zernike_debug=zernike_debug,
+                hadamard_image_formation=hadamard_image_formation,
                 )
 
             # self.trainable_variables = tf.compat.v1.trainable_variables()
@@ -581,7 +583,8 @@ class DASIEModel(object):
                            filter_wavelength_micron=1.0,
                            recovery_model_filter_scale=16,
                            num_zernike_indices=1,
-                           zernike_debug=False,):
+                           zernike_debug=False,
+                           hadamard_image_formation=True):
 
         # TODO: Migrate to constructor.
         self.num_exposures = num_exposures
@@ -709,6 +712,7 @@ class DASIEModel(object):
 
 
                 # Construct the model of the pupil plane, conditioned on the Variables.
+
                 with tf.name_scope("pupil_plane_model"):
 
                     # Initialize the pupil plane quantization grid.
@@ -773,16 +777,30 @@ class DASIEModel(object):
                 mtf = tf.math.abs(otf)
                 self.mtfs.append(mtf)
 
-            #
             with tf.name_scope("image_spectrum_model"):
 
                 self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
 
             with tf.name_scope("image_plane_model"):
 
-                distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
-                distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
+                if hadamard_image_formation:
+
+                    distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
+                    distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
+
+                else:
+                    distributed_aperture_image_plane = tf.nn.conv2d(
+                        tf.squeeze(self.perfect_image, axis=-1),
+                        psf,
+                        strides=[1, 1, 1, 1],
+                        padding='SAME',
+                        data_format='NHWC'
+                    )
                 distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
+
+
+
+
 
             with tf.name_scope("sensor_model"):
 
@@ -828,8 +846,19 @@ class DASIEModel(object):
                     self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
 
                 with tf.name_scope("monolithic_image_plane_model"):
-                    monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
-                    monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
+
+                    if hadamard_image_formation:
+                        monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
+                        monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
+                    else:
+                        monolithic_aperture_image = tf.nn.conv2d(
+                            tf.squeeze(self.perfect_image, axis=-1),
+                            self.monolithic_psf,
+                            strides=[1, 1, 1, 1],
+                            padding='SAME',
+                            data_format='NHWC'
+                        )
+
                     self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
 
         with tf.name_scope("distributed_aperture_image_recovery"):
@@ -2050,6 +2079,7 @@ def main(flags):
                                  monolithic_alpha=monolithic_alpha,
                                  beta=beta,
                                  num_zernike_indices=flags.num_zernike_indices,
+                                 hadamard_image_formation=flags.hadamard_image_formation,
                                  zernike_debug=flags.zernike_debug)
 
         # Merge all the summaries from the graphs, flush and init the nodes.
@@ -2166,6 +2196,11 @@ if __name__ == '__main__':
     parser.add_argument("--crop", action='store_true',
                         default=False,
                         help='If true, crop images to spatial_quantization.')
+
+    parser.add_argument("--hadamard_image_formation", action='store_true',
+                        default=True,
+                        help='If true, use MTF, image spectrum product, else \
+                              use PSF convolution.')
 
     parser.add_argument('--dataset_root', type=str,
                         default="..\\data",
