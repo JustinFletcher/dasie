@@ -787,7 +787,6 @@ class DASIEModel(object):
 
                     distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
                     distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
-
                 else:
                     distributed_aperture_image_plane = tf.nn.conv2d(
                         tf.squeeze(self.perfect_image, axis=-1),
@@ -796,6 +795,8 @@ class DASIEModel(object):
                         padding='SAME',
                         data_format='NHWC'
                     )
+
+                print(tf.shape(distributed_aperture_image_plane))
                 distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
 
 
