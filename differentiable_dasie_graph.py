@@ -791,7 +791,7 @@ class DASIEModel(object):
                 else:
                     distributed_aperture_image_plane = tf.nn.conv2d(
                         tf.squeeze(self.perfect_image, axis=-1),
-                        psf,
+                        tf.expand_dims(tf.expand_dims(psf, -1), -1),
                         strides=[1, 1, 1, 1],
                         padding='SAME',
                         data_format='NHWC'
@@ -853,7 +853,7 @@ class DASIEModel(object):
                     else:
                         monolithic_aperture_image = tf.nn.conv2d(
                             tf.squeeze(self.perfect_image, axis=-1),
-                            self.monolithic_psf,
+                            tf.expand_dims(tf.expand_dims(self.monolithic_psf, -1), -1),
                             strides=[1, 1, 1, 1],
                             padding='SAME',
                             data_format='NHWC'
