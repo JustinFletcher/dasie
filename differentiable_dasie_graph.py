@@ -796,7 +796,7 @@ class DASIEModel(object):
                         data_format='NHWC'
                     )
 
-                print(tf.shape(distributed_aperture_image_plane))
+                print(distributed_aperture_image_plane)
                 distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
 
 
