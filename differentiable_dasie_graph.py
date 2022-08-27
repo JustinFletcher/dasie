@@ -795,6 +795,7 @@ class DASIEModel(object):
                         padding='SAME',
                         data_format='NHWC'
                     )
+                    distributed_aperture_image_plane = tf.squeeze(distributed_aperture_image_plane, axis=-1)
 
                 print(distributed_aperture_image_plane)
                 distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
@@ -859,6 +860,7 @@ class DASIEModel(object):
                             padding='SAME',
                             data_format='NHWC'
                         )
+                        monolithic_aperture_image = tf.squeeze(monolithic_aperture_image, axis=-1)
 
                     self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
 
