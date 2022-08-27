@@ -2047,15 +2047,8 @@ def main(flags):
                                  recovery_model_filter_scale=flags.recovery_model_filter_scale,
                                  loss_name=flags.loss_name,
                                  writer=writer,
-                                 subap_alpha=subap_alpha,
                                  monolithic_alpha=monolithic_alpha,
                                  beta=beta,
-                                 lock_ttp_values=flags.lock_ttp_values,
-                                 output_ttp_from_model=flags.output_ttp_from_model,
-                                 randomize_initial_ttps=flags.randomize_initial_ttps,
-                                 tip_std=flags.tip_std,
-                                 tilt_std=flags.tilt_std,
-                                 piston_std=flags.piston_std,
                                  num_zernike_indices=flags.num_zernike_indices,
                                  zernike_debug=flags.zernike_debug)
 
