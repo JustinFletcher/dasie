@@ -789,7 +789,8 @@ class DASIEModel(object):
                     distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
                 else:
                     distributed_aperture_image_plane = tf.nn.conv2d(
-                        tf.squeeze(self.perfect_image, axis=-1),
+                        # tf.squeeze(self.perfect_image, axis=-1),
+                        self.perfect_image,
                         tf.expand_dims(tf.expand_dims(psf, -1), -1),
                         strides=[1, 1, 1, 1],
                         padding='SAME',
@@ -854,7 +855,8 @@ class DASIEModel(object):
                         monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
                     else:
                         monolithic_aperture_image = tf.nn.conv2d(
-                            tf.squeeze(self.perfect_image, axis=-1),
+                            # tf.squeeze(self.perfect_image, axis=-1),
+                            self.perfect_image,
                             tf.expand_dims(tf.expand_dims(self.monolithic_psf, -1), -1),
                             strides=[1, 1, 1, 1],
                             padding='SAME',
