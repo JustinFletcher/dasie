@@ -516,6 +516,8 @@ class DASIEModel(object):
                  learning_rate=1.0,
                  num_apertures=15,
                  spatial_quantization=256,
+                 image_x_scale=256,
+                 image_y_scale=256,
                  supaperture_radius_meters=None,
                  num_exposures=1,
                  monolithic_alpha=0.1,
@@ -531,6 +533,8 @@ class DASIEModel(object):
         self.num_apertures = num_apertures
         self.batch_size = batch_size
         self.spatial_quantization = spatial_quantization
+        self.image_x_scale = image_x_scale
+        self.image_y_scale = image_y_scale
         self.sess = sess
         self.writer = writer
         self.loss_name = loss_name
@@ -670,7 +674,7 @@ class DASIEModel(object):
                                 1.0,
                             ]
 
-                            # ...make exactly one coefficient non-zero per subap.
+                            # ...make just one coefficient non-zero per subap.
                             for i in range(len(subap_zernike_coefficients)):
                                 if i != aperture_num:
                                     subap_zernike_coefficients[i] = 0.0
@@ -1477,10 +1481,11 @@ class DASIEModel(object):
             strides = [1, stride, stride, 1]
 
             # Given the base quantization, div by downsample, mul by stride.
-            output_scale = (self.spatial_quantization // input_downsample_factor) * stride
+            output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
+            output_y_scale = (self.image_y_scale // input_downsample_factor) * stride
             output_shape = (self.batch_size,
-                            output_scale,
-                            output_scale,
+                            output_x_scale,
+                            output_y_scale,
                             output_channels)
 
             conv_output = tf.nn.conv2d_transpose(input_feature_map,
@@ -1964,6 +1969,7 @@ def main(flags):
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
 
+
     elif flags.dataset_name == "inria_holiday":
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "train")
@@ -2028,6 +2034,11 @@ def main(flags):
                                          cache_dataset_file=False,
                                          cache_path="")
 
+        # Get the image shapes stored during dataset construction.
+        image_x_scale = train_dataset.image_shape[0]
+        image_y_scale = train_dataset.image_shape[1]
+
+
         # Manual debug here, to diagnose data problems.
         plot_data = False
         if plot_data:
@@ -2074,6 +2085,8 @@ def main(flags):
                                  valid_dataset=valid_dataset,
                                  num_exposures=flags.num_exposures,
                                  spatial_quantization=flags.spatial_quantization,
+                                 image_x_scale=image_x_scale,
+                                 image_y_scale=image_y_scale,
                                  learning_rate=flags.learning_rate,
                                  diameter_meters=flags.aperture_diameter_meters,
                                  num_apertures=flags.num_subapertures,
