@@ -181,15 +181,7 @@ class DatasetGenerator(object):
         # return tf.compat.v1.data.make_initializable_iterator(self.dataset)
         self.initializer = self.iterator.make_initializer(self.dataset)
         return self.initializer
-        # TODO: Pick up here working towards a validation loop.
 
-        # def get_initializable_iterator(self):
-    #     return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
-    #     # TODO: Pick up here working towards a validation loop.
-    #     iterator = tf.compat.v1.data.make_initializable_iterator(self.dataset)
-    #     iterator.make_initializer()
-
-        # return tf.compat.v1.data.make_initializable_iterator(self.dataset)
 
     def build_pipeline(self,
                        tfrecord_path,
@@ -247,7 +239,7 @@ class DatasetGenerator(object):
         # TODO: Figure out how to configure this... maybe make it a method?
         if crop_size:
 
-            data = data.map(_perform_crop,
+            data = data.map(_perform_center_crop,
                             num_parallel_calls=num_threads).prefetch(buffer)
 
         data = data.map(_normalize,
@@ -294,6 +286,8 @@ class DatasetGenerator(object):
 
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
+
+        self.image_shape = get_input_shape(data)
 
         # Return a reference to this data pipeline
         return data
@@ -400,7 +394,7 @@ def _standardize(image):
     return image
 
 
-def _perform_crop(image, filename=None, min_crop_size=(256, 256)):
+def _perform_center_crop(image, filename=None, min_crop_size=(256, 256)):
     """
     Randomly crops the image. Crop positions are chosen randomly, as well as
     the size (provided it is above the requested minimum size). If any bounding
@@ -458,8 +452,8 @@ def _perform_crop(image, filename=None, min_crop_size=(256, 256)):
     # The heavy lifting is done, time to make us a crop and transform our
     # bounding boxes to the new coordinates
     image = tf.image.crop_to_bounding_box(image,
-                                          offset_height,
-                                          offset_width,
+                                          (img_shape[0]//2) - (offset_height//2),
+                                          (img_shape[1]//2) - (offset_width//2),
                                           crop_height,
                                           crop_width)
 
