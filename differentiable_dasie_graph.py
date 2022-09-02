@@ -610,7 +610,8 @@ class DASIEModel(object):
         self.subaperture_size_pixels = int(supaperture_radius_meters // self.pupil_meters_per_pixel)
 
         # Construct placeholders for inputs.
-        batch_shape = (spatial_quantization, spatial_quantization)
+        # batch_shape = (spatial_quantization, spatial_quantization)
+        batch_shape = (self.image_x_scale, self.image_y_scale)
         if inputs is not None:
             self.perfect_image = inputs
         else:
@@ -1484,8 +1485,8 @@ class DASIEModel(object):
             output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
             output_y_scale = (self.image_y_scale // input_downsample_factor) * stride
             output_shape = (self.batch_size,
-                            output_y_scale,
                             output_x_scale,
+                            output_y_scale,
                             output_channels)
 
             conv_output = tf.nn.conv2d_transpose(input_feature_map,
@@ -1495,7 +1496,7 @@ class DASIEModel(object):
                                                  padding="SAME",
                                                  data_format='NHWC',
                                                  dilations=None,
-                                                 name=None)
+                                                 name=name)
 
             # Apply an activation function.
             output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
