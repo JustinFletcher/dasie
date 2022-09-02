@@ -1482,8 +1482,8 @@ class DASIEModel(object):
             strides = [1, stride, stride, 1]
 
             # Given the base quantization, div by downsample, mul by stride.
-            output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
-            output_y_scale = (self.image_y_scale // input_downsample_factor) * stride
+            output_x_scale = (self.spatial_quantization // input_downsample_factor) * stride
+            output_y_scale = (self.spatial_quantization // input_downsample_factor) * stride
             output_shape = (self.batch_size,
                             output_x_scale,
                             output_y_scale,
@@ -2234,39 +2234,12 @@ if __name__ == '__main__':
                         default=16,
                         help='Base filter size for recovery model.')
 
-    parser.add_argument("--lock_ttp_values", action='store_true',
-                        default=False,
-                        help="If true, t/t/p are constants")
-
     parser.add_argument("--zernike_debug", action='store_true',
                         default=False,
                         help="If true, each subaperture is constrained such \
                               that only the Zernike coefficient with the same \
                               index as the subaperture index is none-zero.")
 
-
-    parser.add_argument("--output_ttp_from_model", action='store_true',
-                        default=False,
-                        help="If true, t/t/p are populated by an MLP.")
-
-    parser.add_argument("--randomize_initial_ttps", action='store_true',
-                        default=False,
-                        help="If true, t/t/p are populated randomly.")
-
-    parser.add_argument('--tip_std',
-                        type=float,
-                        default=1.0,
-                        help='std for the Gaussian from which tip is drawn.')
-
-    parser.add_argument('--tilt_std',
-                        type=float,
-                        default=1.0,
-                        help='std for the Gaussian from which tilt is drawn.')
-
-    parser.add_argument('--piston_std',
-                        type=float,
-                        default=1.0,
-                        help='std for the Gaussian from which pistons drawn.')
 
 
 
