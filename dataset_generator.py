@@ -288,6 +288,8 @@ class DatasetGenerator(object):
         data.prefetch(buffer_size=buffer)
 
         self.image_shape = get_input_shape(data)
+        print(self.image_shape)
+        die
 
         # Return a reference to this data pipeline
         return data
