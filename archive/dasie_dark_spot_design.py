@@ -6,6 +6,7 @@ Author: Justin Fletcher
 
 import os
 import time
+import copy
 import joblib
 import argparse
 
@@ -15,6 +16,7 @@ import hcipy
 import datetime
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.patches as mpatch
 from decimal import Decimal
 
 import codecs
@@ -183,6 +185,7 @@ class DASIEState(object):
 
         self.ensemble_size = ensemble_size
         self.value = np.zeros((ensemble_size, num_apertures, 3))
+        self.value = np.random.randn(ensemble_size, num_apertures, 3)
 
     def __len__(self):
 
@@ -191,15 +194,16 @@ class DASIEState(object):
     # State set function.
     def store(self):
 
-        self.prior_value = self.value
+        self.prior_value = copy.deepcopy(self.value)
 
     # State set function.
     def restore(self):
 
-        self.value = self.prior_value
+        self.value = copy.deepcopy(self.prior_value)
 
     # Plot the state
-    def plot(self, mtf_scale,
+    def plot(self,
+             mtf_scale,
              dasie_psf_sampler,
              plot_list=None,
              show_plot=True,
@@ -209,6 +213,7 @@ class DASIEState(object):
              epoch=None):
 
         perfect_image = plt.imread('sample_image.png')
+        perfect_image = perfect_image / np.max(perfect_image)
         perfect_image_spectrum = np.fft.fft2(perfect_image, norm="ortho")
 
         mtf_list = list()
@@ -263,12 +268,44 @@ class DASIEState(object):
             ppt_ax.imshow(ptt)
             ppt_ax.axis("off")
 
+
+            chip_center_x = 32
+            chip_center_y = 32
+            chip_radius = 16
+            psf_center = int(np.round(psf.shape[0] / 2))
+            dark_spot_chip_x_start = psf_center + chip_center_x - chip_radius
+            dark_spot_chip_x_stop = psf_center + chip_center_x + chip_radius
+            dark_spot_chip_y_start = psf_center + chip_center_y - chip_radius
+            dark_spot_chip_y_stop = psf_center + chip_center_y + chip_radius
+
+            # plot_psf = psf
+            # plot_psf[dark_spot_chip_x_start:dark_spot_chip_x_stop,
+            #          dark_spot_chip_y_start:dark_spot_chip_y_stop] = 0.0
+
             mtf_ax = fig.add_subplot(gs00[1, index])
             mtf_ax.imshow(np.log10(abs(psf)))
             mtf_ax.axis("off")
 
+            rectangles = {'spot': mpatch.Rectangle((dark_spot_chip_x_start, dark_spot_chip_y_start),
+                                                   2 * chip_radius,
+                                                   2 * chip_radius,
+                                                   fill=False,
+                                                   edgecolor='white')}
+
+            for r in rectangles:
+                mtf_ax.add_artist(rectangles[r])
+                rx, ry = rectangles[r].get_xy()
+                cx = rx + rectangles[r].get_width() / 2.0
+                cy = ry + rectangles[r].get_height() / 2.0
+
+                # mtf_ax.annotate(r, (cx, cy), color='w', weight='bold',
+                #                 fontsize=6, ha='center', va='center')
+
+            psf_chip = psf[dark_spot_chip_x_start:dark_spot_chip_x_stop,
+                           dark_spot_chip_y_start:dark_spot_chip_y_stop]
+
             mtf_ax = fig.add_subplot(gs00[2, index])
-            mtf_ax.imshow(np.log10(np.fft.fftshift(mtf)))
+            mtf_ax.imshow(np.log10(psf_chip))
             mtf_ax.axis("off")
 
             mtf_ax = fig.add_subplot(gs00[3, index])
@@ -294,6 +331,8 @@ class DASIEState(object):
         title = "Mean Restored MTF"
         restored_image_ax.set_title(title)
         restored_image_ax.imshow(np.log10(np.fft.fftshift(np.mean(mtf_list, axis=0))))
+
+
 
         restored_image_ax = fig.add_subplot(gs01[2, 0])
         title = "Restored Image"
@@ -334,6 +373,8 @@ class DASIEState(object):
 
             plot_ax.plot(plot_list)
 
+            plt.yscale('log')
+
         if save_plot:
 
             if run_id:
@@ -343,7 +384,7 @@ class DASIEState(object):
 
             else:
 
-                plt.savefig('tmp.png')
+                plt.savefig('axis_flipped_30_5_experiment.png')
 
         if show_plot:
 
@@ -428,6 +469,64 @@ class DASIECostEvaluator(object):
         # Return the cost.
         return cost
 
+class DarkSpotCostEvaluator(object):
+
+    def __init__(self, mtf_scale, dasie_psf_sampler):
+
+        self.mtf_scale = mtf_scale
+        self.dasie_psf_sampler = dasie_psf_sampler
+        self.one_matrix = np.ones((mtf_scale, mtf_scale))
+        self.aggregate_mtf = np.zeros((mtf_scale, mtf_scale))
+
+        mono_mtf = get_monolithic_mft()
+        # inverted_mono_mtf = np.divide(self.one_matrix, mono_mtf + 1e-16)
+
+        # Compute the grand sum of the monolithic MTF for scaling.
+        self.monolithic_mtf_grand_sum = rmse(mono_mtf)
+
+        self.cost = None
+
+
+    def reset_aggregates(self):
+
+        self.aggregate_mtf = np.zeros((self.mtf_scale, self.mtf_scale))
+
+    def evaluate(self, dasie_state, input_data=None):
+
+        dasie_actuation = None
+        # Iterate over the slices of state representing ptt arrays...
+        for dasie_actuation in dasie_state.value:
+
+            # ...compute the MTF...
+            psf = psf_from_dasie_actuation(self.dasie_psf_sampler,
+                                           dasie_actuation)
+            dasie_actuation = dasie_actuation
+
+        chip_center_x = 64
+        chip_center_y = 64
+        chip_radius = 16
+        psf_center = int(np.round(psf.shape[0] / 2))
+        dark_spot_chip_x_start = psf_center + chip_center_x - chip_radius
+        dark_spot_chip_x_stop = psf_center + chip_center_x + chip_radius
+        dark_spot_chip_y_start = psf_center + chip_center_y - chip_radius
+        dark_spot_chip_y_stop = psf_center + chip_center_y + chip_radius
+
+        psf_chip = psf[dark_spot_chip_x_start:dark_spot_chip_x_stop,
+                       dark_spot_chip_y_start:dark_spot_chip_y_stop]
+
+        alpha = 1.0
+        beta = 1.0
+
+        # cost = alpha * np.sum(psf_chip) + beta * np.sqrt(np.sum(np.power(dasie_actuation, 2)))
+
+        cost = alpha * np.sqrt(np.sum(np.power(dasie_actuation, 2))) + beta * np.sqrt(np.sum(np.power(dasie_actuation, 2)))
+        # cost = np.sqrt(np.sum(np.power(dasie_actuation, 2)))
+
+        self.cost = cost
+
+        # Return the cost.
+        return cost
+
 class DASIEPerturber(object):
 
     def __init__(self, scale=1.0, type="csa"):
@@ -482,14 +581,23 @@ def main(flags):
 
 
     state = DASIEState(flags.ensemble_size, num_apertures)
+    state_cost_evaluator = DarkSpotCostEvaluator(flags.mtf_scale,
+                                                  dasie_psf_sampler)
+
+    type = "csa"
     # state_perturber = DASIEPerturber(scale=flags.actuation_scale)
     state_perturber = DASIEPerturber(scale=flags.actuation_scale,
-                                     type="fsa")
-    state_cost_evaluator = DASIECostEvaluator(flags.mtf_scale,
-                                              dasie_psf_sampler)
-    # temperature_function = csa_temperature_function
-    temperature_function = fsa_temperature_function
-    acceptance_function = csa_acceptance_function
+                                     type=type)
+
+    if type == "csa":
+        temperature_function = csa_temperature_function
+        acceptance_function = csa_acceptance_function
+
+    elif type == "fsa":
+        temperature_function = fsa_temperature_function
+        acceptance_function = csa_acceptance_function
+
+
     initial_temperature = flags.initial_temperature
 
     annealer = Annealer(state,
@@ -542,12 +650,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--actuation_scale',
                         type=float,
-                        default=0.0001,
+                        default=0.01,
                         help='Scale of actuations, as a real.')
 
     parser.add_argument('--initial_temperature',
                         type=float,
-                        default= 0.001,
+                        default= 0.1,
                         help='Scale of actuations, as a real.')
 
     parser.add_argument('--mtf_scale',
@@ -557,7 +665,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--ensemble_size',
                         type=int,
-                        default=4,
+                        default=1,
                         help='Number of samples to take.')
 
     parser.add_argument('--num_epochs',

@@ -347,7 +347,7 @@ class DASIEState(object):
 
             else:
 
-                plt.savefig('tmp.png')
+                plt.savefig('axis_flipped_30_5_experiment.png')
 
         if show_plot:
 

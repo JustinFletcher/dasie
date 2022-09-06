@@ -822,24 +822,24 @@ class DASIEModel(object):
 
             with tf.name_scope("monolithic_aperture_pupil_plane"):
 
-                self.monolithic_pupil_plane = aperture_function_2d(X,
-                                                                   Y,
-                                                                   0.0,
-                                                                   0.0,
-                                                                   monolithic_alpha,
-                                                                   beta,
-                                                                   tip=0.0,
-                                                                   tilt=0.0,
-                                                                   piston=0.001)
+                # self.monolithic_pupil_plane = aperture_function_2d(X,
+                #                                                    Y,
+                #                                                    0.0,
+                #                                                    0.0,
+                #                                                    monolithic_alpha,
+                #                                                    beta,
+                #                                                    tip=0.0,
+                #                                                    tilt=0.0,
+                #                                                    piston=0.001)
 
-                # self.monolithic_pupil_plane = zernike_aperture_function_2d(X,
-                #                                                            Y,
-                #                                                            0.0,
-                #                                                            0.0,
-                #                                                            radius_meters,
-                #                                                            radius_meters,
-                #                                                            zernike_coefficients=[0.001 * self.phase_scale],
-                #                                                            )
+                self.monolithic_pupil_plane = zernike_aperture_function_2d(X,
+                                                                           Y,
+                                                                           0.0,
+                                                                           0.0,
+                                                                           radius_meters,
+                                                                           radius_meters,
+                                                                           zernike_coefficients=[0.001],
+                                                                           )
 
                 # Compute the PSF from the pupil plane.
                 with tf.name_scope("monolithic_psf_model"):
