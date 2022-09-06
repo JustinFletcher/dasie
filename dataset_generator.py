@@ -287,9 +287,8 @@ class DatasetGenerator(object):
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
 
-        self.image_shape = get_input_shape(data)
-        print(self.image_shape)
-        die
+        image_batch_shape = get_input_shape(data)
+        self.image_shape = (image_batch_shape[1], image_batch_shape[2])
 
         # Return a reference to this data pipeline
         return data
