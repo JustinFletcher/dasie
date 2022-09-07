@@ -532,7 +532,7 @@ class DASIEModel(object):
         for i, subap_zernike_coefficient in enumerate(subap_zernike_coefficients):
 
             # Construct the tf.Variable for this coefficient.
-            variable_name = "a" +  str(aperture_num) +  "_z_j_" + str(i)
+            variable_name = "zernike_coefficient_" + str(i)
             # Get the tensor of Zernike coeffs for this subap.
             # z = subap_zernike_coefficients[zernike_term_index]
 
