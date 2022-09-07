@@ -523,6 +523,34 @@ class DASIEModel(object):
 
         return image
 
+    def _build_zernike_coefficient_variables(self,
+                                             subap_zernike_coefficients):
+
+        # Make TF Variables for each subaperture Zernike coeff.
+        subap_zernike_coefficients_variables = list()
+
+        for i, subap_zernike_coefficient in enumerate(subap_zernike_coefficients):
+
+            # Construct the tf.Variable for this coefficient.
+            variable_name = "a" +  str(aperture_num) +  "_z_j_" + str(i)
+            # Get the tensor of Zernike coeffs for this subap.
+            # z = subap_zernike_coefficients[zernike_term_index]
+
+            # Build a TF Variable around this tensor.
+            real_var = tf.Variable(subap_zernike_coefficient,
+                                   dtype=tf.float64,
+                                   name=variable_name,
+                                   trainable=dm_trainable)
+
+            # Construct a complex tensor from real Variable.
+            imag_constant = tf.constant(0.0, dtype=tf.float64)
+            variable = tf.complex(real_var, imag_constant)
+
+            # Append the final variable to the list.
+            subap_zernike_coefficients_variables.append(variable)
+
+        return(subap_zernike_coefficients_variables)
+
     def _build_dasie_model(self,
                            inputs=None,
                            num_apertures=15,
@@ -572,8 +600,7 @@ class DASIEModel(object):
         pupil_extent = filter_wavelength_micron * spatial_quantization / (4.848 * field_of_view_arcsec)
         self.pupil_extent = pupil_extent
         print("pupil_extent=" + str(pupil_extent))
-        phase_scale = 2 * np.pi / filter_wavelength_micron
-        self.phase_scale = phase_scale
+        self.phase_scale = 2 * np.pi / filter_wavelength_micron
         # Compute the subaperture pixel extent.
         self.pupil_meters_per_pixel = radius_meters / spatial_quantization
         self.subaperture_size_pixels = int(supaperture_radius_meters // self.pupil_meters_per_pixel)
@@ -588,191 +615,189 @@ class DASIEModel(object):
         X, Y = np.meshgrid(x, y)
         # End: Physics stuff.
 
+        self.psfs = list()
+        self.otfs = list()
+        self.mtfs = list()
+        self.distributed_aperture_images = list()
 
         # For each exposure, build the pupil function for that exposure.
         self.pupil_planes = list()
         for exposure_num in range(num_exposures):
             with tf.name_scope("exposure_" + str(exposure_num)):
 
-                # Build a list to populated with trainable variables.
-                phase_variables = list()
-                for aperture_num in range(num_apertures):
+                # Build the pupil plane quantization grid for this exposure.
+                pupil_plane = tf.zeros((spatial_quantization,
+                                        spatial_quantization),
+                                       dtype=tf.complex128)
 
-                    with tf.name_scope("subaperture_variables_" \
-                                       + str(aperture_num)):
-
-                        subap_zernike_coefficients = init_zernike_coefficients(
-                            num_zernike_indices=num_zernike_indices,
-                            zernike_init_type=zernike_init_type,
-                        )
-
-                        # TODO: Clean this mess up.
-                        # If a zernike debug is indicated...
-                        if zernike_debug:
-
-                            subap_zernike_coefficients = [
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                                1.0,
-                            ]
-
-                            # ...make just one coefficient non-zero per subap.
-                            for i in range(len(subap_zernike_coefficients)):
-                                if i != aperture_num:
-                                    subap_zernike_coefficients[i] = 0.0
-
-                        # Make TF Variables for each subaperture Zernike coeff.
-                        subap_zernike_coefficients_variables = list()
-                        for zernike_term_index in range(num_zernike_indices):
-
-                            # Construct the tf.Variable for this coefficient.
-                            variable_name = "a" + \
-                                            str(aperture_num) + \
-                                            "_z_j_" + \
-                                            str(zernike_term_index)
-                            # Get the tensor of Zernike coeffs for this subap.
-                            z = subap_zernike_coefficients[zernike_term_index]
-
-                            # Build a TF Variable around this tensor.
-                            real_var = tf.Variable(z,
-                                                   dtype=tf.float64,
-                                                   name=variable_name,
-                                                   trainable=dm_trainable)
-
-                            # Construct a complex tensor from real Variable.
-                            imag_var = tf.constant(0.0, dtype=tf.float64)
-                            variable = tf.complex(real_var, imag_var)
-                            # TODO: Ryan: Here's where I can set the phase scale to physical units. Should I?
-                            # Scale this variable.
-                            # variable = variable * phase_scale
-                            subap_zernike_coefficients_variables.append(variable)
-                        phase_variables.append(subap_zernike_coefficients_variables)
-
-                        # Add some instrumentation for ttp.
-                        # tips = list()
-                        # tilts = list()
-                        # pistons = list()
-                        # for (tip, tilt, piston) in phase_variables:
-                        #     tips.append(tip)
-                        #     tilts.append(tilt)
-                        #     pistons.append(piston)
-                        # with self.writer.as_default():
-                        #     tf.summary.histogram("tip", tips)
-                        #     tf.summary.histogram("tilt", tilts)
-                        #     tf.summary.histogram("piston", pistons)
-
-
-                # Construct the model of the pupil plane, conditioned on the Variables.
+                # Build the model of the pupil plane, using the Variables.
                 with tf.name_scope("pupil_plane_model"):
-
-                    # Initialize the pupil plane quantization grid.
-                    pupil_plane = tf.zeros((spatial_quantization,
-                                            spatial_quantization),
-                                           dtype=tf.complex128)
-
 
                     for aperture_num in range(num_apertures):
 
-                        subap_name = "subaperture_model_" + str(aperture_num)
+                        print("Building aperture number %d." % aperture_num)
 
-                        with tf.name_scope(subap_name):
+                        # Compute the subap centroid cartesian coordinates.
+                        # TODO: correct radius to place the edge, rather than the center, at radius
+                        rotation = (aperture_num + 1) / self.num_apertures
+                        mu_u = radius_meters * np.cos((2 * np.pi) * rotation)
+                        mu_v = radius_meters * np.sin((2 * np.pi) * rotation)
 
-                            print("Building aperture number %d." % aperture_num)
-                            rotation = (aperture_num + 1) / self.num_apertures
+                        # Build the variables for this subaperture.
+                        with tf.name_scope("subaperture_"+ str(aperture_num)):
 
-                            # TODO: correct radius to place the edge, rather than the center, at radius
-                            mu_u = radius_meters * np.cos((2 * np.pi) * rotation)
-                            mu_v = radius_meters * np.sin((2 * np.pi) * rotation)
+
+                            subap_zernike_coefficients = init_zernike_coefficients(
+                                num_zernike_indices=num_zernike_indices,
+                                zernike_init_type=zernike_init_type,
+                            )
+
+                            # TODO: Clean this mess up.
+                            # If a zernike debug is indicated...
+                            if zernike_debug:
+
+                                subap_zernike_coefficients = [
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                    1.0,
+                                ]
+
+                                # ...make just one coefficient non-zero per subap.
+                                for i in range(len(subap_zernike_coefficients)):
+                                    if i != aperture_num:
+                                        subap_zernike_coefficients[i] = 0.0
+
+                            subap_zernike_coefficients_variables = self._build_zernike_coefficient_variables(subap_zernike_coefficients)
+                            # Make TF Variables for each subaperture Zernike coeff.
+                            # subap_zernike_coefficients_variables = list()
+                            # for zernike_term_index in range(num_zernike_indices):
+                            #
+                            #     # Construct the tf.Variable for this coefficient.
+                            #     variable_name = "a" + \
+                            #                     str(aperture_num) + \
+                            #                     "_z_j_" + \
+                            #                     str(zernike_term_index)
+                            #     # Get the tensor of Zernike coeffs for this subap.
+                            #     z = subap_zernike_coefficients[zernike_term_index]
+                            #
+                            #     # Build a TF Variable around this tensor.
+                            #     real_var = tf.Variable(z,
+                            #                            dtype=tf.float64,
+                            #                            name=variable_name,
+                            #                            trainable=dm_trainable)
+                            #
+                            #     # Construct a complex tensor from real Variable.
+                            #     imag_var = tf.constant(0.0, dtype=tf.float64)
+                            #     variable = tf.complex(real_var, imag_var)
+                            #     subap_zernike_coefficients_variables.append(variable)
+
+                                # phase_variables.append(subap_zernike_coefficients_variables)
+
+                                # Add some instrumentation for ttp.
+                                # tips = list()
+                                # tilts = list()
+                                # pistons = list()
+                                # for (tip, tilt, piston) in phase_variables:
+                                #     tips.append(tip)
+                                #     tilts.append(tilt)
+                                #     pistons.append(piston)
+                                # with self.writer.as_default():
+                                #     tf.summary.histogram("tip", tips)
+                                #     tf.summary.histogram("tilt", tilts)
+                                #     tf.summary.histogram("piston", pistons)
 
                             # Select the phase variables for the aperture.
-                            zernike_coefficients = phase_variables[aperture_num]
+                            # zernike_coefficients = phase_variables[aperture_num]
+
+                            # TODO: Ryan: Here's where I can set the phase scale to physical units. Should I?
+                            # pupil_plane += self.phase_scale * zernike_aperture_function_2d(X,
+                            #                                                                Y,
+                            #                                                                mu_u,
+                            #                                                                mu_v,
+                            #                                                                radius_meters,
+                            #                                                                supaperture_radius_meters,
+                            #                                                                subap_zernike_coefficients_variables,
+                            #                                                                )
                             pupil_plane += zernike_aperture_function_2d(X,
                                                                         Y,
                                                                         mu_u,
                                                                         mu_v,
                                                                         radius_meters,
                                                                         supaperture_radius_meters,
-                                                                        zernike_coefficients,
+                                                                        subap_zernike_coefficients_variables,
                                                                         )
 
+                # This pupil plane is complete, now add it to the list.
                 self.pupil_planes.append(pupil_plane)
 
-        self.psfs = list()
-        self.otfs = list()
-        self.mtfs = list()
-        self.distributed_aperture_images = list()
+                # Basically the following is the loss function of the pupil plane.
+                # The pupil plan here can be thought of an estimator, parameterized
+                # by z values, of the true image. I think...
 
-        # Iterate over each pupil plane, one per exposure.
-        for pupil_plane in self.pupil_planes:
+                # Compute the PSF from the pupil plane.
+                with tf.name_scope("psf_model"):
 
-            # Basically the following is the loss function of the pupil plane.
-            # The pupil plan here can be thought of an estimator, parameterized
-            # by z values, of the true image. I think...
+                    psf = tf.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(pupil_plane)))) ** 2
+                    self.psfs.append(psf)
 
-            # Compute the PSF from the pupil plane.
-            with tf.name_scope("psf_model"):
+                # Compute the OTF, which is the Fourier transform of the PSF.
+                with tf.name_scope("otf_model"):
 
-                psf = tf.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(pupil_plane)))) ** 2
-                self.psfs.append(psf)
+                    otf = tf.signal.fft2d(tf.cast(psf, tf.complex128))
+                    self.otfs.append(otf)
 
-            # Compute the OTF, which is the Fourier transform of the PSF.
-            with tf.name_scope("otf_model"):
+                # Compute the mtf, which is the real component of the OTF.
+                with tf.name_scope("mtf_model"):
 
-                otf = tf.signal.fft2d(tf.cast(psf, tf.complex128))
-                self.otfs.append(otf)
+                    mtf = tf.math.abs(otf)
+                    self.mtfs.append(mtf)
 
-            # Compute the mtf, which is the real component of the OTF.
-            with tf.name_scope("mtf_model"):
+                with tf.name_scope("image_spectrum_model"):
 
-                mtf = tf.math.abs(otf)
-                self.mtfs.append(mtf)
+                    self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
 
-            with tf.name_scope("image_spectrum_model"):
+                distributed_aperture_image_plane = self._image_model(
+                    hadamard_image_formation=hadamard_image_formation,
+                    psf=psf,
+                    mtf=mtf)
 
-                self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
+                with tf.name_scope("sensor_model"):
 
-            distributed_aperture_image_plane = self._image_model(
-                hadamard_image_formation=hadamard_image_formation,
-                psf=psf,
-                mtf=mtf)
+                    # import tensorflow_probability as tfp
+                    # # TODO: Implement Gaussian and Poisson process noise.
+                    # # Apply the reparameterization trick kingma2014autovariational
+                    # gaussian_mean = 1e-5
+                    # gaussian_sample = tfp.distributions.Normal(loc=tf.zeros_like(distributed_aperture_image_plane),
+                    #                                            scale=tf.ones_like(distributed_aperture_image_plane))
+                    # gaussian_noise = distributed_aperture_image_plane + (gaussian_mean ** 2) * gaussian_sample
+                    #
+                    # # Apply the score-gradient trick williams1992simple
+                    # poisson_mean_arrival = 4 * 1e-5
+                    # rate = distributed_aperture_image_plane / poisson_mean_arrival
+                    # p = tfp.distributions.Poisson(rate=rate, validate_args=True)
+                    # sampled = tfp.monte_carlo.expectation(f=lambda z: z,
+                    #                                       samples=p.sample(1),
+                    #                                       log_prob=p.log_prob,
+                    #                                       use_reparameterization=False)
+                    # poisson_noise = sampled * poisson_mean_arrival
+                    #
+                    # distributed_aperture_image = gaussian_noise + poisson_noise
 
-            with tf.name_scope("sensor_model"):
+                    distributed_aperture_image = distributed_aperture_image_plane
 
-                # import tensorflow_probability as tfp
-                # # TODO: Implement Gaussian and Poisson process noise.
-                # # Apply the reparameterization trick kingma2014autovariational
-                # gaussian_mean = 1e-5
-                # gaussian_sample = tfp.distributions.Normal(loc=tf.zeros_like(distributed_aperture_image_plane),
-                #                                            scale=tf.ones_like(distributed_aperture_image_plane))
-                # gaussian_noise = distributed_aperture_image_plane + (gaussian_mean ** 2) * gaussian_sample
-                #
-                # # Apply the score-gradient trick williams1992simple
-                # poisson_mean_arrival = 4 * 1e-5
-                # rate = distributed_aperture_image_plane / poisson_mean_arrival
-                # p = tfp.distributions.Poisson(rate=rate, validate_args=True)
-                # sampled = tfp.monte_carlo.expectation(f=lambda z: z,
-                #                                       samples=p.sample(1),
-                #                                       log_prob=p.log_prob,
-                #                                       use_reparameterization=False)
-                # poisson_noise = sampled * poisson_mean_arrival
-                #
-                # distributed_aperture_image = gaussian_noise + poisson_noise
-
-                distributed_aperture_image = distributed_aperture_image_plane
-
-
+                # Finally, add the image from this pupil to the list.
                 self.distributed_aperture_images.append(distributed_aperture_image)
 
         # Now, construct a monolithic aperture of the same radius.
@@ -790,22 +815,22 @@ class DASIEModel(object):
                                                                            zernike_coefficients=[0.001],
                                                                            )
 
-                # Compute the PSF from the pupil plane.
-                with tf.name_scope("psf_model"):
-                    self.monolithic_psf = tf.math.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
+            # Compute the PSF from the pupil plane.
+            with tf.name_scope("psf_model"):
+                self.monolithic_psf = tf.math.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
 
-                # Compute the OTF, which is the Fourier transform of the PSF.
-                with tf.name_scope("otf_model"):
-                    self.monolithic_otf = tf.signal.fft2d(tf.cast(self.monolithic_psf, tf.complex128))
+            # Compute the OTF, which is the Fourier transform of the PSF.
+            with tf.name_scope("otf_model"):
+                self.monolithic_otf = tf.signal.fft2d(tf.cast(self.monolithic_psf, tf.complex128))
 
-                # Compute the mtf, which is the real component of the OTF.
-                with tf.name_scope("mtf_model"):
-                    self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
+            # Compute the mtf, which is the real component of the OTF.
+            with tf.name_scope("mtf_model"):
+                self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
 
 
-                self.monolithic_aperture_image = self._image_model(hadamard_image_formation=hadamard_image_formation,
-                                                                   psf=self.monolithic_psf,
-                                                                   mtf=self.monolithic_mtf)
+            self.monolithic_aperture_image = self._image_model(hadamard_image_formation=hadamard_image_formation,
+                                                               psf=self.monolithic_psf,
+                                                               mtf=self.monolithic_mtf)
 
         with tf.name_scope("distributed_aperture_image_recovery"):
 
