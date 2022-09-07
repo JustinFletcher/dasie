@@ -56,92 +56,9 @@ def cosine_similarity(u, v):
 
     return cos_sim
 
-
-def generalized_gaussian(X, mu, alpha, beta):
-    """
-    :param X: A 1d array onto which the gaussian wil be projected
-    :param mu: The mean of the gaussian.
-    :param alpha:
-    :param beta:
-    :return: A vector with shape matching X.
-    """
-
-    return (beta / (2 * alpha * math.gamma(1 / beta))) * np.exp(
-        -(np.abs(X - mu) / alpha) ** beta)
-
-
-def plane_2d(x, y, x_0, y_0, slope_x, slope_y, height):
-    return ((x - x_0) * slope_x) + ((y - y_0) * slope_y) + height
-
-@np.vectorize
-def generalized_gaussian_2d(u, v, mu_u, mu_v, alpha, beta):
-    scale_constant = (beta / (2 * alpha * tf.exp(tf.math.lgamma((1 / beta)))))
-
-    exponent = -(((u - mu_u) ** 2 + (v - mu_v) ** 2) / alpha) ** beta
-
-    value = tf.exp(exponent)
-
-    z = scale_constant * value
-
-    return z
-
-def tensor_generalized_gaussian_2d(T):
-
-    # Unpack the input tensor.
-    u, v, mu_u, mu_v, alpha, beta = T
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    u = tf.cast(u, dtype=tf.float64)
-    v = tf.cast(v, dtype=tf.float64)
-    mu_u = tf.cast(mu_u, dtype=tf.float64)
-    mu_v = tf.cast(mu_v, dtype=tf.float64)
-    alpha = tf.cast(alpha, dtype=tf.float64)
-    beta = tf.cast(beta, dtype=tf.float64)
-
-    scale_constant = beta / (2 * alpha * tf.exp(tf.math.lgamma((1 / beta))))
-    exponent = -(((u - mu_u) ** 2 + (v - mu_v) ** 2) / alpha) ** beta
-    value = tf.exp(exponent)
-    z = scale_constant * value
-
-    # TODO: This is horrible, but works around tf.math.lgamma not supporting real valued complex datatypes.
-    z = tf.cast(z, dtype=tf.complex128)
-
-    return z
-
-# @np.vectorize
 def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
     return r < radius
-
-
-def aperture_function_2d(X, Y, mu_u, mu_v, alpha, beta, tip, tilt, piston):
-
-    print("Starting aperture function.")
-    # generalized_gaussian_2d_sample = tf.vectorized_map(generalized_gaussian_2d, X, Y, mu_u, mu_v, alpha, beta)
-    T_mu_u = tf.ones_like(X) * mu_u
-    T_mu_v = tf.ones_like(X) * mu_v
-    T_alpha = tf.ones_like(X) * alpha
-    T_beta = tf.ones_like(X) * beta
-    T_X = tf.complex(tf.constant(X), tf.constant(0.0, dtype=tf.float64))
-    T_Y = tf.complex(tf.constant(Y), tf.constant(0.0, dtype=tf.float64))
-    T = (T_X, T_Y, T_mu_u, T_mu_v, T_alpha, T_beta)
-    generalized_gaussian_2d_sample = tf.vectorized_map(tensor_generalized_gaussian_2d, T)
-
-    print("getting plane.")
-    plane_2d_sample = plane_2d(T_X, T_Y, mu_u, mu_v, tip, tilt, piston)
-
-    # The piston tip and tilt are encoded as the phase-angle of pupil plane
-    print("generating phase angle field.")
-    plane_2d_field = tf.exp(plane_2d_sample)
-
-    print("multiplying.")
-    generalized_gaussian_2d_sample = generalized_gaussian_2d_sample
-    aperture_sample = plane_2d_field * generalized_gaussian_2d_sample
-
-    # print(aperture_sample)
-
-    print("Ending aperture function.")
-    return aperture_sample
 
 def zernike_0(T):
 
@@ -557,6 +474,7 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_model"):
 
+            # TODO: Split model to create intermediary placeholder.
             self.inputs, self.output_images = self._build_dasie_model(
                 inputs=dataset_batch,
                 spatial_quantization=spatial_quantization,
@@ -570,7 +488,14 @@ class DASIEModel(object):
                 hadamard_image_formation=hadamard_image_formation,
                 )
 
-            # self.trainable_variables = tf.compat.v1.trainable_variables()
+            # self.recovered_image = self._build_recovery_model(self.distributed_aperture_images,
+            #                                                   filter_scale=recovery_model_filter_scale)
+
+            # Compute the Loss.
+
+            # Compute the metrics.
+
+            # Build the optimization operation.
 
     def _image_model(self,
                      hadamard_image_formation=False,
@@ -615,6 +540,28 @@ class DASIEModel(object):
         # TODO: Migrate to constructor.
         self.num_exposures = num_exposures
 
+        # TODO: Externalize
+        zernike_init_type = "np.random.uniform"
+
+        # TODO: Externalize.
+        lock_dm_values = False
+        if lock_dm_values:
+            dm_trainable = False
+        else:
+            dm_trainable = True
+
+        # Construct placeholders for inputs.
+        # TODO: Refactor "perfect_image" to "object_batch" everywhere.
+        batch_shape = (self.image_x_scale, self.image_y_scale)
+        if inputs is not None:
+            self.perfect_image = inputs
+        else:
+            self.perfect_image = tf.compat.v1.placeholder(tf.float64,
+                                                          shape=batch_shape,
+                                                          name="object_batch")
+
+        # TODO: Modularize physics stuff.
+        # Start: physics stuff.
         # Compute the pupil extent: 4.848 microradians / arcsec
         # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
         # pupil_extent = [count] [micrometers] / [microradian]
@@ -631,15 +578,6 @@ class DASIEModel(object):
         self.pupil_meters_per_pixel = radius_meters / spatial_quantization
         self.subaperture_size_pixels = int(supaperture_radius_meters // self.pupil_meters_per_pixel)
 
-        # Construct placeholders for inputs.
-        # batch_shape = (spatial_quantization, spatial_quantization)
-        batch_shape = (self.image_x_scale, self.image_y_scale)
-        if inputs is not None:
-            self.perfect_image = inputs
-        else:
-            self.perfect_image = tf.compat.v1.placeholder(tf.float64,
-                                                          shape=batch_shape,
-                                                          name="perfect_image_batch")
 
         # Build the simulation mesh grid.
         # TODO: Verify these physical coordinates; clarify pupil vs radius.
@@ -648,13 +586,8 @@ class DASIEModel(object):
         self.pupil_dimension_x = x
         self.pupil_dimension_y = y
         X, Y = np.meshgrid(x, y)
+        # End: Physics stuff.
 
-        # TODO: Externalize.
-        lock_dm_values = False
-        if lock_dm_values:
-            dm_trainable = False
-        else:
-            dm_trainable = True
 
         # For each exposure, build the pupil function for that exposure.
         self.pupil_planes = list()
@@ -668,14 +601,12 @@ class DASIEModel(object):
                     with tf.name_scope("subaperture_variables_" \
                                        + str(aperture_num)):
 
-
-                        # TODO: Externalize
-                        zernike_init_type = "np.random.uniform"
                         subap_zernike_coefficients = init_zernike_coefficients(
                             num_zernike_indices=num_zernike_indices,
-                            zernike_init_type=zernike_init_type
+                            zernike_init_type=zernike_init_type,
                         )
 
+                        # TODO: Clean this mess up.
                         # If a zernike debug is indicated...
                         if zernike_debug:
 
@@ -702,15 +633,20 @@ class DASIEModel(object):
                                 if i != aperture_num:
                                     subap_zernike_coefficients[i] = 0.0
 
-                        # Make TF Variables for each subaperture Zernike index.
+                        # Make TF Variables for each subaperture Zernike coeff.
                         subap_zernike_coefficients_variables = list()
-                        zernike_term_indices = range(num_zernike_indices)
-                        for zernike_term_index in zernike_term_indices:
+                        for zernike_term_index in range(num_zernike_indices):
 
                             # Construct the tf.Variable for this coefficient.
-                            variable_name = "a" + str(aperture_num) + \
-                                            "_z_j_" + str(zernike_term_index)
-                            real_var = tf.Variable(subap_zernike_coefficients[zernike_term_index],
+                            variable_name = "a" + \
+                                            str(aperture_num) + \
+                                            "_z_j_" + \
+                                            str(zernike_term_index)
+                            # Get the tensor of Zernike coeffs for this subap.
+                            z = subap_zernike_coefficients[zernike_term_index]
+
+                            # Build a TF Variable around this tensor.
+                            real_var = tf.Variable(z,
                                                    dtype=tf.float64,
                                                    name=variable_name,
                                                    trainable=dm_trainable)
@@ -718,27 +654,27 @@ class DASIEModel(object):
                             # Construct a complex tensor from real Variable.
                             imag_var = tf.constant(0.0, dtype=tf.float64)
                             variable = tf.complex(real_var, imag_var)
+                            # TODO: Ryan: Here's where I can set the phase scale to physical units. Should I?
                             # Scale this variable.
                             # variable = variable * phase_scale
                             subap_zernike_coefficients_variables.append(variable)
                         phase_variables.append(subap_zernike_coefficients_variables)
 
-                # Add some instrumentation for ttp.
-                # tips = list()
-                # tilts = list()
-                # pistons = list()
-                # for (tip, tilt, piston) in phase_variables:
-                #     tips.append(tip)
-                #     tilts.append(tilt)
-                #     pistons.append(piston)
-                # with self.writer.as_default():
-                #     tf.summary.histogram("tip", tips)
-                #     tf.summary.histogram("tilt", tilts)
-                #     tf.summary.histogram("piston", pistons)
+                        # Add some instrumentation for ttp.
+                        # tips = list()
+                        # tilts = list()
+                        # pistons = list()
+                        # for (tip, tilt, piston) in phase_variables:
+                        #     tips.append(tip)
+                        #     tilts.append(tilt)
+                        #     pistons.append(piston)
+                        # with self.writer.as_default():
+                        #     tf.summary.histogram("tip", tips)
+                        #     tf.summary.histogram("tilt", tilts)
+                        #     tf.summary.histogram("piston", pistons)
 
 
                 # Construct the model of the pupil plane, conditioned on the Variables.
-
                 with tf.name_scope("pupil_plane_model"):
 
                     # Initialize the pupil plane quantization grid.
@@ -807,26 +743,6 @@ class DASIEModel(object):
 
                 self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
 
-            # with tf.name_scope("image_plane_model"):
-                # if hadamard_image_formation:
-                #
-                #     distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
-                #     distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
-                # else:
-                #     distributed_aperture_image_plane = tf.nn.conv2d(
-                #         # tf.squeeze(self.perfect_image, axis=-1),
-                #         self.perfect_image,
-                #         tf.expand_dims(tf.expand_dims(psf, -1), -1),
-                #         strides=[1, 1, 1, 1],
-                #         padding='SAME',
-                #         data_format='NHWC'
-                #     )
-                #     distributed_aperture_image_plane = tf.squeeze(distributed_aperture_image_plane, axis=-1)
-                #
-                # print(distributed_aperture_image_plane)
-                # # TODO Ryan: Is this smart?
-                # distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
-
             distributed_aperture_image_plane = self._image_model(
                 hadamard_image_formation=hadamard_image_formation,
                 psf=psf,
@@ -864,15 +780,6 @@ class DASIEModel(object):
 
             with tf.name_scope("pupil_plane"):
 
-                # self.monolithic_pupil_plane = aperture_function_2d(X,
-                #                                                    Y,
-                #                                                    0.0,
-                #                                                    0.0,
-                #                                                    monolithic_alpha,
-                #                                                    beta,
-                #                                                    tip=0.0,
-                #                                                    tilt=0.0,
-                #                                                    piston=0.001)
 
                 self.monolithic_pupil_plane = zernike_aperture_function_2d(X,
                                                                            Y,
@@ -899,24 +806,6 @@ class DASIEModel(object):
                 self.monolithic_aperture_image = self._image_model(hadamard_image_formation=hadamard_image_formation,
                                                                    psf=self.monolithic_psf,
                                                                    mtf=self.monolithic_mtf)
-
-                # with tf.name_scope("monolithic_image_plane_model"):
-
-                    # if hadamard_image_formation:
-                    #     monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
-                    #     monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
-                    # else:
-                    #     monolithic_aperture_image = tf.nn.conv2d(
-                    #         # tf.squeeze(self.perfect_image, axis=-1),
-                    #         self.perfect_image,
-                    #         tf.expand_dims(tf.expand_dims(self.monolithic_psf, -1), -1),
-                    #         strides=[1, 1, 1, 1],
-                    #         padding='SAME',
-                    #         data_format='NHWC'
-                    #     )
-                    #     monolithic_aperture_image = tf.squeeze(monolithic_aperture_image, axis=-1)
-                    #
-                    # self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
 
         with tf.name_scope("distributed_aperture_image_recovery"):
 
