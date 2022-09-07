@@ -1,6 +1,6 @@
 """
 This is a generic TFRecords creator, meant to replace a proliferation of
-domain specific TFRecords builders in the MISS code base. The major advantage of
+domain specific TFRecords builders in the MISS code base. The advantage of
 this particular method is the use of a input JSON so that the user can specify
 arbitrarily complex mappings and partitionings between input and output
 directories. Another major advantage is using a recursive search for file
@@ -128,9 +128,50 @@ def make_spectranet_tf_example(spectra_path,
 
     return example
 
+def unannotated_jpg_tf_example(spectra_path,
+                               annotation_path,
+                               object_id=0,
+                               num_classes=2):
+    """
+    Mapping from data paths and annotation paths to a TFExample requires a
+    unique function for each problem domain. This function accomplishes that
+    mapping for the spectranet problem domain.
+
+    :param spectra_path: path to the spectra (i.e. data) .fits file.
+    :param annotation_path: path to the annotation .json file.
+    :param object_id: ID of this object (from 0 to num_classes - 1 inclusive)
+    :param num_classes: number of classes, used in 1-hot encoding class IDs
+    :return: a TFExample corresponding to the provided data and annotation paths
+    """
+    annotation_path = os.path.abspath(annotation_path)
+    _, obj_filename = os.path.split(spectra_path)
+
+    # Read in the files for this example
+    image = read_fits(spectra_path)
+    annotations = load_from_json(annotation_path)["data"]
+    img_height, img_width = image.shape
+
+    # Create the features for this example
+    features = {
+        "images_raw": _bytes_feature([image.tostring()]),
+        "class_name": _bytes_feature([annotations['observations'][obj_filename]['class_name'].encode()]),
+        "class_id": _int64_feature([object_id]),
+        "height": _int64_feature([img_height]),
+        "width": _int64_feature([img_width]),
+        "num_classes": _int64_feature([num_classes]),
+        "filename": _bytes_feature([spectra_path.encode()]),
+        "annotation_path": _bytes_feature([annotation_path.encode()]),
+    }
+
+    # Create an example protocol buffer
+    example = tf.train.Example(features=tf.train.Features(feature=features))
+
+    return example
+
 
 tfexample_creation_functions = {
-    "spectranet": make_spectranet_tf_example
+    "spectranet": make_spectranet_tf_example,
+    "unannotated_jpg_tf_example": unannotated_jpg_tf_example
 }
 
 

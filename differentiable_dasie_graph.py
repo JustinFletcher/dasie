@@ -574,6 +574,32 @@ class DASIEModel(object):
 
             # self.trainable_variables = tf.compat.v1.trainable_variables()
 
+    def _image_model(self,
+                     hadamard_image_formation=False,
+                     mtf=None,
+                     psf=None):
+
+        with tf.name_scope("image_plane_model"):
+
+            if hadamard_image_formation:
+                complex_mtf = tf.cast(mtf, dtype=tf.complex128)
+                image_spectrum = self.perfect_image_spectrum * complex_mtf
+                image = tf.abs(tf.signal.fft2d(image_spectrum))
+            else:
+                image = tf.nn.conv2d(
+                    # tf.squeeze(self.perfect_image, axis=-1),
+                    self.perfect_image,
+                    tf.expand_dims(tf.expand_dims(psf, -1), -1),
+                    strides=[1, 1, 1, 1],
+                    padding='SAME',
+                    data_format='NHWC'
+                )
+                image = tf.squeeze(image, axis=-1)
+
+            image = image / tf.reduce_max(image)
+
+        return image
+
     def _build_dasie_model(self,
                            inputs=None,
                            num_apertures=15,
@@ -582,8 +608,6 @@ class DASIEModel(object):
                            supaperture_radius_meters=None,
                            field_of_view_arcsec=4.0,
                            spatial_quantization=256,
-                           monolithic_alpha=0.1,
-                           beta=10.0,
                            filter_wavelength_micron=1.0,
                            recovery_model_filter_scale=16,
                            num_zernike_indices=1,
@@ -715,7 +739,6 @@ class DASIEModel(object):
                 #     tf.summary.histogram("piston", pistons)
 
 
-
                 # Construct the model of the pupil plane, conditioned on the Variables.
 
                 with tf.name_scope("pupil_plane_model"):
@@ -786,41 +809,62 @@ class DASIEModel(object):
 
                 self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
 
-            with tf.name_scope("image_plane_model"):
+            # with tf.name_scope("image_plane_model"):
+                # if hadamard_image_formation:
+                #
+                #     distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
+                #     distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
+                # else:
+                #     distributed_aperture_image_plane = tf.nn.conv2d(
+                #         # tf.squeeze(self.perfect_image, axis=-1),
+                #         self.perfect_image,
+                #         tf.expand_dims(tf.expand_dims(psf, -1), -1),
+                #         strides=[1, 1, 1, 1],
+                #         padding='SAME',
+                #         data_format='NHWC'
+                #     )
+                #     distributed_aperture_image_plane = tf.squeeze(distributed_aperture_image_plane, axis=-1)
+                #
+                # print(distributed_aperture_image_plane)
+                # # TODO Ryan: Is this smart?
+                # distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
 
-                if hadamard_image_formation:
-
-                    distributed_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(mtf, dtype=tf.complex128)
-                    distributed_aperture_image_plane = tf.abs(tf.signal.fft2d(distributed_aperture_image_spectrum))
-                else:
-                    distributed_aperture_image_plane = tf.nn.conv2d(
-                        # tf.squeeze(self.perfect_image, axis=-1),
-                        self.perfect_image,
-                        tf.expand_dims(tf.expand_dims(psf, -1), -1),
-                        strides=[1, 1, 1, 1],
-                        padding='SAME',
-                        data_format='NHWC'
-                    )
-                    distributed_aperture_image_plane = tf.squeeze(distributed_aperture_image_plane, axis=-1)
-
-                print(distributed_aperture_image_plane)
-                distributed_aperture_image_plane = distributed_aperture_image_plane / tf.reduce_max(distributed_aperture_image_plane)
-
-
-
-
+            distributed_aperture_image_plane = self._image_model(
+                hadamard_image_formation=hadamard_image_formation,
+                psf=psf,
+                mtf=mtf)
 
             with tf.name_scope("sensor_model"):
 
-                # TODO: Implement Gaussian and Poisson process noise.
+                # import tensorflow_probability as tfp
+                # # TODO: Implement Gaussian and Poisson process noise.
+                # # Apply the reparameterization trick kingma2014autovariational
+                # gaussian_mean = 1e-5
+                # gaussian_sample = tfp.distributions.Normal(loc=tf.zeros_like(distributed_aperture_image_plane),
+                #                                            scale=tf.ones_like(distributed_aperture_image_plane))
+                # gaussian_noise = distributed_aperture_image_plane + (gaussian_mean ** 2) * gaussian_sample
+                #
+                # # Apply the score-gradient trick williams1992simple
+                # poisson_mean_arrival = 4 * 1e-5
+                # rate = distributed_aperture_image_plane / poisson_mean_arrival
+                # p = tfp.distributions.Poisson(rate=rate, validate_args=True)
+                # sampled = tfp.monte_carlo.expectation(f=lambda z: z,
+                #                                       samples=p.sample(1),
+                #                                       log_prob=p.log_prob,
+                #                                       use_reparameterization=False)
+                # poisson_noise = sampled * poisson_mean_arrival
+                #
+                # distributed_aperture_image = gaussian_noise + poisson_noise
+
                 distributed_aperture_image = distributed_aperture_image_plane
+
 
                 self.distributed_aperture_images.append(distributed_aperture_image)
 
         # Now, construct a monolithic aperture of the same radius.
         with tf.name_scope("monolithic_aperture"):
 
-            with tf.name_scope("monolithic_aperture_pupil_plane"):
+            with tf.name_scope("pupil_plane"):
 
                 # self.monolithic_pupil_plane = aperture_function_2d(X,
                 #                                                    Y,
@@ -842,34 +886,39 @@ class DASIEModel(object):
                                                                            )
 
                 # Compute the PSF from the pupil plane.
-                with tf.name_scope("monolithic_psf_model"):
+                with tf.name_scope("psf_model"):
                     self.monolithic_psf = tf.math.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
 
                 # Compute the OTF, which is the Fourier transform of the PSF.
-                with tf.name_scope("monolithic_otf_model"):
+                with tf.name_scope("otf_model"):
                     self.monolithic_otf = tf.signal.fft2d(tf.cast(self.monolithic_psf, tf.complex128))
 
                 # Compute the mtf, which is the real component of the OTF.
-                with tf.name_scope("monolithic_mtf_model"):
+                with tf.name_scope("mtf_model"):
                     self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
 
-                with tf.name_scope("monolithic_image_plane_model"):
 
-                    if hadamard_image_formation:
-                        monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
-                        monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
-                    else:
-                        monolithic_aperture_image = tf.nn.conv2d(
-                            # tf.squeeze(self.perfect_image, axis=-1),
-                            self.perfect_image,
-                            tf.expand_dims(tf.expand_dims(self.monolithic_psf, -1), -1),
-                            strides=[1, 1, 1, 1],
-                            padding='SAME',
-                            data_format='NHWC'
-                        )
-                        monolithic_aperture_image = tf.squeeze(monolithic_aperture_image, axis=-1)
+                self.monolithic_aperture_image = self._image_model(hadamard_image_formation=hadamard_image_formation,
+                                                                   psf=self.monolithic_psf,
+                                                                   mtf=self.monolithic_mtf)
 
-                    self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
+                # with tf.name_scope("monolithic_image_plane_model"):
+
+                    # if hadamard_image_formation:
+                    #     monolithic_aperture_image_spectrum = self.perfect_image_spectrum * tf.cast(self.monolithic_mtf, dtype=tf.complex128)
+                    #     monolithic_aperture_image = tf.abs(tf.signal.fft2d(monolithic_aperture_image_spectrum))
+                    # else:
+                    #     monolithic_aperture_image = tf.nn.conv2d(
+                    #         # tf.squeeze(self.perfect_image, axis=-1),
+                    #         self.perfect_image,
+                    #         tf.expand_dims(tf.expand_dims(self.monolithic_psf, -1), -1),
+                    #         strides=[1, 1, 1, 1],
+                    #         padding='SAME',
+                    #         data_format='NHWC'
+                    #     )
+                    #     monolithic_aperture_image = tf.squeeze(monolithic_aperture_image, axis=-1)
+                    #
+                    # self.monolithic_aperture_image = monolithic_aperture_image / tf.reduce_max(monolithic_aperture_image)
 
         with tf.name_scope("distributed_aperture_image_recovery"):
 
@@ -1940,7 +1989,8 @@ def speedplus_parse_function(example_proto):
 def main(flags):
 
 
-    beta = 32.0
+    # beta = 32.0
+    # TODO: Externalize
     subaperture_spacing_meters = 0.1
 
     # Set the GPUs we want the script to use/see
@@ -1957,12 +2007,12 @@ def main(flags):
     # Compute the scaling factor from meters to alpha for a GG PDF over meters.
     # alpha = np.log(-np.log(epsilon)) / np.log(beta) * ap_radius_meters
     # alpha = alpha / (flags.num_subapertures)
-    epsilon = 1e-15
+    # epsilon = 1e-15
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
     subap_radius_meters = ((ap_radius_meters * np.sin(np.pi / flags.num_subapertures)) - (subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
-    meters_to_alpha = 1 /  (2 * (np.log(-np.log(epsilon)) / np.log(beta)))
-    subap_alpha = subap_radius_meters * meters_to_alpha / 2
-    monolithic_alpha = flags.aperture_diameter_meters * meters_to_alpha * 2
+    # meters_to_alpha = 1 /  (2 * (np.log(-np.log(epsilon)) / np.log(beta)))
+    # subap_alpha = subap_radius_meters * meters_to_alpha / 2
+    # monolithic_alpha = flags.aperture_diameter_meters * meters_to_alpha * 2
 
 
     # Map our dataset name to relative locations and parse functions.
@@ -2096,8 +2146,6 @@ def main(flags):
                                  recovery_model_filter_scale=flags.recovery_model_filter_scale,
                                  loss_name=flags.loss_name,
                                  writer=writer,
-                                 monolithic_alpha=monolithic_alpha,
-                                 beta=beta,
                                  num_zernike_indices=flags.num_zernike_indices,
                                  hadamard_image_formation=flags.hadamard_image_formation,
                                  zernike_debug=flags.zernike_debug)
@@ -2229,6 +2277,10 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_name', type=str,
                         default="speedplus",
                         help='Path to the train data TFRecords directory.')
+
+    parser.add_argument('--object_plane_scale', type=float,
+                        default=1.0,
+                        help='The angular scale/pixel of the object plane.')
 
     parser.add_argument('--recovery_model_filter_scale',
                         type=int,

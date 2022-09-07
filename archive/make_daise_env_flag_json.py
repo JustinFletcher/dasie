@@ -21,11 +21,16 @@ from miss_utilities.utils import save_as_json
 
 def main(flags):
 
+    env_dict = dict()
+
+
+    env_dict["env_kwargs"] = flags.__dict__
+    env_dict["env_name"] = 'Dasie-v0'
+
     print("Saving: \n")
     print(flags.__dict__)
     print("To: %s" % flags.json_file_path)
-
-    save_as_json(flags.json_file_path, flags.__dict__)
+    save_as_json(flags.json_file_path, env_dict)
 
 
 
@@ -38,7 +43,7 @@ if __name__ == '__main__':
                         default=".\\dasie.json",
                         help='Path and name of the DASIE JSON.')
 
-    ############################ DASIE FLAGS ##################################
+    ############################ DASIE KWARGS #################################
     parser.add_argument('--extended_object_image_file', type=str,
                         default=None,
                         help='Filename of image to convolve PSF with (if none, PSF returned)')
