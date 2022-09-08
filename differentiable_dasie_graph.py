@@ -524,7 +524,8 @@ class DASIEModel(object):
         return image
 
     def _build_zernike_coefficient_variables(self,
-                                             subap_zernike_coefficients):
+                                             subap_zernike_coefficients,
+                                             trainable=True):
 
         # Make TF Variables for each subaperture Zernike coeff.
         subap_zernike_coefficients_variables = list()
@@ -540,7 +541,7 @@ class DASIEModel(object):
             real_var = tf.Variable(subap_zernike_coefficient,
                                    dtype=tf.float64,
                                    name=variable_name,
-                                   trainable=dm_trainable)
+                                   trainable=trainable)
 
             # Construct a complex tensor from real Variable.
             imag_constant = tf.constant(0.0, dtype=tf.float64)
@@ -679,7 +680,8 @@ class DASIEModel(object):
                                     if i != aperture_num:
                                         subap_zernike_coefficients[i] = 0.0
 
-                            subap_zernike_coefficients_variables = self._build_zernike_coefficient_variables(subap_zernike_coefficients)
+                            subap_zernike_coefficients_variables = self._build_zernike_coefficient_variables(subap_zernike_coefficients,
+                                                                                                             trainable=dm_trainable)
                             # Make TF Variables for each subaperture Zernike coeff.
                             # subap_zernike_coefficients_variables = list()
                             # for zernike_term_index in range(num_zernike_indices):
