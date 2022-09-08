@@ -351,20 +351,45 @@ def select_zernike_function(term_number):
     return function_name
 
 def init_zernike_coefficients(num_zernike_indices=1,
-                              zernike_init_type="constant"):
-    zernike_coefficients = list()
+                              zernike_init_type="constant",
+                              zernike_debug=False,
+                              debug_nonzero_coefficient=None):
 
-    for _ in range(num_zernike_indices):
-        if zernike_init_type == "constant":
-            zernike_coefficient = 1.0
-        elif zernike_init_type == "np.random.uniform":
-            zernike_coefficient = np.random.uniform(0.0, 1.0)
-        else:
-            raise ValueError("You provided --zernike_init_type of %s, but \
-                             only 'constant' and 'np.random.uniform' are \
-                             supported")
+    # If a zernike debug is indicated...
+    if zernike_debug:
 
-        zernike_coefficients.append(zernike_coefficient)
+        # ...make just one coefficient non-zero per subap.
+        zernike_coefficients = [1.0] * num_zernike_indices
+
+        for i in range(len(zernike_coefficients)):
+
+            if i != debug_nonzero_coefficient:
+
+                zernike_coefficients[i] = 0.0
+
+    # If we're not debugging, then initialize the coefficients as specified.
+    else:
+
+        zernike_coefficients = list()
+
+        for _ in range(num_zernike_indices):
+
+            if zernike_init_type == "constant":
+
+                zernike_coefficient = 1.0
+
+            elif zernike_init_type == "np.random.uniform":
+
+                zernike_coefficient = np.random.uniform(0.0, 1.0)
+
+            else:
+
+                raise ValueError("You provided --zernike_init_type of %s, but \
+                                 only 'constant' and 'np.random.uniform' are \
+                                 supported")
+
+            zernike_coefficients.append(zernike_coefficient)
+
     return zernike_coefficients
 
 
@@ -437,8 +462,6 @@ class DASIEModel(object):
                  image_y_scale=256,
                  supaperture_radius_meters=None,
                  num_exposures=1,
-                 monolithic_alpha=0.1,
-                 beta=10.0,
                  recovery_model_filter_scale=16,
                  diameter_meters=2.5,
                  num_zernike_indices=1,
@@ -524,21 +547,19 @@ class DASIEModel(object):
         return image
 
     def _build_zernike_coefficient_variables(self,
-                                             subap_zernike_coefficients,
+                                             zernike_coefficients,
                                              trainable=True):
 
         # Make TF Variables for each subaperture Zernike coeff.
-        subap_zernike_coefficients_variables = list()
+        zernike_coefficients_variables = list()
 
-        for i, subap_zernike_coefficient in enumerate(subap_zernike_coefficients):
+        for (i, zernike_coefficient) in enumerate(zernike_coefficients):
 
             # Construct the tf.Variable for this coefficient.
             variable_name = "zernike_coefficient_" + str(i)
-            # Get the tensor of Zernike coeffs for this subap.
-            # z = subap_zernike_coefficients[zernike_term_index]
 
             # Build a TF Variable around this tensor.
-            real_var = tf.Variable(subap_zernike_coefficient,
+            real_var = tf.Variable(zernike_coefficient,
                                    dtype=tf.float64,
                                    name=variable_name,
                                    trainable=trainable)
@@ -548,9 +569,9 @@ class DASIEModel(object):
             variable = tf.complex(real_var, imag_constant)
 
             # Append the final variable to the list.
-            subap_zernike_coefficients_variables.append(variable)
+            zernike_coefficients_variables.append(variable)
 
-        return(subap_zernike_coefficients_variables)
+        return(zernike_coefficients_variables)
 
     def _build_dasie_model(self,
                            inputs=None,
@@ -647,82 +668,18 @@ class DASIEModel(object):
                         # Build the variables for this subaperture.
                         with tf.name_scope("subaperture_"+ str(aperture_num)):
 
-
-                            subap_zernike_coefficients = init_zernike_coefficients(
+                            # Initialize the coefficients for this subaperture.
+                            subap_zernike_coeffs = init_zernike_coefficients(
                                 num_zernike_indices=num_zernike_indices,
                                 zernike_init_type=zernike_init_type,
+                                zernike_debug=zernike_debug,
+                                debug_nonzero_coefficient=aperture_num
                             )
 
-                            # TODO: Clean this mess up.
-                            # If a zernike debug is indicated...
-                            if zernike_debug:
-
-                                subap_zernike_coefficients = [
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                    1.0,
-                                ]
-
-                                # ...make just one coefficient non-zero per subap.
-                                for i in range(len(subap_zernike_coefficients)):
-                                    if i != aperture_num:
-                                        subap_zernike_coefficients[i] = 0.0
-
-                            subap_zernike_coefficients_variables = self._build_zernike_coefficient_variables(subap_zernike_coefficients,
-                                                                                                             trainable=dm_trainable)
-                            # Make TF Variables for each subaperture Zernike coeff.
-                            # subap_zernike_coefficients_variables = list()
-                            # for zernike_term_index in range(num_zernike_indices):
-                            #
-                            #     # Construct the tf.Variable for this coefficient.
-                            #     variable_name = "a" + \
-                            #                     str(aperture_num) + \
-                            #                     "_z_j_" + \
-                            #                     str(zernike_term_index)
-                            #     # Get the tensor of Zernike coeffs for this subap.
-                            #     z = subap_zernike_coefficients[zernike_term_index]
-                            #
-                            #     # Build a TF Variable around this tensor.
-                            #     real_var = tf.Variable(z,
-                            #                            dtype=tf.float64,
-                            #                            name=variable_name,
-                            #                            trainable=dm_trainable)
-                            #
-                            #     # Construct a complex tensor from real Variable.
-                            #     imag_var = tf.constant(0.0, dtype=tf.float64)
-                            #     variable = tf.complex(real_var, imag_var)
-                            #     subap_zernike_coefficients_variables.append(variable)
-
-                                # phase_variables.append(subap_zernike_coefficients_variables)
-
-                                # Add some instrumentation for ttp.
-                                # tips = list()
-                                # tilts = list()
-                                # pistons = list()
-                                # for (tip, tilt, piston) in phase_variables:
-                                #     tips.append(tip)
-                                #     tilts.append(tilt)
-                                #     pistons.append(piston)
-                                # with self.writer.as_default():
-                                #     tf.summary.histogram("tip", tips)
-                                #     tf.summary.histogram("tilt", tilts)
-                                #     tf.summary.histogram("piston", pistons)
-
-                            # Select the phase variables for the aperture.
-                            # zernike_coefficients = phase_variables[aperture_num]
-
+                            # Build TF Variables around the coefficients.
+                            subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(subap_zernike_coeffs,
+                                                                                                        trainable=dm_trainable)
+                            # Render this subaperture on the pupil plane grid.
                             # TODO: Ryan: Here's where I can set the phase scale to physical units. Should I?
                             # pupil_plane += self.phase_scale * zernike_aperture_function_2d(X,
                             #                                                                Y,
@@ -732,21 +689,19 @@ class DASIEModel(object):
                             #                                                                supaperture_radius_meters,
                             #                                                                subap_zernike_coefficients_variables,
                             #                                                                )
+
+
                             pupil_plane += zernike_aperture_function_2d(X,
                                                                         Y,
                                                                         mu_u,
                                                                         mu_v,
                                                                         radius_meters,
                                                                         supaperture_radius_meters,
-                                                                        subap_zernike_coefficients_variables,
+                                                                        subap_zernike_coefficients_vars,
                                                                         )
 
                 # This pupil plane is complete, now add it to the list.
                 self.pupil_planes.append(pupil_plane)
-
-                # Basically the following is the loss function of the pupil plane.
-                # The pupil plan here can be thought of an estimator, parameterized
-                # by z values, of the true image. I think...
 
                 # Compute the PSF from the pupil plane.
                 with tf.name_scope("psf_model"):
@@ -864,6 +819,19 @@ class DASIEModel(object):
             self.da_mse_mono_mse_ratio = self.distributed_aperture_image_mse / self.monolithic_aperture_image_mse
             # TODO: Implement SSIM
             # TODO: Implement PSNR
+
+            # Add some instrumentation for ttp.
+            # tips = list()
+            # tilts = list()
+            # pistons = list()
+            # for (tip, tilt, piston) in phase_variables:
+            #     tips.append(tip)
+            #     tilts.append(tilt)
+            #     pistons.append(piston)
+            # with self.writer.as_default():
+            #     tf.summary.histogram("tip", tips)
+            #     tf.summary.histogram("tilt", tilts)
+            #     tf.summary.histogram("piston", pistons)
 
 
         # I wonder if this works...
