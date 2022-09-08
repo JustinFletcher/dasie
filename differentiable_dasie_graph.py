@@ -31,6 +31,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
@@ -478,6 +479,8 @@ class DASIEModel(object):
         self.sess = sess
         self.writer = writer
         self.loss_name = loss_name
+        self.num_exposures = num_exposures
+
 
         train_iterator = train_dataset.get_iterator()
         self.train_iterator_handle = sess.run(train_iterator.string_handle())
@@ -546,6 +549,26 @@ class DASIEModel(object):
 
         return image
 
+    def _build_geometric_optics(self, pupil_plane):
+
+        # Compute the PSF from the pupil plane.
+        with tf.name_scope("psf_model"):
+            shifted_pupil_plane = tf.signal.ifftshift(pupil_plane)
+            shifted_pupil_spectrum = tf.signal.fft2d(shifted_pupil_plane)
+            psf = tf.abs(tf.signal.fftshift(shifted_pupil_spectrum)) ** 2
+
+        # Compute the OTF, which is the Fourier transform of the PSF.
+        with tf.name_scope("otf_model"):
+
+            otf = tf.signal.fft2d(tf.cast(psf, tf.complex128))
+
+        # Compute the mtf, which is the real component of the OTF.
+        with tf.name_scope("mtf_model"):
+
+            mtf = tf.math.abs(otf)
+
+        return (psf, otf, mtf)
+
     def _build_zernike_coefficient_variables(self,
                                              zernike_coefficients,
                                              trainable=True):
@@ -573,6 +596,31 @@ class DASIEModel(object):
 
         return(zernike_coefficients_variables)
 
+    def _apply_noise(self,
+                     image,
+                     gaussian_mean=1e-5,
+                     poisson_mean_arrival=4e-5):
+
+        # TODO: Implement Gaussian and Poisson process noise.
+        # Apply the reparameterization trick kingma2014autovariational
+        gaussian_sample = tfp.distributions.Normal(loc=tf.zeros_like(image),
+                                                   scale=tf.ones_like(image))
+        gaussian_noise = image + (gaussian_mean ** 2) * gaussian_sample
+
+        # Apply the score-gradient trick williams1992simple
+
+        rate = image / poisson_mean_arrival
+        p = tfp.distributions.Poisson(rate=rate, validate_args=True)
+        sampled = tfp.monte_carlo.expectation(f=lambda z: z,
+                                              samples=p.sample(1),
+                                              log_prob=p.log_prob,
+                                              use_reparameterization=False)
+        poisson_noise = sampled * poisson_mean_arrival
+
+        noisy_image = gaussian_noise + poisson_noise
+
+        return noisy_image
+
     def _build_dasie_model(self,
                            inputs=None,
                            num_apertures=15,
@@ -587,9 +635,6 @@ class DASIEModel(object):
                            zernike_debug=False,
                            hadamard_image_formation=True):
 
-        # TODO: Migrate to constructor.
-        self.num_exposures = num_exposures
-
         # TODO: Externalize
         zernike_init_type = "np.random.uniform"
 
@@ -600,7 +645,7 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
-        # Construct placeholders for inputs.
+        # Build object plane image batch tensor objects.
         # TODO: Refactor "perfect_image" to "object_batch" everywhere.
         batch_shape = (self.image_x_scale, self.image_y_scale)
         if inputs is not None:
@@ -609,6 +654,12 @@ class DASIEModel(object):
             self.perfect_image = tf.compat.v1.placeholder(tf.float64,
                                                           shape=batch_shape,
                                                           name="object_batch")
+
+        with tf.name_scope("image_spectrum_model"):
+
+            self.perfect_image_spectrum = tf.signal.fft2d(
+                tf.cast(tf.squeeze(self.perfect_image, axis=-1),
+                        dtype=tf.complex128))
 
         # TODO: Modularize physics stuff.
         # Start: physics stuff.
@@ -703,27 +754,13 @@ class DASIEModel(object):
                 # This pupil plane is complete, now add it to the list.
                 self.pupil_planes.append(pupil_plane)
 
-                # Compute the PSF from the pupil plane.
-                with tf.name_scope("psf_model"):
 
-                    psf = tf.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(pupil_plane)))) ** 2
-                    self.psfs.append(psf)
+                psf, otf, mtf = self._build_geometric_optics(pupil_plane)
 
-                # Compute the OTF, which is the Fourier transform of the PSF.
-                with tf.name_scope("otf_model"):
-
-                    otf = tf.signal.fft2d(tf.cast(psf, tf.complex128))
-                    self.otfs.append(otf)
-
-                # Compute the mtf, which is the real component of the OTF.
-                with tf.name_scope("mtf_model"):
-
-                    mtf = tf.math.abs(otf)
-                    self.mtfs.append(mtf)
-
-                with tf.name_scope("image_spectrum_model"):
-
-                    self.perfect_image_spectrum = tf.signal.fft2d(tf.cast(tf.squeeze(self.perfect_image, axis=-1), dtype=tf.complex128))
+                # Store the psf, otf, and mtf tensors for later evaluation.
+                self.psfs.append(psf)
+                self.otfs.append(otf)
+                self.mtfs.append(mtf)
 
                 distributed_aperture_image_plane = self._image_model(
                     hadamard_image_formation=hadamard_image_formation,
@@ -732,7 +769,8 @@ class DASIEModel(object):
 
                 with tf.name_scope("sensor_model"):
 
-                    # import tensorflow_probability as tfp
+                    distributed_aperture_image = self._apply_noise(distributed_aperture_image_plane)
+
                     # # TODO: Implement Gaussian and Poisson process noise.
                     # # Apply the reparameterization trick kingma2014autovariational
                     # gaussian_mean = 1e-5
@@ -752,7 +790,7 @@ class DASIEModel(object):
                     #
                     # distributed_aperture_image = gaussian_noise + poisson_noise
 
-                    distributed_aperture_image = distributed_aperture_image_plane
+                    # distributed_aperture_image = distributed_aperture_image_plane
 
                 # Finally, add the image from this pupil to the list.
                 self.distributed_aperture_images.append(distributed_aperture_image)
