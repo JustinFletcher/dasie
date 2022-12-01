@@ -1,23 +1,14 @@
 # Distributed Aperture System for Interferometric Exploitation (DASIE)
 
-In TF 2.3+, invoke the following command to run the existing training routine with sequential Zernike modeling per subaperture.
+This repository supports the development of code related to the
+Distributed Aperture System for Interferometric Exploitation (DASIE) project.
+This project comprises the development of a simulation environment compatible 
+with the [Open AI Gym][1], a deep reinforcement learning approach to the DASIE 
+visuomotor control problem, and a static planning approach in which DASIE
+control is  formulated as an electromechanical metasurface design problem which
+is in turn solved by gradient descent.
 
-```
-python ./src/planning/differentiable_dasie_graph.py  --run_name=debug --num_steps=4096 --spatial_quantization=512 --batch_size=16 --recovery
-_model_filter_scale=2 --num_exposures=2 --save_plot --dataset_name=speedplu
-s --dataset_root=../data --gpu_list=0 --plot_periodicity=32 --aperture_diam
-eter_meters=20.0 --num_zernike_indices=15 --num_subapertures=15 --crop --ha
-damard_image_formation --zernike_debug
-```
-
-To run the standard training routine, issue the same command without the `--zernike_debug` flag.
-
-Eventually, we'll reconstruct the workflow below for a SDMUU formulation
-
-This is a private repository for use in the development of code related to the Distributed Aperture System for
-Interferometric Exploitation (DASIE) project. This project comprises the development of a simulation environment 
-compatible with the [Open AI Gym][1], a deep reinforcement learning approach to the DASIE control problem, and relevant 
-utilities.  
+## Visuomotor Control
 
 To install `gym` using `pip`, simply: 
 
@@ -73,6 +64,23 @@ env.close()
 ```
 
 Or, simply call `python src\visuomotor\run_dasie_via_gym.py`.
+
+## Open-Lo0o Planning
+
+In TF 2.3+, invoke the following command to run the existing training routine
+with sequential Zernike modeling per subaperture.
+
+```
+python ./src/planning/differentiable_dasie_graph.py  --run_name=debug --num_steps=4096 --spatial_quantization=512 --batch_size=16 --recovery
+_model_filter_scale=2 --num_exposures=2 --save_plot --dataset_name=speedplu
+s --dataset_root=../data --gpu_list=0 --plot_periodicity=32 --aperture_diam
+eter_meters=20.0 --num_zernike_indices=15 --num_subapertures=15 --crop --ha
+damard_image_formation --zernike_debug
+```
+
+To run the standard training routine, issue the same command without the
+ `--zernike_debug` flag.
+
 
 
 
