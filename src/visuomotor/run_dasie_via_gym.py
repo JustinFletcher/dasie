@@ -12,7 +12,8 @@ import argparse
 import gym
 
 # Function which adds all the arugments for running a multi-aperture simulation to argparser instance
-from simulate_multi_aperture import add_multi_aperture_telescope_args
+# TODO: this is a horrible worst practice that needs to be removed.
+# from env_model.simulate_multi_aperture import add_multi_aperture_telescope_args
 
 
 # TODO: Move this whole script down a level.
@@ -25,7 +26,7 @@ def cli_main(flags):
     # Register our custom DASIE environment.
     gym.envs.registration.register(
         id='Dasie-v0',
-        entry_point='dasie_gym_env.dasie:DasieEnv',
+        entry_point='env_model.dasie:DasieEnv',
         max_episode_steps=flags.max_episode_steps,
         reward_threshold=flags.reward_threshold,
     )
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     
     
     ### Add all the arguments for Multi-Aperture Telescope simulator
-    parser = add_multi_aperture_telescope_args(parser)
+    # parser = add_multi_aperture_telescope_args(parser)
     
     
     ### Gym simulation setup ###
@@ -139,7 +140,37 @@ if __name__ == "__main__":
                         default="test",
                         help='Which version of the DASIE sim do we use?')
 
-    # Parse known arguments.
+
+    parser.add_argument('--render_frequency',
+                        type=int,
+                        default=1,
+                        help='Render gif this frequently, in steps.')
+
+
+    parser.add_argument('--filter_psf_resolution', type=int,
+                        default=2 ** 8,
+                        help='Resolution of simulated PSF (this and extent set pixel scale for extended image convolution)')
+
+
+
+    ############################ DASIE FLAGS ##################################
+    parser.add_argument('--extended_object_image_file', type=str,
+                        default=".\\resources\\sample_image.png",
+                        help='Filename of image to convolve PSF with (if none, PSF returned)')
+
+    parser.add_argument('--extended_object_distance', type=str,
+                        default=None,
+                        help='Distance in meters to the extended object.')
+
+    parser.add_argument('--extended_object_extent', type=str,
+                        default=None,
+                        help='Extent in meters of the extended object image.')
+
+    parser.add_argument('--observation_window_size',
+                        type=int,
+                        default=2**1,
+                        help='Number of frames input to the model.')
+
     parsed_flags, _ = parser.parse_known_args()
 
     # Call main.

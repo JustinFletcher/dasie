@@ -11,6 +11,7 @@ import os
 import gym
 import glob
 import time
+import datetime
 import numpy as np
 
 from collections import deque
@@ -23,7 +24,7 @@ from gym.utils import seeding
 from matplotlib import pyplot as plt
 
 # Simulation of multi aperture telescope built on top of MutiPSFSampler built on top of HCIPy
-from simulate_multi_aperture import SimulateMultiApertureTelescope
+from .simulate_multi_aperture import SimulateMultiApertureTelescope
 
 
 def cosine_similarity(u, v):
@@ -93,7 +94,7 @@ class DasieEnv(gym.Env):
         # TODO: generalize to accomodate changing images.
         self.extended_object_image_file = kwargs['extended_object_image_file']
         if self.extended_object_image_file:
-            perfect_image = plt.imread('sample_image.png')
+            perfect_image = plt.imread(self.extended_object_image_file)
             self.perfect_image = perfect_image / np.max(perfect_image)
         
         
@@ -194,7 +195,7 @@ class DasieEnv(gym.Env):
             # Initialize the tip, tilt, and piston for this aperture.
             tip = 0.0 + self.tip_phase_error_scale * np.random.randn(1)
             tilt = 0.0 + self.tilt_phase_error_scale * np.random.randn(1)
-            piston = 1.0 +self.piston_phase_error_scale * np.random.randn(1)
+            piston = 1.0 + self.piston_phase_error_scale * np.random.randn(1)
             aperture['tip_phase'] = tip[0]
             aperture['tilt_phase'] = tilt[0]
             aperture['piston_phase'] = piston[0]
@@ -338,7 +339,9 @@ class DasieEnv(gym.Env):
             logdir = "."
 
         if not run_name:
-            run_name = str(datetime.timestamp(datetime.now()))
+            # run_name = str(datetime.timestamp(datetime.now()))
+            run_name = "temp"
+
 
         if self.state is None: return None
 

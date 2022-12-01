@@ -63,7 +63,7 @@ from matplotlib import pyplot as plt
 
 # Load HCIPy and MultiAperturePSFSampler built on top of it
 import hcipy 
-from multi_aperture_psf import MultiAperturePSFSampler
+from .multi_aperture_psf import MultiAperturePSFSampler
 
 
 ### Below is my attempt at not having to redefine and describe every variable many times in the codebase (~Ian C)

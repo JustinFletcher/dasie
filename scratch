@@ -1,0 +1,9 @@
+
+python train_dasie_ddpg.py --env=Dasie-v0 --batch_size=4 --num_filters=4 --extended_object_image_file=.\sample_image.png --render_env --render_mode=gif --render_frequency=1
+
+
+
+cd ..\miss_utilities
+python setup.py develop
+# installs tf 2.6
+

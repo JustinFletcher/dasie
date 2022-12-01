@@ -31,7 +31,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 import tensorflow as tf
-import tensorflow_probability as tfp
+# TODO: Implement TF probability.
+# import tensorflow_probability as tfp
 
 
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
@@ -514,8 +515,11 @@ class DASIEModel(object):
                 hadamard_image_formation=hadamard_image_formation,
                 )
 
-            # self.recovered_image = self._build_recovery_model(self.distributed_aperture_images,
-            #                                                   filter_scale=recovery_model_filter_scale)
+        with tf.name_scope("dasie_recovery_inference"):
+            # TODO: make inference not random by loading weights.
+            self.inference_batch = tf.compat.v1.placeholder(tf.float64, shape=[1, num_exposures, spatial_quantization, spatial_quantization])
+            self.recovered_image = self._build_recovery_model(self.inference_batch,
+                                                              filter_scale=recovery_model_filter_scale)
 
             # Compute the Loss.
 
@@ -603,8 +607,10 @@ class DASIEModel(object):
 
         # TODO: Implement Gaussian and Poisson process noise.
         # Apply the reparameterization trick kingma2014autovariational
-        gaussian_sample = tfp.distributions.Normal(loc=tf.zeros_like(image),
-                                                   scale=tf.ones_like(image))
+        gaussian_dist = tfp.distributions.Normal(loc=tf.zeros_like(image),
+                                                 scale=tf.ones_like(image))
+
+        gaussian_sample = tfp.distributions.Sample(gaussian_sample)
         gaussian_noise = image + (gaussian_mean ** 2) * gaussian_sample
 
         # Apply the score-gradient trick williams1992simple
@@ -769,28 +775,10 @@ class DASIEModel(object):
 
                 with tf.name_scope("sensor_model"):
 
-                    distributed_aperture_image = self._apply_noise(distributed_aperture_image_plane)
-
                     # # TODO: Implement Gaussian and Poisson process noise.
-                    # # Apply the reparameterization trick kingma2014autovariational
-                    # gaussian_mean = 1e-5
-                    # gaussian_sample = tfp.distributions.Normal(loc=tf.zeros_like(distributed_aperture_image_plane),
-                    #                                            scale=tf.ones_like(distributed_aperture_image_plane))
-                    # gaussian_noise = distributed_aperture_image_plane + (gaussian_mean ** 2) * gaussian_sample
-                    #
-                    # # Apply the score-gradient trick williams1992simple
-                    # poisson_mean_arrival = 4 * 1e-5
-                    # rate = distributed_aperture_image_plane / poisson_mean_arrival
-                    # p = tfp.distributions.Poisson(rate=rate, validate_args=True)
-                    # sampled = tfp.monte_carlo.expectation(f=lambda z: z,
-                    #                                       samples=p.sample(1),
-                    #                                       log_prob=p.log_prob,
-                    #                                       use_reparameterization=False)
-                    # poisson_noise = sampled * poisson_mean_arrival
-                    #
-                    # distributed_aperture_image = gaussian_noise + poisson_noise
+                    # distributed_aperture_image = self._apply_noise(distributed_aperture_image_plane)
+                    distributed_aperture_image = distributed_aperture_image_plane
 
-                    # distributed_aperture_image = distributed_aperture_image_plane
 
                 # Finally, add the image from this pupil to the list.
                 self.distributed_aperture_images.append(distributed_aperture_image)
@@ -799,7 +787,6 @@ class DASIEModel(object):
         with tf.name_scope("monolithic_aperture"):
 
             with tf.name_scope("pupil_plane"):
-
 
                 self.monolithic_pupil_plane = zernike_aperture_function_2d(X,
                                                                            Y,
@@ -1688,6 +1675,12 @@ class DASIEModel(object):
                               ],
                              feed_dict={self.handle: self.valid_iterator_handle})
 
+    def recover(self, images):
+
+        return self.sess.run([self.recovered_image
+                              ],
+                             feed_dict={self.handle: self.valid_iterator_handle})
+
 def train(sess,
           dasie_model,
           train_dataset,
@@ -1859,6 +1852,8 @@ def train(sess,
         json_file = os.path.join(logdir, "results_" + str(i) + ".json")
         json.dump(results_dict, open(json_file, 'w'))
         # data = json.load(open("file_name.json"))
+
+        # TODO: Dump recovery model weights and Zernike plan here.
 
         # TODO: Refactor to report at the step scale for training.
         # Execute the summary writer ops to write their values.

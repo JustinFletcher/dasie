@@ -945,7 +945,7 @@ def main(flags):
     # TODO: Add reward function flag.
     gym.envs.registration.register(
         id='Dasie-v0',
-        entry_point='dasie_gym_env.dasie:DasieEnv'
+        entry_point='env_model.dasie:DasieEnv'
     )
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:

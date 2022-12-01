@@ -18,3 +18,4 @@ python run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 
 
 # Approximate PTT actuation with a DM
 python run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --dm_actuator_num=35
+python visuomotor\example\run_dasie_via_gym.py --telescope_setup_pkl=bench_demo.pkl --num_steps=20 --dm_actuator_num=35

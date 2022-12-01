@@ -19,6 +19,8 @@ import tensorflow as tf
 
 from matplotlib import image
 
+from matplotlib import pyplot as plt
+
 from itertools import islice, zip_longest
 
 
@@ -30,10 +32,43 @@ def read_fits(filepath):
         Filepath to read the array from
     """
     a = astropy.io.fits.getdata(filepath)
+    a = astropy.io.jpg.getdata()
     a = a.astype(np.uint16)
 
     return a
 
+
+def convert(img, target_type_min, target_type_max, target_type):
+    imin = img.min()
+    imax = img.max()
+
+    a = (target_type_max - target_type_min) / (imax - imin)
+    b = target_type_max - a * imax
+    new_img = (a * img + b).astype(target_type)
+    return new_img
+
+def read_png(filepath):
+    """
+    Reads a jpg file into a numpy arrays
+    Parameters
+    ----------
+    filepath : str
+        Filepath to a jpg which we wil read into an array
+    """
+    jpg_data = image.imread(filepath, format="png")
+
+    jpg_data = convert(jpg_data, 0, 255, np.uint8)
+    # plt.imshow(jpg_data)
+    # plt.show()
+    # die
+    # jpg_data = jpg_data / np.max(jpg_data)
+    #
+    # jpg_data = jpg_data.astype(np.uint8)
+
+    # plt.imshow(jpg_data)
+    # plt.show()
+    # die
+    return jpg_data
 
 def read_jpg(filepath):
     """
@@ -43,8 +78,26 @@ def read_jpg(filepath):
     filepath : str
         Filepath to a jpg which we wil read into an array
     """
-    jpg_data = image.imread(filepath)
+    jpg_data = image.imread(filepath, format="jpg")
 
+    # Check shape of image and convert rgb and rgba to greyscale.
+    # TODO: externalize this flag.
+    # greyscale = True
+    # if greyscale:
+    #     r, g, b = jpg_data[:, :, 0], jpg_data[:, :, 1], jpg_data[:, :, 2]
+    #     jpg_data = 0.2989 * r + 0.5870 * g + 0.1140 * b
+
+    jpg_data = convert(jpg_data, 0, 255, np.uint8)
+    # plt.imshow(jpg_data)
+    # plt.show()
+    # die
+    # jpg_data = jpg_data / np.max(jpg_data)
+    #
+    # jpg_data = jpg_data.astype(np.uint8)
+
+    # plt.imshow(jpg_data)
+    # plt.show()
+    # die
     return jpg_data
 
 
@@ -65,10 +118,12 @@ def _floats_feature(value):
 
 def build_speedplus_tf_example(example):
 
-    (image_path, annotation_path) = example
+    (image_path) = example
 
     # Read in the files for this example
     image = read_jpg(image_path)
+    image_height = image.shape[1]
+    image_width = image.shape[0]
 
     # Ada: You'll need to read from annotation_path to get, e.g., class labels.
 
@@ -76,9 +131,12 @@ def build_speedplus_tf_example(example):
     # Ada: Note here how I'm serializing the image and then binarizing it.
     features = {
         "image_raw": _bytes_feature([image.tostring()]),
+        "height": _int64_feature([image_height]),
+        "width": _int64_feature([image_width]),
         # Ada: Annotation mappings go here - I just don't need any right now...
         # "class_label": _int64_feature(class_label)
     }
+
 
     # Create an example protocol buffer
     example = tf.train.Example(features=tf.train.Features(feature=features))
@@ -118,6 +176,10 @@ def build_speedplus_dataset(datapath):
     # Iterate over each subdirectory, each of which is a data subdomain.
     # Ada: This may or may not be applicable to your problem.
     for directory_name in get_immediate_subdirectories(datapath):
+
+        # Ada: Note that this implies that --datadir will have a set of...
+        # ...subdirs which will contain a subdir named "images". You are not...
+        # ...bound to this convention at all - it's dataset-specific.
         collection_path = os.path.join(datapath, directory_name)
         image_dir_path = os.path.join(collection_path, "images")
         # Ada: Here, I've commented this out for my work. You'll need it.
@@ -125,14 +187,13 @@ def build_speedplus_dataset(datapath):
 
         # Parse the lists of images and annotations, an co-sort them for zip.
         image_paths = sorted(os.listdir(image_dir_path))
-        # Ada: I've commented this ofor my work, but you'll need it.
+        # Ada: I've commented this for my work, but you'll need it.
         # annotation_paths = sorted(os.listdir(annotation_dir_path))
         # Ada: I'm adding a hack in here to avoid breaking the pattern for you.
-        annotation_paths = [None] * len(image_paths)
+        # annotation_paths = [None] * len(image_paths)
 
         # Now that we've built two lists of labeled examples, zip them up...
-        for (image_path,
-             annotation_path) in zip(image_paths, annotation_paths):
+        for image_path in image_paths:
 
             # Get first image and annotation and write to file path.
             # Ada: Here, I've commented this out for my work. You'll need it.
@@ -140,8 +201,7 @@ def build_speedplus_dataset(datapath):
             #            os.path.join(annotation_dir_path, annotation_path))
 
             # ...joining each as a tuple and appending them to our list.
-            # TODO: Remove the None after delivery to Ada, then refactor.
-            example = (os.path.join(image_dir_path, image_path), None)
+            example = os.path.join(image_dir_path, image_path)
             examples.append(example)
 
     return(examples)
@@ -160,7 +220,7 @@ def partition_examples(examples, splits_dict):
     # Iterate over the items specifying the partitions.
     for (split_name, split_fraction) in splits_dict.items():
 
-        # Compute the size of this parition.
+        # Compute the size of this partition.
         num_split_examples = int(split_fraction * num_examples)
 
         # Pop the next partition elements.
@@ -329,23 +389,42 @@ def main(flags):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    #
+    # parser.add_argument('--name', type=str,
+    #                     default="speedplus",
+    #                     help='Name of the dataset to build.')
+
+    # parser.add_argument('--data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\speedplus\\speedplus",
+    #                     help='Path to speedplus output data.')
+    #
+    # parser.add_argument('--output_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords",
+    #                     help='Path to the output directory.')
+
 
     parser.add_argument('--name', type=str,
-                        default="speedplus",
+                        default="inria_holiday",
                         help='Name of the dataset to build.')
 
     parser.add_argument('--data_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\speedplus\\speedplus",
+                        default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one\\speedplus",
                         help='Path to speedplus output data.')
 
     parser.add_argument('--output_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords",
+                        default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one_tfrecords",
                         help='Path to the output directory.')
 
     parser.add_argument("--examples_per_tfrecord",
                         type=int,
                         default=512,
                         help="Maximum number of examples to write to a file")
+
+    parser.add_argument("--greyscale",
+                        action='store_true',
+                        default=False,
+                        help='If true, map rgb jpgs/pngs to NTSC greyscale.')
+
 
     parser.add_argument("--splits_files_path", type=str,
                         default=None,
