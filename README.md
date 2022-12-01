@@ -65,7 +65,7 @@ env.close()
 
 Or, simply call `python src\visuomotor\run_dasie_via_gym.py`.
 
-## Open-Lo0o Planning
+## Open-Loop Planning
 
 In TF 2.3+, invoke the following command to run the existing training routine
 with sequential Zernike modeling per subaperture.
