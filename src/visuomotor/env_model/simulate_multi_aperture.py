@@ -63,7 +63,7 @@ from matplotlib import pyplot as plt
 
 # Load HCIPy and MultiAperturePSFSampler built on top of it
 import hcipy 
-from multi_aperture_psf import MultiAperturePSFSampler
+from .multi_aperture_psf import MultiAperturePSFSampler
 
 
 ### Below is my attempt at not having to redefine and describe every variable many times in the codebase (~Ian C)
@@ -394,6 +394,7 @@ class SimulateMultiApertureTelescope():
         ### Load extended object if specified
         self.extended_object_image_file = kwargs['extended_object_image_file']
         if self.extended_object_image_file is not None:
+
             self.set_extended_object( plt.imread( self.extended_object_image_file ) )
         else:
             self.set_extended_object( None )
@@ -436,6 +437,10 @@ class SimulateMultiApertureTelescope():
         #                   noise for now.  I should probably fix this later 
         #                   (though it does help keep things explicit)
         self.ext_im = image
+
+    def get_extended_object_image(self):
+
+        return(self.ext_im)
 
         
     def generate_atmosphere(self,

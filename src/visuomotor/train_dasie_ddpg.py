@@ -945,9 +945,7 @@ def main(flags):
     # TODO: Add reward function flag.
     gym.envs.registration.register(
         id='Dasie-v0',
-        entry_point='dasie_gym_env.dasie:DasieEnv',
-        max_episode_steps=flags.max_episode_steps,
-        reward_threshold=flags.reward_threshold,
+        entry_point='env_model.dasie:DasieEnv'
     )
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
@@ -1039,10 +1037,6 @@ if __name__ == '__main__':
                         default=1000,
                         help='Steps per episode limit.')
 
-    parser.add_argument('--observation_window_size',
-                        type=int,
-                        default=2**1,
-                        help='Number of frames input to the model.')
 
     parser.add_argument('--logdir',
                         type=str,
@@ -1170,6 +1164,10 @@ if __name__ == '__main__':
                         default=None,
                         help='Extent in meters of the extended object image.')
 
+    parser.add_argument('--observation_window_size',
+                        type=int,
+                        default=2**1,
+                        help='Number of frames input to the model.')
     ### Telescope / pupil-plane setup ###
 
     # For now, passing in telescope setup pkl overrides any CLI arguments relating to
