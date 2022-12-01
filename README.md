@@ -3,8 +3,7 @@
 In TF 2.3+, invoke the following command to run the existing training routine with sequential Zernike modeling per subaperture.
 
 ```
-python differentiable_dasie_graph.py  --run_name=d
-ebug --num_steps=4096 --spatial_quantization=512 --batch_size=16 --recovery
+python ./src/planning/differentiable_dasie_graph.py  --run_name=debug --num_steps=4096 --spatial_quantization=512 --batch_size=16 --recovery
 _model_filter_scale=2 --num_exposures=2 --save_plot --dataset_name=speedplu
 s --dataset_root=../data --gpu_list=0 --plot_periodicity=32 --aperture_diam
 eter_meters=20.0 --num_zernike_indices=15 --num_subapertures=15 --crop --ha
