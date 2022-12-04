@@ -1071,13 +1071,13 @@ class DASIEModel(object):
         :return: None
         """
         # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
-        print([v for v in tf.compat.v1.trainable_variables()])
+        # print([v for v in tf.compat.v1.trainable_variables()])
 
-
+        save_dict = dict()
         for v in tf.compat.v1.trainable_variables():
-            print(v)
-            print(v.name)
-            print(v.value)
+            save_dict[v.name] = self.sess.run(v)
+
+        print(save_dict)
 
         print("I'm trying to save here!")
         die
