@@ -435,7 +435,7 @@ def main(flags):
                                  learning_rate=flags.learning_rate,
                                  diameter_meters=flags.aperture_diameter_meters,
                                  num_apertures=flags.num_subapertures,
-                                 supaperture_radius_meters=subap_radius_meters,
+                                 subaperture_radius_meters=subap_radius_meters,
                                  recovery_model_filter_scale=flags.recovery_model_filter_scale,
                                  loss_name=flags.loss_name,
                                  writer=writer,
