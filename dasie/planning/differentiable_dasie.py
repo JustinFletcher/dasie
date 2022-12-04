@@ -1073,6 +1073,12 @@ class DASIEModel(object):
         # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
         print([v for v in tf.compat.v1.trainable_variables()])
 
+
+        for v in tf.compat.v1.trainable_variables():
+            print(v)
+            print(v.name)
+            print(v.value)
+
         print("I'm trying to save here!")
         die
 
@@ -1088,6 +1094,10 @@ class DASIEModel(object):
         """
 
         # TODO: Implement.
+        restore_dict = json.load(restore_file)
+        for v in tf.compat.v1.trainable_variables():
+            v.value = restore_dict["variables"][v.name]
+
         return None
 
     def train(self):
