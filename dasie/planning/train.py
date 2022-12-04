@@ -80,6 +80,16 @@ def train(sess,
         print("Beginning Epoch %d" % i)
         tf.summary.experimental.set_step(i)
 
+
+
+
+        print("Epoch %d Model Saving." % i)
+        # TODO: Put me back after validation when you're done.
+        dasie_model.save(logdir=logdir,)
+        print("Epoch %d Model Saved." % i)
+
+
+
         # First, plot the model status if requested
         print("Epoch %d Plots Plotting." % i)
 
@@ -142,14 +152,6 @@ def train(sess,
             print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
             print("Epoch %d Validation Complete." % i)
             pass
-
-
-        print("Epoch %d Model Saving." % i)
-
-        # TODO: Dump recovery model weights and Zernike plan here.
-        dasie_model.save(logdir=logdir,)
-
-        print("Epoch %d Model Saved." % i)
 
         # Write the results dict for this epoch.
         json_file = os.path.join(logdir, "results_" + str(i) + ".json")
