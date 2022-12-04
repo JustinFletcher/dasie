@@ -76,10 +76,60 @@ def train(sess,
     # Enter the main training loop.
     for i in range(num_steps):
 
+        # Start the epoch with a model save, then validate, and finally train.
         print("Beginning Epoch %d" % i)
         tf.summary.experimental.set_step(i)
 
-        # If requested, plot the model status.
+        # Initialize the validation dataset iterator to prepare for validation.
+        print("Validating...")
+        sess.run(valid_dataset_initializer)
+
+        # Initialize the validation display metrics.
+        valid_loss = 0.0
+        valid_monolithic_aperture_image_mse = 0.0
+        valid_distributed_aperture_image_mse = 0.0
+        valid_da_mse_mono_mse_ratio = 0.0
+        valid_steps = 0.0
+
+        # Validate by looping an calling validate batches, until...
+        try:
+            while True:
+                # Execute one gradient update step.
+                (step_valid_loss,
+                 step_valid_monolithic_aperture_image_mse,
+                 step_valid_distributed_aperture_image_mse,
+                 step_valid_da_mse_mono_mse_ratio) = dasie_model.validate()
+
+                # Increment all of our metrics.
+                # TODO: Eventually refactor to summaries.
+                valid_loss += step_valid_loss
+                valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
+                valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
+                valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
+                valid_steps += 1.0
+
+        # ...there are no more validate batches.
+        except tf.errors.OutOfRangeError:
+
+            # Compute the epoch results.
+            mean_valid_loss = valid_loss / valid_steps
+            mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
+            mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
+            mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
+
+            # Store the epoch results.
+            results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
+            results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
+            results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
+            results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
+
+            print("Validation Loss: %f" % mean_valid_loss)
+            print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
+            print("Epoch %d Validation Complete." % i)
+            pass
+
+        print("Epoch %d Plots Plotting." % i)
+
         if save_plot:
             if (i % plot_periodicity) == 0:
 
@@ -89,6 +139,30 @@ def train(sess,
                                  show_plot=show_plot,
                                  step=i)
                 print("Plotting completed.")
+
+        # If requested, plot the model status.
+        print("Epoch %d Plots Plotted." % i)
+
+        print("Epoch %d Model Saving." % i)
+
+        # TODO: Dump recovery model weights and Zernike plan here.
+        dasie_model.save(logdir=logdir,)
+
+        print("Epoch %d Model Saved." % i)
+
+        # Write the results dict for this epoch.
+        json_file = os.path.join(logdir, "results_" + str(i) + ".json")
+        json.dump(results_dict, open(json_file, 'w'))
+        # data = json.load(open("file_name.json"))
+
+        # TODO: Refactor to report at the step scale for training.
+        # Execute the summary writer ops to write their values.
+        sess.run(valid_dataset_initializer)
+        feed_dict = {dasie_model.handle: dasie_model.valid_iterator_handle}
+        sess.run(all_summary_ops, feed_dict=feed_dict)
+        sess.run(step_update, feed_dict=feed_dict)
+        sess.run(writer_flush, feed_dict=feed_dict)
+
 
         # Initialize the training dataset iterator to prepare for training.
         print("Training...")
@@ -151,75 +225,6 @@ def train(sess,
 
             pass
 
-        # Initialize the validation dataset iterator to prepare for validation.
-        print("Validating...")
-        sess.run(valid_dataset_initializer)
-
-        # Initialize the validation display metrics.
-        valid_loss = 0.0
-        valid_monolithic_aperture_image_mse = 0.0
-        valid_distributed_aperture_image_mse = 0.0
-        valid_da_mse_mono_mse_ratio = 0.0
-        valid_steps = 0.0
-
-        # Validate by looping an calling validate batches, until...
-        try:
-            while True:
-                # Execute one gradient update step.
-                (step_valid_loss,
-                 step_valid_monolithic_aperture_image_mse,
-                 step_valid_distributed_aperture_image_mse,
-                 step_valid_da_mse_mono_mse_ratio) = dasie_model.validate()
-
-                # Increment all of our metrics.
-                # TODO: Eventually refactor to summaries.
-                valid_loss += step_valid_loss
-                valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
-                valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
-                valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
-                valid_steps += 1.0
-
-        # ...there are no more validate batches.
-        except tf.errors.OutOfRangeError:
-
-            # Compute the epoch results.
-            mean_valid_loss = valid_loss / valid_steps
-            mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
-            mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
-            mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
-
-            # Store the epoch results.
-            results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
-            results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
-            results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
-            results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
-
-            print("Validation Loss: %f" % mean_valid_loss)
-            print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
-            print("Epoch %d Validation Complete." % i)
-            pass
-
-
-
-        print("Epoch %d Model Saving." % i)
-
-        # TODO: Dump recovery model weights and Zernike plan here.
-        dasie_model.save(logdir=logdir,)
-
-        print("Epoch %d Model Saved." % i)
-        # Write the results dict for this epoch.
-        json_file = os.path.join(logdir, "results_" + str(i) + ".json")
-        json.dump(results_dict, open(json_file, 'w'))
-        # data = json.load(open("file_name.json"))
-
-
-        # TODO: Refactor to report at the step scale for training.
-        # Execute the summary writer ops to write their values.
-        sess.run(valid_dataset_initializer)
-        feed_dict = {dasie_model.handle: dasie_model.valid_iterator_handle}
-        sess.run(all_summary_ops, feed_dict=feed_dict)
-        sess.run(step_update, feed_dict=feed_dict)
-        sess.run(writer_flush, feed_dict=feed_dict)
 
 def speedplus_parse_function(example_proto):
     """
