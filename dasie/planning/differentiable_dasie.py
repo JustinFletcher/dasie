@@ -1070,6 +1070,8 @@ class DASIEModel(object):
         restored.
         :return: None
         """
+        # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
+        print([v for v in tf.trainable_variables()])
 
         print("I'm trying to save here!")
         die

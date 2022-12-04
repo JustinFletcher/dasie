@@ -80,6 +80,21 @@ def train(sess,
         print("Beginning Epoch %d" % i)
         tf.summary.experimental.set_step(i)
 
+        # First, plot the model status if requested
+        print("Epoch %d Plots Plotting." % i)
+
+        if save_plot:
+            if (i % plot_periodicity) == 0:
+
+                sess.run(valid_dataset_initializer)
+                print("Plotting...")
+                dasie_model.plot(logdir=logdir,
+                                 show_plot=show_plot,
+                                 step=i)
+                print("Plotting completed.")
+
+        print("Epoch %d Plots Plotted." % i)
+
         # Initialize the validation dataset iterator to prepare for validation.
         print("Validating...")
         sess.run(valid_dataset_initializer)
@@ -128,20 +143,6 @@ def train(sess,
             print("Epoch %d Validation Complete." % i)
             pass
 
-        print("Epoch %d Plots Plotting." % i)
-
-        if save_plot:
-            if (i % plot_periodicity) == 0:
-
-                sess.run(valid_dataset_initializer)
-                print("Plotting...")
-                dasie_model.plot(logdir=logdir,
-                                 show_plot=show_plot,
-                                 step=i)
-                print("Plotting completed.")
-
-        # If requested, plot the model status.
-        print("Epoch %d Plots Plotted." % i)
 
         print("Epoch %d Model Saving." % i)
 
