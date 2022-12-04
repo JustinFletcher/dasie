@@ -487,49 +487,49 @@ class DASIEModel(object):
         self.learning_rate = set_kwargs_default('learning_rate', 1.0, kwargs)
         # self.num_apertures = num_apertures
         # self.num_apertures = kwargs.get('num_apertures', 15)
-        self.learning_rate = set_kwargs_default('num_apertures', 15, kwargs)
+        self.num_apertures = set_kwargs_default('num_apertures', 15, kwargs)
         # self.batch_size = batch_size
         # self.batch_size = kwargs.get('batch_size', 2)
-        self.learning_rate = set_kwargs_default('batch_size', 2, kwargs)
+        self.batch_size = set_kwargs_default('batch_size', 2, kwargs)
         # self.spatial_quantization = spatial_quantization
         # self.spatial_quantization = kwargs.get('spatial_quantization', 256)
-        self.learning_rate = set_kwargs_default('spatial_quantization', 256, kwargs)
+        self.spatial_quantization = set_kwargs_default('spatial_quantization', 256, kwargs)
         # self.image_x_scale = image_x_scale
         # self.image_x_scale = kwargs.get('image_x_scale', 256)
-        self.learning_rate = set_kwargs_default('image_x_scale', 256, kwargs)
+        self.image_x_scale = set_kwargs_default('image_x_scale', 256, kwargs)
         # self.image_y_scale = image_y_scale
         # self.image_y_scale = kwargs.get('image_y_scale', 256)
-        self.learning_rate = set_kwargs_default('image_y_scale', 256, kwargs)
+        self.image_y_scale = set_kwargs_default('image_y_scale', 256, kwargs)
         # self.writer = writer
         # self.writer = kwargs.get('writer', None)
-        self.learning_rate = set_kwargs_default('writer', None, kwargs)
+        self.writer = set_kwargs_default('writer', None, kwargs)
         # self.loss_name = loss_name
         # self.loss_name = kwargs.get('loss_name', "mse")
-        self.learning_rate = set_kwargs_default('loss_name', "mse", kwargs)
+        self.loss_name = set_kwargs_default('loss_name', "mse", kwargs)
         # self.num_exposures = num_exposures
         # self.num_exposures = kwargs.get('num_exposures', 1)
-        self.learning_rate = set_kwargs_default('num_exposures', 1, kwargs)
+        self.num_exposures = set_kwargs_default('num_exposures', 1, kwargs)
         # self.subaperture_radius_meters = subaperture_radius_meters
         # self.subaperture_radius_meters = kwargs.get('subaperture_radius_meters',
         #                                             None)
-        self.learning_rate = set_kwargs_default('subaperture_radius_meters', None, kwargs)
+        self.subaperture_radius_meters = set_kwargs_default('subaperture_radius_meters', None, kwargs)
         # self.diameter_meters = diameter_meters
         # self.diameter_meters = kwargs.get('diameter_meters', 2.5)
-        self.learning_rate = set_kwargs_default('diameter_meters', 2.5, kwargs)
+        self.diameter_meters = set_kwargs_default('diameter_meters', 2.5, kwargs)
         # self.recovery_model_filter_scale = recovery_model_filter_scale
         # self.recovery_model_filter_scale = kwargs.get('recovery_model_filter_scale',
         #                                               16)
-        self.learning_rate = set_kwargs_default('recovery_model_filter_scale', 16, kwargs)
+        self.recovery_model_filter_scale = set_kwargs_default('recovery_model_filter_scale', 16, kwargs)
         # self.num_zernike_indices = num_zernike_indices
         # self.num_zernike_indices = kwargs.get('num_zernike_indices', 15)
-        self.learning_rate = set_kwargs_default('num_zernike_indices', 15, kwargs)
+        self.num_zernike_indices = set_kwargs_default('num_zernike_indices', 15, kwargs)
         # self.zernike_debug = zernike_debug
         # self.zernike_debug = kwargs.get('zernike_debug', False)
-        self.learning_rate = set_kwargs_default('zernike_debug', False, kwargs)
+        self.zernike_debug = set_kwargs_default('zernike_debug', False, kwargs)
         # self.hadamard_image_formation = hadamard_image_formation
         # self.hadamard_image_formation = kwargs.get('hadamard_image_formation',
         #                                            True)
-        self.learning_rate = set_kwargs_default('hadamard_image_formation', True, kwargs)
+        self.hadamard_image_formation = set_kwargs_default('hadamard_image_formation', True, kwargs)
 
         # Persist the kwargs to enable model saving and recovery.
         self.kwargs = kwargs
