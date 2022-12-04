@@ -478,7 +478,8 @@ class DASIEModel(object):
                  hadamard_image_formation=True,
                  writer=None,
                  **kwargs):
-
+        print(kwargs["subaperture_radius_meters"])
+        die
         self.sess = sess
         # First, set the kwargs. This is needed to persist kwargs in a save.
         # TODO: refactor constructor for this approach.

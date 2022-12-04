@@ -424,9 +424,6 @@ def main(flags):
                     plt.show()
 
         # Build a DA model.
-        print("here.")
-        print(subap_radius_meters)
-        die
         dasie_model = DASIEModel(sess,
                                  batch_size=flags.batch_size,
                                  train_dataset=train_dataset,
