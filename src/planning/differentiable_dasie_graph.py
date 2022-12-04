@@ -34,6 +34,8 @@ import tensorflow as tf
 # TODO: Implement TF probability.
 # import tensorflow_probability as tfp
 
+from recovery_models import RecoveryModel
+
 
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
@@ -515,11 +517,11 @@ class DASIEModel(object):
                 hadamard_image_formation=hadamard_image_formation,
                 )
 
-        with tf.name_scope("dasie_recovery_inference"):
-            # TODO: make inference not random by loading weights.
-            self.inference_batch = tf.compat.v1.placeholder(tf.float64, shape=[1, num_exposures, spatial_quantization, spatial_quantization])
-            self.recovered_image = self._build_recovery_model(self.inference_batch,
-                                                              filter_scale=recovery_model_filter_scale)
+        # with tf.name_scope("dasie_recovery_inference"):
+        #     # TODO: make inference not random by loading weights.
+        #     self.inference_batch = tf.compat.v1.placeholder(tf.float64, shape=[1, num_exposures, spatial_quantization, spatial_quantization])
+        #     self.recovered_image = self._build_recovery_model(self.inference_batch,
+        #                                                       filter_scale=recovery_model_filter_scale)
 
             # Compute the Loss.
 
@@ -893,611 +895,621 @@ class DASIEModel(object):
         :param filter_scale: the smallest filter scale to use.
         :return:
         """
-        with tf.name_scope("recovery_model"):
 
-            # Stack the the images in the ensemble to form a batch of inputs.
-            distributed_aperture_images_batch = tf.stack(distributed_aperture_images_batch, axis=-1)
-
-            with tf.name_scope("recovery_feature_extractor"):
-                input = distributed_aperture_images_batch
-                # down_l0 conv-c15-k7-s1-LRelu input
-                down_l0 = self.conv_block(input,
-                                    input_channels=self.num_exposures,
-                                    output_channels=filter_scale,
-                                    kernel_size=7,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # down_l0 conv-c15-k7-s1-LRelu down_l0
-                down_l0 = self.conv_block(down_l0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=7,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # down_l1 conv-c30-k5-s2-LRelu down_l0
-                down_l1_0 = self.conv_block(down_l0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=5,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # down_l1 conv-c30-k3-s1-LRelu down_l1
-                down_l1 = self.conv_block(down_l1_0,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # down_l1 conv-c30-k3-s1-LRelu down_l1
-                down_l1 = self.conv_block(down_l1,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # down_l2 conv-c60-k5-s2-LRelu down_l1
-                down_l2 = self.conv_block(down_l1_0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=5,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # down_l2 conv-c60-k3-s1-LRelu down_l2
-                down_l2 = self.conv_block(down_l2,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-
-                # down_l2 conv-c60-k3-s1-LRelu down_l2
-                down_l2 = self.conv_block(down_l2,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # End of downsample and pre-skip.
-
-
-                # conv_l2_k0 conv-c60-k3-s1-LRelu down_l2
-                conv_l2_k0 = self.conv_block(down_l2,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k1 conv-c60-k3-s1-LRelu conv_l2_k0
-                conv_l2_k1 = self.conv_block(conv_l2_k0,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k2 conv-c60-k3-s1-LRelu Concat([conv_l2_k0, conv_l2_k1])
-                conv_l2_k2 = self.conv_block(tf.concat([conv_l2_k0, conv_l2_k1], axis=-1),
-                                    input_channels=filter_scale * 8,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k3 conv-c60-k3-s1-LRelu conv_l2_k2
-                conv_l2_k3 = self.conv_block(conv_l2_k2,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k4 conv-c60-k3-s1-LRelu conv_l2_k3
-                conv_l2_k4 = self.conv_block(conv_l2_k3,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-
-                # conv_l2_k5 conv-c60-k3-s1-LRelu conv_l2_k4
-                conv_l2_k5 = self.conv_block(conv_l2_k4,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # End of bottom pipe.
-
-
-                # Mid-resolution.
-                # conv_l1_k0 conv-c30-k3-s1-LRelu down_l1
-                conv_l1_k0 = self.conv_block(down_l1,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k1 conv-c30-k3-s1-LRelu conv_l1_k0
-                conv_l1_k1 = self.conv_block(conv_l1_k0,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # conv_l1_k2 conv-c30-k3-s1-LRelu Concat([conv_l1_k0, conv_l1_k1])
-                conv_l1_k2 = self.conv_block(tf.concat([conv_l1_k0, conv_l1_k1], axis=-1),
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k3 conv-c30-k3-s1-LRelu conv_l1_k2
-                conv_l1_k3 = self.conv_block(conv_l1_k2,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-
-                # conv_l1_k4 conv-c30-k3-s1-LRelu conv_l1_k3
-                conv_l1_k4 = self.conv_block(conv_l1_k3,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k5 conv-c30-k3-s1-LRelu conv_l1_k4
-                conv_l1_k5 = self.conv_block(conv_l1_k4,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # up_l2 convT-c30-k2-s2-LRelu conv_l2_k5
-                # modded to: up_l2 convT-c60-k2-s2-LRelu conv_l2_k5
-                # pull the bottom pipe up.
-                up_l2 = self.convT_block(conv_l2_k5,
-                                    input_downsample_factor=4,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=2,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k6 conv-c30-k3-s1-LRelu Concat([up_l2, conv_l1_k5])
-                # modded to: input 60
-                conv_l1_k6 = self.conv_block(tf.concat([up_l2, conv_l1_k5], axis=-1),
-                                    input_channels=filter_scale * 6,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k7 conv-c30-k3-s1-LRelu conv_l1_k6
-                conv_l1_k7 = self.conv_block(conv_l1_k6,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # End of mid-resolution pipe.
-
-                # High Resolution.
-                # conv_l0_k0 conv-c15-k3-s1-LRelu down_l0
-                conv_l0_k0 = self.conv_block(down_l0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # conv_l0_k1 conv-c15-k3-s1-LRelu conv_l0_k0
-                conv_l0_k1 = self.conv_block(conv_l0_k0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l0_k2 conv-c15-k3-s1-LRelu Concat([conv_l1_k0, conv_l0_k1])c
-                # halv the input size = conv_l1_k0
-                # This is wrong in tseng2021neural! The sizes don't match!
-                # Modded to: conv_l0_k2 conv-c15-k3-s1-LRelu Concat([conv_l0_k0, conv_l0_k1])
-                # Then I moved the whole concat down to be consistent with fig 5
-                conv_l0_k2 = self.conv_block(conv_l0_k1,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l0_k3 conv-c15-k3-s1-LRelu conv_l0_k2
-                conv_l0_k3 = self.conv_block(conv_l0_k2,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l0_k4 conv-c15-k3-s1-LRelu conv_l0_k3
-                # Move the skip connection here to be consistent with Fig 5.
-                conv_l0_k4 = self.conv_block(tf.concat([conv_l0_k0, conv_l0_k3], axis=-1),
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-
-                # conv_l0_k5 conv-c15-k3-s1-LRelu conv_l0_k4
-                conv_l0_k5 = self.conv_block(conv_l0_k4,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # up_l1 convT-c15-k2-s2-LRelu conv_l1_k5
-                # modded to: up_l1 convT-c30-k2-s2-LRelu conv_l1_k5
-                up_l1 = self.convT_block(conv_l1_k5,
-                                    input_downsample_factor=2,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=2,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-
-                # conv_l0_k6 conv-c15-k3-s1-LRelu Concat([up_l1, conv_l0_k5])
-                conv_l0_k6 = self.conv_block(tf.concat([up_l1, conv_l0_k5], axis=-1),
-                                    input_channels=filter_scale * 3,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l0_k7 conv-c15-k3-s1-LRelu conv_l0_k6
-                conv_l0_k7 = self.conv_block(conv_l0_k6,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-
-            with tf.name_scope("recovery_feature_propagator"):
-
-                # fp_l0 Feature Propagator (PSF_1x, conv_l0_k7)
-                # TODO: Implement feature propagator.
-                fp_l0 = conv_l0_k7
-                # fp_l1 Feature Propagator (PSF_2x, conv_l1_k7)
-                # TODO: Implement feature propagator.
-                fp_l1 = conv_l1_k7
-                # fp_l2 Feature Propagator (PSF_4x, conv_l2_k5)
-                # TODO: Implement feature propagator.
-                fp_l2 = conv_l2_k5
-
-            with tf.name_scope("recovery_decoder"):
-                # conv_l0_k0 conv-c30-k5-s1-LRelu fp_l0
-                conv_l0_k0 = self.conv_block(fp_l0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=5,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l0_k1 conv-c30-k5-s1-LRelu conv_l0_k0
-                conv_l0_k1 = self.conv_block(conv_l0_k0,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=5,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # down_l0 conv-c30-k5-s2-LRelu conv_l0_k1
-                down_l0 = self.conv_block(conv_l0_k1,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=5,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k0 conv-c60-k3-s1-LRelu Concat([fp_l1, down_l0])
-                conv_l1_k0 = self.conv_block(tf.concat([fp_l1, down_l0], axis=-1),
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                # conv_l1_k1 conv-c60-k3-s1-LRelu conv_l1_k0
-                conv_l1_k1 = self.conv_block(conv_l1_k0,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # down_l1 conv-c60-k3-s2-LRelu conv_l1_k1
-                down_l1 = self.conv_block(conv_l1_k1,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k0 conv-c120-k3-s1-LRelu Concat([fp_l2, down_l1])
-                # Modded to 60.
-                conv_l2_k0 = self.conv_block(tf.concat([fp_l2, down_l1], axis=-1),
-                                    input_channels=filter_scale * 8,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k1 conv-c120-k3-s1-LRelu conv_l2_k0
-                # Report error - this is never used, even in the paper.
-                conv_l2_k1 = self.conv_block(conv_l2_k0,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k2 conv-c120-k3-s1-LRelu Concat([conv_l2_k0, fp_l2, down_l1])
-                # NOTE: This was wrong in the tseng2021neural! conv_l2_k0 -> conv_l2_k1
-                conv_l2_k2 = self.conv_block(tf.concat([conv_l2_k1, fp_l2, down_l1], axis=-1),
-                                             # change to 10 if breaks
-                                    input_channels=filter_scale * 12,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l2_k3 conv-c120-k3-s1-LRelu conv_l2_k2
-                # modded to: conv_l2_k3 conv-c60-k3-s1-LRelu conv_l2_k2
-                conv_l2_k3 = self.conv_block(conv_l2_k2,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # up_l2 convT-c60-k2-s2-LRelu conv_l2_k3
-                # modded to 60 input
-                up_l2 = self.convT_block(conv_l2_k3,
-                                    input_downsample_factor=4,
-                                    input_channels=filter_scale * 4,
-                                    output_channels=filter_scale * 4,
-                                    kernel_size=2,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k2 conv-c60-k3-s1-LRelu Concat([conv_l1_k1, up_l2])
-                # modded to 30.
-                conv_l1_k2 = self.conv_block(tf.concat([conv_l1_k1, up_l2], axis=-1),
-                                    input_channels=filter_scale * 8,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # conv_l1_k3 conv-c60-k3-s1-LRelu conv_l1_k2
-                conv_l1_k3 = self.conv_block(conv_l1_k2,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=3,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # up_l1 convT-c60-k2-s2-LRelu conv_l2_k3
-                # NOTE: This was wrong in the tseng2021neural! conv_l2_k3 -> conv_l1_k3
-                up_l1 = self.convT_block(conv_l1_k3,
-                                    input_downsample_factor=2,
-                                    input_channels=filter_scale * 2,
-                                    output_channels=filter_scale * 2,
-                                    kernel_size=2,
-                                    stride=2,
-                                    activation="LRelu")
-                #
-
-                # conv_l0_k2 conv-c30-k5-s1-LRelu Concat([conv_l0_k1, up_l1])
-                conv_l0_k2 = self.conv_block(tf.concat([conv_l0_k1, up_l1], axis=-1),
-                                    input_channels=filter_scale * 3,
-                                    output_channels=filter_scale,
-                                    kernel_size=5,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-
-                # Output RGB conv_l0_k2
-                # NOTE: This was underspecified in tseng2021neural!
-                conv_l0_k3 = self.conv_block(conv_l0_k2,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=2,
-                                    stride=1,
-                                    activation="LRelu")
-                #
-                conv_l0_k4 = self.conv_block(conv_l0_k3,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=2,
-                                    stride=1,
-                                    activation="LRelu")
-                conv_l0_k5 = self.conv_block(conv_l0_k4,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=2,
-                                    stride=1,
-                                    activation="LRelu")
-                conv_l0_k6 = self.conv_block(conv_l0_k5,
-                                    input_channels=filter_scale,
-                                    output_channels=filter_scale,
-                                    kernel_size=2,
-                                    stride=1,
-                                    activation="LRelu")
-                conv_l0_k7 = self.conv_block(conv_l0_k6,
-                                    input_channels=filter_scale,
-                                    output_channels=1,
-                                    kernel_size=2,
-                                    stride=1,
-                                    activation="LRelu")
-                conv_l0_k0 = self.conv_block(conv_l0_k7,
-                                    input_channels=1,
-                                    output_channels=1,
-                                    kernel_size=2,
-                                    stride=1,
-                                    activation="LRelu")
-
-            # Remove the now irrelevant channel dim.
-            recovered_image_batch = tf.squeeze(conv_l0_k0)
-
-        return recovered_image_batch
-
-    def convT_block(self,
-                   input_feature_map,
-                   input_downsample_factor,
-                   input_channels,
-                   output_channels=1,
-                   kernel_size=2,
-                   stride=1,
-                   activation="LRelu",
-                   name=None):
-
-        if not name:
-
-            name = "convT-c" + str(output_channels) + "-k" + str(kernel_size) + "-s" + str(stride) + "-" + activation
-
-        with tf.name_scope(name):
-
-            # Initialize the filter variables as he2015delving.
-            he_relu_init_std = np.sqrt(2 / (input_channels * (kernel_size**2)))
-            filters = tf.Variable(tf.random.normal((kernel_size,
-                                                    kernel_size,
-                                                    input_channels,
-                                                    output_channels),
-                                                   stddev=he_relu_init_std,
-                                                   dtype=tf.float64))
-
-            # Encode the strides for TensorFlow, and build the conv graph.
-            strides = [1, stride, stride, 1]
-
-            # Given the base quantization, div by downsample, mul by stride.
-            print(self.image_x_scale)
-            output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
-            output_y_scale = (self.image_y_scale // input_downsample_factor) * stride
-            output_shape = (self.batch_size,
-                            output_x_scale,
-                            output_y_scale,
-                            output_channels)
-
-            conv_output = tf.nn.conv2d_transpose(input_feature_map,
-                                                 filters,
-                                                 output_shape,
-                                                 strides,
-                                                 padding="SAME",
-                                                 data_format='NHWC',
-                                                 dilations=None,
-                                                 name=name)
-
-            # Apply an activation function.
-            output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
-
-        return output_feature_map
-
-    def conv_block(self,
-                   input_feature_map,
-                   input_channels,
-                   output_channels=1,
-                   kernel_size=2,
-                   stride=1,
-                   activation="LRelu",
-                   name=None):
-
-        if not name:
-
-            name = "conv-c" + str(output_channels) + "-k" + str(kernel_size) + "-s" + str(stride) + "-" + activation
-
-        with tf.name_scope(name):
-
-            # Initialize the filter variables as he2015delving.
-            he_relu_init_std = np.sqrt(2 / (input_channels * (kernel_size**2)))
-            filters = tf.Variable(tf.random.normal((kernel_size,
-                                                    kernel_size,
-                                                    input_channels,
-                                                    output_channels),
-                                                   stddev=he_relu_init_std,
-                                                   dtype=tf.float64))
-
-            # Encode the strides for TensorFlow, and build the conv graph.
-            strides = [1, stride, stride, 1]
-            conv_output = tf.nn.conv2d(input_feature_map,
-                                       filters,
-                                       strides,
-                                       padding="SAME",
-                                       data_format='NHWC',
-                                       dilations=None,
-                                       name=None)
-
-            # Apply an activation function.
-            output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
-
-        return output_feature_map
+        # Stack the the images in the ensemble to form a batch of inputs.
+        distributed_aperture_images_batch = tf.stack(distributed_aperture_images_batch, axis=-1)
+
+        recovery_model = RecoveryModel()
+
+        # with tf.name_scope("recovery_model"):
+        #
+        #     with tf.name_scope("recovery_feature_extractor"):
+        #         input = distributed_aperture_images_batch
+        #         # down_l0 conv-c15-k7-s1-LRelu input
+        #         down_l0 = self.conv_block(input,
+        #                             input_channels=self.num_exposures,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=7,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l0 conv-c15-k7-s1-LRelu down_l0
+        #         down_l0 = self.conv_block(down_l0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=7,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l1 conv-c30-k5-s2-LRelu down_l0
+        #         down_l1_0 = self.conv_block(down_l0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=5,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l1 conv-c30-k3-s1-LRelu down_l1
+        #         down_l1 = self.conv_block(down_l1_0,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l1 conv-c30-k3-s1-LRelu down_l1
+        #         down_l1 = self.conv_block(down_l1,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l2 conv-c60-k5-s2-LRelu down_l1
+        #         down_l2 = self.conv_block(down_l1_0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=5,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l2 conv-c60-k3-s1-LRelu down_l2
+        #         down_l2 = self.conv_block(down_l2,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #
+        #         # down_l2 conv-c60-k3-s1-LRelu down_l2
+        #         down_l2 = self.conv_block(down_l2,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # End of downsample and pre-skip.
+        #
+        #
+        #         # conv_l2_k0 conv-c60-k3-s1-LRelu down_l2
+        #         conv_l2_k0 = self.conv_block(down_l2,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k1 conv-c60-k3-s1-LRelu conv_l2_k0
+        #         conv_l2_k1 = self.conv_block(conv_l2_k0,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k2 conv-c60-k3-s1-LRelu Concat([conv_l2_k0, conv_l2_k1])
+        #         conv_l2_k2 = self.conv_block(tf.concat([conv_l2_k0, conv_l2_k1], axis=-1),
+        #                             input_channels=filter_scale * 8,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k3 conv-c60-k3-s1-LRelu conv_l2_k2
+        #         conv_l2_k3 = self.conv_block(conv_l2_k2,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k4 conv-c60-k3-s1-LRelu conv_l2_k3
+        #         conv_l2_k4 = self.conv_block(conv_l2_k3,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #
+        #         # conv_l2_k5 conv-c60-k3-s1-LRelu conv_l2_k4
+        #         conv_l2_k5 = self.conv_block(conv_l2_k4,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # End of bottom pipe.
+        #
+        #
+        #         # Mid-resolution.
+        #         # conv_l1_k0 conv-c30-k3-s1-LRelu down_l1
+        #         conv_l1_k0 = self.conv_block(down_l1,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k1 conv-c30-k3-s1-LRelu conv_l1_k0
+        #         conv_l1_k1 = self.conv_block(conv_l1_k0,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # conv_l1_k2 conv-c30-k3-s1-LRelu Concat([conv_l1_k0, conv_l1_k1])
+        #         conv_l1_k2 = self.conv_block(tf.concat([conv_l1_k0, conv_l1_k1], axis=-1),
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k3 conv-c30-k3-s1-LRelu conv_l1_k2
+        #         conv_l1_k3 = self.conv_block(conv_l1_k2,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #
+        #         # conv_l1_k4 conv-c30-k3-s1-LRelu conv_l1_k3
+        #         conv_l1_k4 = self.conv_block(conv_l1_k3,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k5 conv-c30-k3-s1-LRelu conv_l1_k4
+        #         conv_l1_k5 = self.conv_block(conv_l1_k4,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # up_l2 convT-c30-k2-s2-LRelu conv_l2_k5
+        #         # modded to: up_l2 convT-c60-k2-s2-LRelu conv_l2_k5
+        #         # pull the bottom pipe up.
+        #         up_l2 = self.convT_block(conv_l2_k5,
+        #                             input_downsample_factor=4,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=2,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k6 conv-c30-k3-s1-LRelu Concat([up_l2, conv_l1_k5])
+        #         # modded to: input 60
+        #         conv_l1_k6 = self.conv_block(tf.concat([up_l2, conv_l1_k5], axis=-1),
+        #                             input_channels=filter_scale * 6,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k7 conv-c30-k3-s1-LRelu conv_l1_k6
+        #         conv_l1_k7 = self.conv_block(conv_l1_k6,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # End of mid-resolution pipe.
+        #
+        #         # High Resolution.
+        #         # conv_l0_k0 conv-c15-k3-s1-LRelu down_l0
+        #         conv_l0_k0 = self.conv_block(down_l0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # conv_l0_k1 conv-c15-k3-s1-LRelu conv_l0_k0
+        #         conv_l0_k1 = self.conv_block(conv_l0_k0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l0_k2 conv-c15-k3-s1-LRelu Concat([conv_l1_k0, conv_l0_k1])c
+        #         # halv the input size = conv_l1_k0
+        #         # This is wrong in tseng2021neural! The sizes don't match!
+        #         # Modded to: conv_l0_k2 conv-c15-k3-s1-LRelu Concat([conv_l0_k0, conv_l0_k1])
+        #         # Then I moved the whole concat down to be consistent with fig 5
+        #         conv_l0_k2 = self.conv_block(conv_l0_k1,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l0_k3 conv-c15-k3-s1-LRelu conv_l0_k2
+        #         conv_l0_k3 = self.conv_block(conv_l0_k2,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l0_k4 conv-c15-k3-s1-LRelu conv_l0_k3
+        #         # Move the skip connection here to be consistent with Fig 5.
+        #         conv_l0_k4 = self.conv_block(tf.concat([conv_l0_k0, conv_l0_k3], axis=-1),
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #
+        #         # conv_l0_k5 conv-c15-k3-s1-LRelu conv_l0_k4
+        #         conv_l0_k5 = self.conv_block(conv_l0_k4,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # up_l1 convT-c15-k2-s2-LRelu conv_l1_k5
+        #         # modded to: up_l1 convT-c30-k2-s2-LRelu conv_l1_k5
+        #         up_l1 = self.convT_block(conv_l1_k5,
+        #                             input_downsample_factor=2,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=2,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #
+        #         # conv_l0_k6 conv-c15-k3-s1-LRelu Concat([up_l1, conv_l0_k5])
+        #         conv_l0_k6 = self.conv_block(tf.concat([up_l1, conv_l0_k5], axis=-1),
+        #                             input_channels=filter_scale * 3,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l0_k7 conv-c15-k3-s1-LRelu conv_l0_k6
+        #         conv_l0_k7 = self.conv_block(conv_l0_k6,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #
+        #     with tf.name_scope("recovery_feature_propagator"):
+        #
+        #         # fp_l0 Feature Propagator (PSF_1x, conv_l0_k7)
+        #         # TODO: Implement feature propagator.
+        #         fp_l0 = conv_l0_k7
+        #         # fp_l1 Feature Propagator (PSF_2x, conv_l1_k7)
+        #         # TODO: Implement feature propagator.
+        #         fp_l1 = conv_l1_k7
+        #         # fp_l2 Feature Propagator (PSF_4x, conv_l2_k5)
+        #         # TODO: Implement feature propagator.
+        #         fp_l2 = conv_l2_k5
+        #
+        #     with tf.name_scope("recovery_decoder"):
+        #         # conv_l0_k0 conv-c30-k5-s1-LRelu fp_l0
+        #         conv_l0_k0 = self.conv_block(fp_l0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=5,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l0_k1 conv-c30-k5-s1-LRelu conv_l0_k0
+        #         conv_l0_k1 = self.conv_block(conv_l0_k0,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=5,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # down_l0 conv-c30-k5-s2-LRelu conv_l0_k1
+        #         down_l0 = self.conv_block(conv_l0_k1,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=5,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k0 conv-c60-k3-s1-LRelu Concat([fp_l1, down_l0])
+        #         conv_l1_k0 = self.conv_block(tf.concat([fp_l1, down_l0], axis=-1),
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         # conv_l1_k1 conv-c60-k3-s1-LRelu conv_l1_k0
+        #         conv_l1_k1 = self.conv_block(conv_l1_k0,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # down_l1 conv-c60-k3-s2-LRelu conv_l1_k1
+        #         down_l1 = self.conv_block(conv_l1_k1,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k0 conv-c120-k3-s1-LRelu Concat([fp_l2, down_l1])
+        #         # Modded to 60.
+        #         conv_l2_k0 = self.conv_block(tf.concat([fp_l2, down_l1], axis=-1),
+        #                             input_channels=filter_scale * 8,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k1 conv-c120-k3-s1-LRelu conv_l2_k0
+        #         # Report error - this is never used, even in the paper.
+        #         conv_l2_k1 = self.conv_block(conv_l2_k0,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k2 conv-c120-k3-s1-LRelu Concat([conv_l2_k0, fp_l2, down_l1])
+        #         # NOTE: This was wrong in the tseng2021neural! conv_l2_k0 -> conv_l2_k1
+        #         conv_l2_k2 = self.conv_block(tf.concat([conv_l2_k1, fp_l2, down_l1], axis=-1),
+        #                                      # change to 10 if breaks
+        #                             input_channels=filter_scale * 12,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l2_k3 conv-c120-k3-s1-LRelu conv_l2_k2
+        #         # modded to: conv_l2_k3 conv-c60-k3-s1-LRelu conv_l2_k2
+        #         conv_l2_k3 = self.conv_block(conv_l2_k2,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # up_l2 convT-c60-k2-s2-LRelu conv_l2_k3
+        #         # modded to 60 input
+        #         up_l2 = self.convT_block(conv_l2_k3,
+        #                             input_downsample_factor=4,
+        #                             input_channels=filter_scale * 4,
+        #                             output_channels=filter_scale * 4,
+        #                             kernel_size=2,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k2 conv-c60-k3-s1-LRelu Concat([conv_l1_k1, up_l2])
+        #         # modded to 30.
+        #         conv_l1_k2 = self.conv_block(tf.concat([conv_l1_k1, up_l2], axis=-1),
+        #                             input_channels=filter_scale * 8,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l1_k3 conv-c60-k3-s1-LRelu conv_l1_k2
+        #         conv_l1_k3 = self.conv_block(conv_l1_k2,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=3,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # up_l1 convT-c60-k2-s2-LRelu conv_l2_k3
+        #         # NOTE: This was wrong in the tseng2021neural! conv_l2_k3 -> conv_l1_k3
+        #         up_l1 = self.convT_block(conv_l1_k3,
+        #                             input_downsample_factor=2,
+        #                             input_channels=filter_scale * 2,
+        #                             output_channels=filter_scale * 2,
+        #                             kernel_size=2,
+        #                             stride=2,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # conv_l0_k2 conv-c30-k5-s1-LRelu Concat([conv_l0_k1, up_l1])
+        #         conv_l0_k2 = self.conv_block(tf.concat([conv_l0_k1, up_l1], axis=-1),
+        #                             input_channels=filter_scale * 3,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=5,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #
+        #         # Output RGB conv_l0_k2
+        #         # NOTE: This was underspecified in tseng2021neural!
+        #         conv_l0_k3 = self.conv_block(conv_l0_k2,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=2,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         #
+        #         conv_l0_k4 = self.conv_block(conv_l0_k3,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=2,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         conv_l0_k5 = self.conv_block(conv_l0_k4,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=2,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         conv_l0_k6 = self.conv_block(conv_l0_k5,
+        #                             input_channels=filter_scale,
+        #                             output_channels=filter_scale,
+        #                             kernel_size=2,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         conv_l0_k7 = self.conv_block(conv_l0_k6,
+        #                             input_channels=filter_scale,
+        #                             output_channels=1,
+        #                             kernel_size=2,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #         conv_l0_k0 = self.conv_block(conv_l0_k7,
+        #                             input_channels=1,
+        #                             output_channels=1,
+        #                             kernel_size=2,
+        #                             stride=1,
+        #                             activation="LRelu")
+        #
+        #     # Remove the now irrelevant channel dim.
+        #     recovered_image_batch = tf.squeeze(conv_l0_k0)
+        #
+        # return recovered_image_batch
+
+        return recovery_model.build(distributed_aperture_images_batch,
+                                    filter_scale,
+                                    self.num_exposures,
+                                    self.image_x_scale,
+                                    self.image_y_scale,
+                                    self.batch_size)
+
+    # def convT_block(self,
+    #                input_feature_map,
+    #                input_downsample_factor,
+    #                input_channels,
+    #                output_channels=1,
+    #                kernel_size=2,
+    #                stride=1,
+    #                activation="LRelu",
+    #                name=None):
+    #
+    #     if not name:
+    #
+    #         name = "convT-c" + str(output_channels) + "-k" + str(kernel_size) + "-s" + str(stride) + "-" + activation
+    #
+    #     with tf.name_scope(name):
+    #
+    #         # Initialize the filter variables as he2015delving.
+    #         he_relu_init_std = np.sqrt(2 / (input_channels * (kernel_size**2)))
+    #         filters = tf.Variable(tf.random.normal((kernel_size,
+    #                                                 kernel_size,
+    #                                                 input_channels,
+    #                                                 output_channels),
+    #                                                stddev=he_relu_init_std,
+    #                                                dtype=tf.float64))
+    #
+    #         # Encode the strides for TensorFlow, and build the conv graph.
+    #         strides = [1, stride, stride, 1]
+    #
+    #         # Given the base quantization, div by downsample, mul by stride.
+    #         print(self.image_x_scale)
+    #         output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
+    #         output_y_scale = (self.image_y_scale // input_downsample_factor) * stride
+    #         output_shape = (self.batch_size,
+    #                         output_x_scale,
+    #                         output_y_scale,
+    #                         output_channels)
+    #
+    #         conv_output = tf.nn.conv2d_transpose(input_feature_map,
+    #                                              filters,
+    #                                              output_shape,
+    #                                              strides,
+    #                                              padding="SAME",
+    #                                              data_format='NHWC',
+    #                                              dilations=None,
+    #                                              name=name)
+    #
+    #         # Apply an activation function.
+    #         output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
+    #
+    #     return output_feature_map
+    #
+    # def conv_block(self,
+    #                input_feature_map,
+    #                input_channels,
+    #                output_channels=1,
+    #                kernel_size=2,
+    #                stride=1,
+    #                activation="LRelu",
+    #                name=None):
+    #
+    #     if not name:
+    #
+    #         name = "conv-c" + str(output_channels) + "-k" + str(kernel_size) + "-s" + str(stride) + "-" + activation
+    #
+    #     with tf.name_scope(name):
+    #
+    #         # Initialize the filter variables as he2015delving.
+    #         he_relu_init_std = np.sqrt(2 / (input_channels * (kernel_size**2)))
+    #         filters = tf.Variable(tf.random.normal((kernel_size,
+    #                                                 kernel_size,
+    #                                                 input_channels,
+    #                                                 output_channels),
+    #                                                stddev=he_relu_init_std,
+    #                                                dtype=tf.float64))
+    #
+    #         # Encode the strides for TensorFlow, and build the conv graph.
+    #         strides = [1, stride, stride, 1]
+    #         conv_output = tf.nn.conv2d(input_feature_map,
+    #                                    filters,
+    #                                    strides,
+    #                                    padding="SAME",
+    #                                    data_format='NHWC',
+    #                                    dilations=None,
+    #                                    name=None)
+    #
+    #         # Apply an activation function.
+    #         output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
+    #
+    #     return output_feature_map
 
 
     def plot(self, show_plot=False, logdir=None, step=None):
@@ -1844,16 +1856,20 @@ def train(sess,
 
             print("Validation Loss: %f" % mean_valid_loss)
             print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
-
             print("Epoch %d Validation Complete." % i)
             pass
 
+
+
+        print("Epoch %d Model Saving." % i)
+
+        # TODO: Dump recovery model weights and Zernike plan here.
+        print("Epoch %d Model Saved." % i)
         # Write the results dict for this epoch.
         json_file = os.path.join(logdir, "results_" + str(i) + ".json")
         json.dump(results_dict, open(json_file, 'w'))
         # data = json.load(open("file_name.json"))
 
-        # TODO: Dump recovery model weights and Zernike plan here.
 
         # TODO: Refactor to report at the step scale for training.
         # Execute the summary writer ops to write their values.
@@ -1903,11 +1919,7 @@ def speedplus_parse_function(example_proto):
 
 def main(flags):
 
-
     # beta = 32.0
-    # TODO: Externalize
-    subaperture_spacing_meters = 0.1
-
     # Set the GPUs we want the script to use/see
     os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
 
@@ -1917,18 +1929,29 @@ def main(flags):
     save_dir = os.path.join(".", "logs", dir_name)
     os.makedirs(save_dir, exist_ok=True)
 
-    # TODO: Document how distance to the target is quantified implicitly.
-    # TODO: Document how extent of the target is quantified implicitly.
     # Compute the scaling factor from meters to alpha for a GG PDF over meters.
     # alpha = np.log(-np.log(epsilon)) / np.log(beta) * ap_radius_meters
     # alpha = alpha / (flags.num_subapertures)
     # epsilon = 1e-15
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
-    subap_radius_meters = ((ap_radius_meters * np.sin(np.pi / flags.num_subapertures)) - (subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
+    subap_radius_meters = ((ap_radius_meters * np.sin(np.pi / flags.num_subapertures)) - (flags.subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
     # meters_to_alpha = 1 /  (2 * (np.log(-np.log(epsilon)) / np.log(beta)))
     # subap_alpha = subap_radius_meters * meters_to_alpha / 2
     # monolithic_alpha = flags.aperture_diameter_meters * meters_to_alpha * 2
+    subap_area = np.pi * (subap_radius_meters ** 2)
+    total_subap_area = subap_area * flags.num_subapertures
+    mono_ap_area = np.pi * (ap_radius_meters ** 2)
+    mono_to_dist_aperture_ratio = mono_ap_area / total_subap_area
+    print(mono_to_dist_aperture_ratio)
 
+    # TODO: [Ryan and Matthew] I could use help here.
+    # TODO: Document how distance to the target is quantified implicitly.
+    # TODO: Document how extent of the target is quantified implicitly.
+    base_results_dict = vars(flags)
+    base_results_dict["mono_to_dist_aperture_ratio"] = mono_to_dist_aperture_ratio
+    base_results_dict["ap_radius_meters"] = ap_radius_meters
+    base_results_dict["subap_radius_meters"] = subap_radius_meters
+    # TODO: Append all other derived optical information here!
 
     # Map our dataset name to relative locations and parse functions.
     if flags.dataset_name == "speedplus":
@@ -1961,7 +1984,7 @@ def main(flags):
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
 
-        print("\n\n\n\n\n\n\n\n\n Session Created \n\n\n\n\n\n\n")
+        print("\n\n\n\n\n\n\n\n\n Session Created \n\n\n\n\n\n\n\n\n")
 
         # Set all our seeds.
         np.random.seed(flags.random_seed)
@@ -1973,6 +1996,7 @@ def main(flags):
         tf.summary.experimental.set_step(step)
         writer = tf.summary.create_file_writer(save_dir)
 
+        print("\n\n\n\n\n\n\n\n\n Building Dataset... \n\n\n\n\n\n\n\n\n")
         # Build our datasets.
         train_dataset = DatasetGenerator(train_data_dir,
                                          parse_function=parse_function,
@@ -2000,22 +2024,25 @@ def main(flags):
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
                                          cache_path="")
+        print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
 
         # Get the image shapes stored during dataset construction.
         image_x_scale = train_dataset.image_shape[0]
         image_y_scale = train_dataset.image_shape[1]
-
 
         # Manual debug here, to diagnose data problems.
         plot_data = False
         if plot_data:
 
             for i in range(16):
+
+                # Generate the iterator for the train dataset.
                 train_iterator = train_dataset.get_iterator()
                 train_dataset_batch = train_iterator.get_next()
                 train_dataset_initializer = train_dataset.get_initializer()
                 sess.run(train_dataset_initializer)
 
+                # Generate the iterator for the validation dataset.
                 valid_iterator = valid_dataset.get_iterator()
                 valid_dataset_batch = valid_iterator.get_next()
                 valid_dataset_initializer = valid_dataset.get_initializer()
@@ -2069,8 +2096,6 @@ def main(flags):
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
         writer_flush = writer.flush()
         sess.run([writer.init(), step.initializer])
-
-        base_results_dict = vars(flags)
 
         # Optimize the DASIE model parameters.
         train(sess,
@@ -2136,6 +2161,12 @@ if __name__ == '__main__':
                         type=int,
                         default=15,
                         help='Number of DASIE subapertures.')
+
+
+    parser.add_argument('--subaperture_spacing_meters',
+                        type=float,
+                        default=0.1,
+                        help='Meters of space between subapertures.')
 
 
     parser.add_argument('--num_zernike_indices',
