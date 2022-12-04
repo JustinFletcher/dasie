@@ -1063,7 +1063,7 @@ class DASIEModel(object):
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
 
-    def save(self, logdir=logdir,):
+    def save(self, logdir=None,):
         """
         This function saves a dictionary comprising all weights, kwargs, and
         the git hash so that any model trained from the same commit can be
