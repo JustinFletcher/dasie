@@ -1121,7 +1121,7 @@ class DASIEModel(object):
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
 
-    def save(self, logdir=None,):
+    def save(self, logdir=None, step=None):
         """
         This function saves a dictionary comprising all weights, kwargs, and
         the git hash so that any model trained from the same commit can be
@@ -1139,9 +1139,11 @@ class DASIEModel(object):
             save_dict[v.name] = self.sess.run(v)
 
         print(save_dict)
-
-        json_file = os.path.join(logdir,
-                                 "model_checkpoint_" + str(i) + ".json")
+        if step:
+            json_file = os.path.join(logdir,
+                                     "model_checkpoint_" + str(step) + ".json")
+        else:
+            json_file = os.path.join(logdir, "model_checkpoint" + ".json")
         print(json_file)
         json.dump(save_dict, open(json_file, 'w'))
 
