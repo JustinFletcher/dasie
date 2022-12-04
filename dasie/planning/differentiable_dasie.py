@@ -451,40 +451,92 @@ def zernike_aperture_function_2d(X,
     print("-Ending aperture function.")
     return tensor_zernike_2d_field
 
+
+def set_kwargs_default(key, value, kwargs):
+    kwargs[key] = kwargs.get(key, value)
+    return (kwargs[key])
+
 class DASIEModel(object):
 
     def __init__(self,
                  sess,
-                 train_dataset,
-                 valid_dataset,
-                 batch_size,
+                 train_dataset=None,
+                 valid_dataset=None,
+                 batch_size=2,
                  loss_name="mse",
                  learning_rate=1.0,
                  num_apertures=15,
                  spatial_quantization=256,
                  image_x_scale=256,
                  image_y_scale=256,
-                 supaperture_radius_meters=None,
+                 subaperture_radius_meters=None,
                  num_exposures=1,
                  recovery_model_filter_scale=16,
                  diameter_meters=2.5,
                  num_zernike_indices=1,
                  zernike_debug=False,
                  hadamard_image_formation=True,
-                 writer=None):
+                 writer=None,
+                 **kwargs):
 
-        self.learning_rate = learning_rate
-        self.num_apertures = num_apertures
-        self.batch_size = batch_size
-        self.spatial_quantization = spatial_quantization
-        self.image_x_scale = image_x_scale
-        self.image_y_scale = image_y_scale
         self.sess = sess
-        self.writer = writer
-        self.loss_name = loss_name
-        self.num_exposures = num_exposures
+        # First, set the kwargs. This is needed to persist kwargs in a save.
+        # TODO: refactor constructor for this approach.
+        # self.learning_rate = learning_rate
+        # self.learning_rate = kwargs.get('learning_rate', 1.0)
+        self.learning_rate = set_kwargs_default('learning_rate', 1.0, kwargs)
+        # self.num_apertures = num_apertures
+        # self.num_apertures = kwargs.get('num_apertures', 15)
+        self.learning_rate = set_kwargs_default('num_apertures', 15, kwargs)
+        # self.batch_size = batch_size
+        # self.batch_size = kwargs.get('batch_size', 2)
+        self.learning_rate = set_kwargs_default('batch_size', 2, kwargs)
+        # self.spatial_quantization = spatial_quantization
+        # self.spatial_quantization = kwargs.get('spatial_quantization', 256)
+        self.learning_rate = set_kwargs_default('spatial_quantization', 256, kwargs)
+        # self.image_x_scale = image_x_scale
+        # self.image_x_scale = kwargs.get('image_x_scale', 256)
+        self.learning_rate = set_kwargs_default('image_x_scale', 256, kwargs)
+        # self.image_y_scale = image_y_scale
+        # self.image_y_scale = kwargs.get('image_y_scale', 256)
+        self.learning_rate = set_kwargs_default('image_y_scale', 256, kwargs)
+        # self.writer = writer
+        # self.writer = kwargs.get('writer', None)
+        self.learning_rate = set_kwargs_default('writer', None, kwargs)
+        # self.loss_name = loss_name
+        # self.loss_name = kwargs.get('loss_name', "mse")
+        self.learning_rate = set_kwargs_default('loss_name', "mse", kwargs)
+        # self.num_exposures = num_exposures
+        # self.num_exposures = kwargs.get('num_exposures', 1)
+        self.learning_rate = set_kwargs_default('num_exposures', 1, kwargs)
+        # self.subaperture_radius_meters = subaperture_radius_meters
+        # self.subaperture_radius_meters = kwargs.get('subaperture_radius_meters',
+        #                                             None)
+        self.learning_rate = set_kwargs_default('subaperture_radius_meters', None, kwargs)
+        # self.diameter_meters = diameter_meters
+        # self.diameter_meters = kwargs.get('diameter_meters', 2.5)
+        self.learning_rate = set_kwargs_default('diameter_meters', 2.5, kwargs)
+        # self.recovery_model_filter_scale = recovery_model_filter_scale
+        # self.recovery_model_filter_scale = kwargs.get('recovery_model_filter_scale',
+        #                                               16)
+        self.learning_rate = set_kwargs_default('recovery_model_filter_scale', 16, kwargs)
+        # self.num_zernike_indices = num_zernike_indices
+        # self.num_zernike_indices = kwargs.get('num_zernike_indices', 15)
+        self.learning_rate = set_kwargs_default('num_zernike_indices', 15, kwargs)
+        # self.zernike_debug = zernike_debug
+        # self.zernike_debug = kwargs.get('zernike_debug', False)
+        self.learning_rate = set_kwargs_default('zernike_debug', False, kwargs)
+        # self.hadamard_image_formation = hadamard_image_formation
+        # self.hadamard_image_formation = kwargs.get('hadamard_image_formation',
+        #                                            True)
+        self.learning_rate = set_kwargs_default('hadamard_image_formation', True, kwargs)
 
+        # Persist the kwargs to enable model saving and recovery.
+        self.kwargs = kwargs
 
+        self.radius_meters = self.diameter_meters / 2
+
+        # TODO: Make this optional by providing some other dataset batch.
         train_iterator = train_dataset.get_iterator()
         self.train_iterator_handle = sess.run(train_iterator.string_handle())
 
@@ -503,30 +555,100 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_model"):
 
-            self.inputs, self.output_images = self._build_dasie_model(
+            # TODO: Look in here and see if this will build without the dataset
+            self._build_dasie_model(
                 inputs=dataset_batch,
-                spatial_quantization=spatial_quantization,
+                spatial_quantization=self.spatial_quantization,
                 num_apertures=self.num_apertures,
-                radius_meters=diameter_meters / 2,
-                supaperture_radius_meters=supaperture_radius_meters,
-                num_exposures=num_exposures,
-                recovery_model_filter_scale=recovery_model_filter_scale,
-                num_zernike_indices=num_zernike_indices,
-                zernike_debug=zernike_debug,
-                hadamard_image_formation=hadamard_image_formation,
+                radius_meters=self.radius_meters,
+                subaperture_radius_meters=self.subaperture_radius_meters,
+                num_exposures=self.num_exposures,
+                recovery_model_filter_scale=self.recovery_model_filter_scale,
+                num_zernike_indices=self.num_zernike_indices,
+                zernike_debug=self.zernike_debug,
+                hadamard_image_formation=self.hadamard_image_formation,
                 )
 
-        # with tf.name_scope("dasie_recovery_inference"):
-        #     # TODO: make inference not random by loading weights.
-        #     self.inference_batch = tf.compat.v1.placeholder(tf.float64, shape=[1, num_exposures, spatial_quantization, spatial_quantization])
-        #     self.recovered_image = self._build_recovery_model(self.inference_batch,
-        #                                                       filter_scale=recovery_model_filter_scale)
+        with tf.name_scope("distributed_aperture_image_recovery_model"):
 
-            # Compute the Loss.
+            # Combine the ensemble of images with the restoration function.
+            self.recovered_image = self._build_recovery_model(
+                self.distributed_aperture_images,
+                filter_scale=self.recovery_model_filter_scale)
 
-            # Compute the metrics.
 
-            # Build the optimization operation.
+        with tf.name_scope("dasie_loss"):
+
+            # First, add some bookeeping nodes.
+            self.perfect_image_flipped = tf.reverse(
+                tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
+            self.image_mse = tf.reduce_mean(
+                (self.recovered_image - self.perfect_image_flipped) ** 2)
+
+            # Then build the selected loss function.
+            if self.loss_name == "mse":
+                loss = self.image_mse
+            if self.loss_name == "mae":
+                loss = tf.reduce_mean(tf.math.abs(
+                    self.recovered_image - self.perfect_image_flipped))
+            if self.loss_name == "l2":
+                loss = tf.math.sqrt(tf.math.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
+            if self.loss_name == "cos":
+                loss = -cosine_similarity(self.recovered_image,
+                                          self.perfect_image_flipped)
+
+            self.loss = loss
+
+        with tf.name_scope("dasie_metrics"):
+
+            self.monolithic_aperture_image_mse = tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2)
+            self.distributed_aperture_image_mse = tf.reduce_mean(
+                (self.recovered_image - self.perfect_image_flipped) ** 2)
+            self.da_mse_mono_mse_ratio = self.distributed_aperture_image_mse / self.monolithic_aperture_image_mse
+            # TODO: Implement SSIM
+            # TODO: Implement PSNR
+
+            # Add some instrumentation for ttp.
+            # tips = list()
+            # tilts = list()
+            # pistons = list()
+            # for (tip, tilt, piston) in phase_variables:
+            #     tips.append(tip)
+            #     tilts.append(tilt)
+            #     pistons.append(piston)
+            # with self.writer.as_default():
+            #     tf.summary.histogram("tip", tips)
+            #     tf.summary.histogram("tilt", tilts)
+            #     tf.summary.histogram("piston", pistons)
+            # TODO: clean this up.
+            # I wonder if this works...
+            with self.writer.as_default():
+
+                # TODO: refactor all these endpoints to name *_batch.
+                tf.summary.scalar("in_graph_loss", self.loss)
+                tf.summary.scalar("monolithic_aperture_image_mse",
+                                  self.monolithic_aperture_image_mse)
+                tf.summary.scalar("distributed_aperture_image_mse",
+                                  self.distributed_aperture_image_mse)
+                tf.summary.scalar("da_mse_mono_mse_ratio",
+                                  self.da_mse_mono_mse_ratio)
+                # tf.compat.v1.summary.scalar("v1_test", self.loss)
+
+            with tf.compat.v1.Graph().as_default():
+                tf.summary.scalar("debug_metric", 0.5)
+            # self.summaries = tf.compat.v1.summary.all_v2_summary_ops()
+            # self.v1_summaries = tf.compat.v1.summary.merge_all()
+
+        with tf.name_scope("dasie_optimizer"):
+            # Build an op that applies the policy gradients to the model.
+            self.optimize = tf.compat.v1.train.AdamOptimizer(
+                self.learning_rate).minimize(self.loss)
+
+
+        self.inputs = self.perfect_image
+        self.output_images = self.recovered_image
+
+
 
     def _image_model(self,
                      hadamard_image_formation=False,
@@ -633,7 +755,7 @@ class DASIEModel(object):
                            num_apertures=15,
                            num_exposures=1,
                            radius_meters=1.25,
-                           supaperture_radius_meters=None,
+                           subaperture_radius_meters=None,
                            field_of_view_arcsec=4.0,
                            spatial_quantization=256,
                            filter_wavelength_micron=1.0,
@@ -668,6 +790,8 @@ class DASIEModel(object):
                 tf.cast(tf.squeeze(self.perfect_image, axis=-1),
                         dtype=tf.complex128))
 
+        # TODO: Make the distributed aperture optical model a separate method.
+
         # TODO: Modularize physics stuff.
         # Start: physics stuff.
         # Compute the pupil extent: 4.848 microradians / arcsec
@@ -683,7 +807,7 @@ class DASIEModel(object):
         self.phase_scale = 2 * np.pi / filter_wavelength_micron
         # Compute the subaperture pixel extent.
         self.pupil_meters_per_pixel = radius_meters / spatial_quantization
-        self.subaperture_size_pixels = int(supaperture_radius_meters // self.pupil_meters_per_pixel)
+        self.subaperture_size_pixels = int(subaperture_radius_meters // self.pupil_meters_per_pixel)
 
 
         # Build the simulation mesh grid.
@@ -744,7 +868,7 @@ class DASIEModel(object):
                             #                                                                mu_u,
                             #                                                                mu_v,
                             #                                                                radius_meters,
-                            #                                                                supaperture_radius_meters,
+                            #                                                                subaperture_radius_meters,
                             #                                                                subap_zernike_coefficients_variables,
                             #                                                                )
 
@@ -754,7 +878,7 @@ class DASIEModel(object):
                                                                         mu_u,
                                                                         mu_v,
                                                                         radius_meters,
-                                                                        supaperture_radius_meters,
+                                                                        subaperture_radius_meters,
                                                                         subap_zernike_coefficients_vars,
                                                                         )
 
@@ -815,74 +939,6 @@ class DASIEModel(object):
                                                                psf=self.monolithic_psf,
                                                                mtf=self.monolithic_mtf)
 
-        with tf.name_scope("distributed_aperture_image_recovery"):
-
-            # Combine the ensemble of images with the restoration function.
-            self.recovered_image = self._build_recovery_model(self.distributed_aperture_images,
-                                                              filter_scale=recovery_model_filter_scale)
-
-        self.perfect_image_flipped = tf.reverse(tf.reverse(tf.squeeze(self.perfect_image, axis=-1), [-1]), [1])
-        self.image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped) ** 2)
-
-        with tf.name_scope("dasie_loss"):
-
-            if self.loss_name == "mse":
-                loss = self.image_mse
-            if self.loss_name == "mae":
-                loss = tf.reduce_mean(tf.math.abs(self.recovered_image - self.perfect_image_flipped))
-            if self.loss_name == "l2":
-                loss = tf.math.sqrt(tf.math.reduce_sum((self.recovered_image - self.perfect_image_flipped) ** 2))
-            if self.loss_name == "cos":
-                loss = -cosine_similarity(self.recovered_image,
-                                          self.perfect_image_flipped)
-
-            self.loss = loss
-
-        with tf.name_scope("dasie_metrics"):
-
-            self.monolithic_aperture_image_mse = tf.reduce_mean((self.monolithic_aperture_image - self.perfect_image_flipped) ** 2)
-            self.distributed_aperture_image_mse = tf.reduce_mean((self.recovered_image - self.perfect_image_flipped)**2)
-            self.da_mse_mono_mse_ratio = self.distributed_aperture_image_mse / self.monolithic_aperture_image_mse
-            # TODO: Implement SSIM
-            # TODO: Implement PSNR
-
-            # Add some instrumentation for ttp.
-            # tips = list()
-            # tilts = list()
-            # pistons = list()
-            # for (tip, tilt, piston) in phase_variables:
-            #     tips.append(tip)
-            #     tilts.append(tilt)
-            #     pistons.append(piston)
-            # with self.writer.as_default():
-            #     tf.summary.histogram("tip", tips)
-            #     tf.summary.histogram("tilt", tilts)
-            #     tf.summary.histogram("piston", pistons)
-
-
-        # I wonder if this works...
-        with self.writer.as_default():
-
-            # TODO: refactor all these endpoints to name *_batch.
-            tf.summary.scalar("in_graph_loss", self.loss)
-            tf.summary.scalar("monolithic_aperture_image_mse", self.monolithic_aperture_image_mse)
-            tf.summary.scalar("distributed_aperture_image_mse", self.distributed_aperture_image_mse)
-            tf.summary.scalar("da_mse_mono_mse_ratio", self.da_mse_mono_mse_ratio)
-            # tf.compat.v1.summary.scalar("v1_test", self.loss)
-        with tf.name_scope("dasie_optimizer"):
-            # Build an op that applies the policy gradients to the model.
-            self.optimize = tf.compat.v1.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
-
-
-        output_batch = self.recovered_image
-
-        with tf.compat.v1.Graph().as_default():
-            tf.summary.scalar("debug_metric", 0.5)
-
-        # self.summaries = tf.compat.v1.summary.all_v2_summary_ops()
-        # self.v1_summaries = tf.compat.v1.summary.merge_all()
-
-        return self.perfect_image, output_batch
 
 
     def _build_recovery_model(self,
@@ -1073,11 +1129,16 @@ class DASIEModel(object):
         # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
         # print([v for v in tf.compat.v1.trainable_variables()])
 
-        save_dict = dict()
+        # TODO: Major refactor to implement kwargs.
+        save_dict = vars(self.kwargs)
         for v in tf.compat.v1.trainable_variables():
             save_dict[v.name] = self.sess.run(v)
 
         print(save_dict)
+
+        json_file = os.path.join(logdir,
+                                 "model_checkpoint_" + str(i) + ".json")
+        json.dump(save_dict, open(json_file, 'w'))
 
         print("I'm trying to save here!")
         die
