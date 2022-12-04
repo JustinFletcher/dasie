@@ -40,6 +40,13 @@ from recovery_models import RecoveryModel
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
 
+def is_jsonable(x):
+    try:
+        json.dumps(x)
+        return True
+    except (TypeError, OverflowError):
+        return False
+
 def cosine_similarity(u, v):
     """
     :param u: Any np.array matching u in shape (and semantics probably)
@@ -1131,10 +1138,11 @@ class DASIEModel(object):
         # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
         # print([v for v in tf.compat.v1.trainable_variables()])
 
-        # TODO: Major refactor to implement kwargs.
-        # TODO: left off here.
-        print(self.kwargs)
-        save_dict = self.kwargs
+        save_dict = dict()
+        for key, value in self.kwargs.items():
+            if is_jsonable(value):
+                save_dict[key] = value
+
         for v in tf.compat.v1.trainable_variables():
             save_dict[v.name] = self.sess.run(v)
 

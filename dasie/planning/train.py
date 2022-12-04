@@ -425,6 +425,7 @@ def main(flags):
 
         # Build a DA model.
         dasie_model = DASIEModel(sess,
+                                 writer=writer,
                                  batch_size=flags.batch_size,
                                  train_dataset=train_dataset,
                                  valid_dataset=valid_dataset,
@@ -438,7 +439,6 @@ def main(flags):
                                  subaperture_radius_meters=subap_radius_meters,
                                  recovery_model_filter_scale=flags.recovery_model_filter_scale,
                                  loss_name=flags.loss_name,
-                                 writer=writer,
                                  num_zernike_indices=flags.num_zernike_indices,
                                  hadamard_image_formation=flags.hadamard_image_formation,
                                  zernike_debug=flags.zernike_debug)
