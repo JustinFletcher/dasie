@@ -500,8 +500,6 @@ class DASIEModel(object):
         # self.image_y_scale = image_y_scale
         # self.image_y_scale = kwargs.get('image_y_scale', 256)
         self.image_y_scale = set_kwargs_default('image_y_scale', 256, kwargs)
-        print(image_y_scale)
-        die
         # self.writer = writer
         # self.writer = kwargs.get('writer', None)
         self.writer = set_kwargs_default('writer', None, kwargs)
@@ -516,6 +514,7 @@ class DASIEModel(object):
         #                                             None)
         self.subaperture_radius_meters = set_kwargs_default('subaperture_radius_meters', None, kwargs)
         print(self.subaperture_radius_meters)
+        die
         # self.diameter_meters = diameter_meters
         # self.diameter_meters = kwargs.get('diameter_meters', 2.5)
         self.diameter_meters = set_kwargs_default('diameter_meters', 2.5, kwargs)
