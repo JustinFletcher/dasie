@@ -31,7 +31,6 @@ import tensorflow as tf
 
 from recovery_models import RecoveryModel
 from differentiable_dasie import DASIEModel
-from ..utils.make_speedplus_tfrecords import speedplus_parse_function
 
 
 def train(sess,
@@ -219,6 +218,44 @@ def train(sess,
         sess.run(all_summary_ops, feed_dict=feed_dict)
         sess.run(step_update, feed_dict=feed_dict)
         sess.run(writer_flush, feed_dict=feed_dict)
+
+def speedplus_parse_function(example_proto):
+    """
+    This is the first step of the generator/augmentation chain. Reading the
+    raw file out of the TFRecord is fairly straight-forward, though does
+    require some simple fixes. For instance, the number of bounding boxes
+    needs to be padded to some upper bound so that the tensors are all of
+    the same shape and can thus be batched.
+
+    :param example_proto: Example from a TFRecord file
+    :return: The raw image and padded bounding boxes corresponding to
+    this TFRecord example.
+    """
+    # Define how to parse the example
+    features = {
+        "image_raw": tf.io.VarLenFeature(dtype=tf.string),
+        "width": tf.io.FixedLenFeature([], dtype=tf.int64),
+        "height": tf.io.FixedLenFeature([], dtype=tf.int64),
+    }
+
+    # Parse the example
+    features_parsed = tf.io.parse_single_example(serialized=example_proto,
+                                                 features=features)
+    width = tf.cast(features_parsed["width"], tf.int32)
+    height = tf.cast(features_parsed["height"], tf.int32)
+
+    # filename = tf.cast(
+    #     tf.sparse.to_dense(features_parsed["filename"], default_value=""),
+    #     tf.string,
+    # )
+
+    image = tf.sparse.to_dense(features_parsed["image_raw"], default_value="")
+    image = tf.io.decode_raw(image, tf.uint8)
+
+    image = tf.reshape(image, [width, height, 1])
+    image = tf.cast(image, tf.float64)
+
+    return image
 
 
 def main(flags):
