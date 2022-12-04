@@ -30,6 +30,7 @@ import tensorflow as tf
 # import tensorflow_probability as tfp
 
 from recovery_models import RecoveryModel
+from differentiable_dasie import DASIEModel
 
 
 def train(sess,
