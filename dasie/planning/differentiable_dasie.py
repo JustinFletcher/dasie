@@ -1138,6 +1138,7 @@ class DASIEModel(object):
 
         json_file = os.path.join(logdir,
                                  "model_checkpoint_" + str(i) + ".json")
+        print(json_file)
         json.dump(save_dict, open(json_file, 'w'))
 
         print("I'm trying to save here!")
