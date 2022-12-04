@@ -204,6 +204,8 @@ def train(sess,
         print("Epoch %d Model Saving." % i)
 
         # TODO: Dump recovery model weights and Zernike plan here.
+        dasie_model.save(logdir=logdir,)
+
         print("Epoch %d Model Saved." % i)
         # Write the results dict for this epoch.
         json_file = os.path.join(logdir, "results_" + str(i) + ".json")

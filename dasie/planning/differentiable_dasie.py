@@ -503,7 +503,6 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_model"):
 
-            # TODO: Split model to create intermediary placeholder.
             self.inputs, self.output_images = self._build_dasie_model(
                 inputs=dataset_batch,
                 spatial_quantization=spatial_quantization,
@@ -1064,13 +1063,16 @@ class DASIEModel(object):
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
 
-    def save(self):
+    def save(self, logdir=logdir,):
         """
         This function saves a dictionary comprising all weights, kwargs, and
         the git hash so that any model trained from the same commit can be
         restored.
         :return: None
         """
+
+        print("I'm trying to save here!")
+        die
 
         # TODO: Implement.
         return None
