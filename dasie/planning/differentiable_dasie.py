@@ -514,7 +514,7 @@ class DASIEModel(object):
         #                                             None)
         self.subaperture_radius_meters = set_kwargs_default('subaperture_radius_meters', None, kwargs)
         print(self.subaperture_radius_meters)
-        die
+        # die
         # self.diameter_meters = diameter_meters
         # self.diameter_meters = kwargs.get('diameter_meters', 2.5)
         self.diameter_meters = set_kwargs_default('diameter_meters', 2.5, kwargs)

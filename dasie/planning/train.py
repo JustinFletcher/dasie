@@ -423,7 +423,10 @@ def main(flags):
                     plt.imshow(np_valid_dataset_batch[3])
                     plt.show()
 
-        # Build a DA model. Inputs: n p/t/t tensors. Output: n image tensors.
+        # Build a DA model.
+        print("here.")
+        print(subap_radius_meters)
+        die
         dasie_model = DASIEModel(sess,
                                  batch_size=flags.batch_size,
                                  train_dataset=train_dataset,
