@@ -1134,7 +1134,7 @@ class DASIEModel(object):
         # TODO: Major refactor to implement kwargs.
         # TODO: left off here.
         print(self.kwargs)
-        save_dict = vars(self.kwargs)
+        save_dict = self.kwargs
         for v in tf.compat.v1.trainable_variables():
             save_dict[v.name] = self.sess.run(v)
 
