@@ -10,11 +10,11 @@ def main(flags):
     with tf.compat.v1.Session() as sess:
         print("Restoring Recovery Model.")
 
-        restore_dict = json.load(open(dasie_model_save_file, 'r'))
+        restore_dict = json.load(open(flags.dasie_model_save_file, 'r'))
 
         dasie_model = DASIEModel(sess, restore_dict["kwargs"])
 
-        dasie_model.restore(dasie_model_save_file)
+        dasie_model.restore(flags.dasie_model_save_file)
         print("Recovery Model Restored.")
         die
 
