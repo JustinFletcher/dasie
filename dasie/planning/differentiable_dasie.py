@@ -804,17 +804,18 @@ class DASIEModel(object):
         if inputs is not None:
             self.perfect_image = inputs
         else:
+            shape = (self.image_x_scale, self.image_y_scale, 1, 1)
             self.perfect_image = tf.compat.v1.placeholder(tf.float64,
-                                                          shape=batch_shape,
+                                                          shape=shape,
                                                           name="object_batch")
 
         with tf.name_scope("image_spectrum_model"):
 
-            # self.perfect_image_spectrum = tf.signal.fft2d(
-            #     tf.cast(tf.squeeze(self.perfect_image, axis=-1),
-            #             dtype=tf.complex128))
             self.perfect_image_spectrum = tf.signal.fft2d(
-                tf.cast(self.perfect_image, dtype=tf.complex128))
+                tf.cast(tf.squeeze(self.perfect_image, axis=-1),
+                        dtype=tf.complex128))
+            # self.perfect_image_spectrum = tf.signal.fft2d(
+            #     tf.cast(self.perfect_image, dtype=tf.complex128))
 
         # TODO: Make the distributed aperture optical model a separate method.
 
