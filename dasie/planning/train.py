@@ -85,8 +85,15 @@ def train(sess,
 
         print("Epoch %d Model Saving." % i)
         # TODO: Put me back after validation when you're done.
-        dasie_model.save(logdir=logdir,)
+        save_file_path = os.path.join(logdir, "model_save_" + str(i) + ".json")
+        dasie_model.save(save_file_path)
         print("Epoch %d Model Saved." % i)
+
+        print("Epoch %d Model Restoring." % i)
+        # TODO: Put me back after validation when you're done.
+        dasie_model.restore(save_file_path)
+        print("Epoch %d Model Restored." % i)
+        die
 
 
 

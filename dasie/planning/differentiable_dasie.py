@@ -1144,7 +1144,7 @@ class DASIEModel(object):
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
 
-    def save(self, logdir=None, step=None):
+    def save(self, save_file_path):
         """
         This function saves a dictionary comprising all weights, kwargs, and
         the git hash so that any model trained from the same commit can be
@@ -1167,24 +1167,13 @@ class DASIEModel(object):
         for v in tf.compat.v1.trainable_variables():
             save_dict[v.name] = self.sess.run(v)
 
-        print(save_dict)
-        if step:
-            json_file = os.path.join(logdir,
-                                     "model_save_" + str(step) + ".json")
-        else:
-            json_file = os.path.join(logdir, "model_save" + ".json")
-        print(json_file)
         # json.dump(save_dict, open(json_file, 'w'))
-        json.dump(save_dict, open(json_file, 'w'), cls=NpEncoder)
+        json.dump(save_dict, open(save_file_path, 'w'), cls=NpEncoder)
 
-        print("I'm trying to save here!")
-        die
-
-        # TODO: Implement.
         return None
 
 
-    def restore(self):
+    def restore(self, restore_file_path):
         """
         This function loads a dictionary comprising all weights and kwargs,
         enabling their use to restore the saved model if the model is the same.
@@ -1192,9 +1181,10 @@ class DASIEModel(object):
         """
 
         # TODO: Implement.
-        restore_dict = json.load(restore_file)
+        restore_dict = json.load(restore_file_path)
         for v in tf.compat.v1.trainable_variables():
-            v.value = restore_dict["variables"][v.name]
+            # v.value = restore_dict["variables"][v.name]
+            v.load(restore_dict["variables"][v.name], self.sess)
 
         return None
 
