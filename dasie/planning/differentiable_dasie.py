@@ -581,10 +581,9 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_model"):
 
-            # TODO: Look in here and see if this will build without the dataset
+            # TODO: remove superfluous property arguments.
             self._build_dasie_model(
                 inputs=self.dataset_batch,
-                batch_size=self.batch_size,
                 spatial_quantization=self.spatial_quantization,
                 num_apertures=self.num_apertures,
                 radius_meters=self.radius_meters,
