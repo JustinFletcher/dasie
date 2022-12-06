@@ -1151,18 +1151,11 @@ class DASIEModel(object):
         restored.
         :return: None
         """
-        # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
-        # print([v for v in tf.compat.v1.trainable_variables()])
-        # checkpoint_path = os.path.join(logdir, "ckpt")
-        # checkpoint = tf.train.Checkpoint(model=self.output_images)
-        # save_path = checkpoint.save(checkpoint_path)
-        # checkpoint = tf.train.Checkpoint(model=self.output_images,
-        #                                  zernikes=self.plan)
 
         save_dict = dict()
         for key, value in self.kwargs.items():
             if is_jsonable(value):
-                save_dict[key] = value
+                save_dict["variables"][key] = value
 
         for v in tf.compat.v1.trainable_variables():
             save_dict[v.name] = self.sess.run(v)
