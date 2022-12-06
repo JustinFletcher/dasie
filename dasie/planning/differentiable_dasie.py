@@ -556,28 +556,34 @@ class DASIEModel(object):
 
         self.radius_meters = self.diameter_meters / 2
 
-        # TODO: Make this optional by providing some other dataset batch.
-        train_iterator = train_dataset.get_iterator()
-        self.train_iterator_handle = sess.run(train_iterator.string_handle())
+        if (train_dataset == None) or (valid_dataset == None):
 
-        valid_iterator = valid_dataset.get_iterator()
-        self.valid_iterator_handle = sess.run(valid_iterator.string_handle())
+            self.dataset_batch = None
 
-        self.handle = tf.compat.v1.placeholder(tf.string, shape=[])
+        else:
 
-        # Abstract specific iterators as only their types.
-        iterator_output_types = train_iterator.output_types
-        iterator = tf.compat.v1.data.Iterator.from_string_handle(self.handle,
-                                                                 iterator_output_types)
-        dataset_batch = iterator.get_next()
+            # TODO: Make this optional by providing some other dataset batch.
+            train_iterator = train_dataset.get_iterator()
+            self.train_iterator_handle = sess.run(train_iterator.string_handle())
 
-        self.dataset_batch = dataset_batch
+            valid_iterator = valid_dataset.get_iterator()
+            self.valid_iterator_handle = sess.run(valid_iterator.string_handle())
+
+            self.handle = tf.compat.v1.placeholder(tf.string, shape=[])
+
+            # Abstract specific iterators as only their types.
+            iterator_output_types = train_iterator.output_types
+            iterator = tf.compat.v1.data.Iterator.from_string_handle(self.handle,
+                                                                     iterator_output_types)
+            dataset_batch = iterator.get_next()
+
+            self.dataset_batch = dataset_batch
 
         with tf.name_scope("dasie_model"):
 
             # TODO: Look in here and see if this will build without the dataset
             self._build_dasie_model(
-                inputs=dataset_batch,
+                inputs=self.dataset_batch,
                 spatial_quantization=self.spatial_quantization,
                 num_apertures=self.num_apertures,
                 radius_meters=self.radius_meters,
