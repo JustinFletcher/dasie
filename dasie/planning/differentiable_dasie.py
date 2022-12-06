@@ -804,7 +804,7 @@ class DASIEModel(object):
         if inputs is not None:
             self.perfect_image = inputs
         else:
-            shape = (1, self.image_x_scale, self.image_y_scale, num_exposures)
+            shape = (1, self.image_x_scale, self.image_y_scale, 1)
             self.perfect_image = tf.compat.v1.placeholder(tf.float64,
                                                           shape=shape,
                                                           name="object_batch")
