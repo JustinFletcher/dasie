@@ -584,6 +584,7 @@ class DASIEModel(object):
             # TODO: Look in here and see if this will build without the dataset
             self._build_dasie_model(
                 inputs=self.dataset_batch,
+                batch_size=self.batch_size,
                 spatial_quantization=self.spatial_quantization,
                 num_apertures=self.num_apertures,
                 radius_meters=self.radius_meters,
@@ -800,11 +801,15 @@ class DASIEModel(object):
 
         # Build object plane image batch tensor objects.
         # TODO: Refactor "perfect_image" to "object_batch" everywhere.
+        # TODO: Externalize
         batch_shape = (self.image_x_scale, self.image_y_scale)
         if inputs is not None:
             self.perfect_image = inputs
         else:
-            shape = (1, self.image_x_scale, self.image_y_scale, 1)
+            shape = (self.batch_size,
+                     self.image_x_scale,
+                     self.image_y_scale,
+                     1)
             self.perfect_image = tf.compat.v1.placeholder(tf.float64,
                                                           shape=shape,
                                                           name="object_batch")
