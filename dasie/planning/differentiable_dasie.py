@@ -1157,6 +1157,7 @@ class DASIEModel(object):
             if is_jsonable(value):
                 save_dict[key] = value
 
+        save_dict["variables"] = dict()
         for v in tf.compat.v1.trainable_variables():
             save_dict["variables"][v.name] = self.sess.run(v)
 
