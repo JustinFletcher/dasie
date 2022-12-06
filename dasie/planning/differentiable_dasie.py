@@ -648,16 +648,18 @@ class DASIEModel(object):
             #     tf.summary.histogram("piston", pistons)
             # TODO: clean this up.
             # I wonder if this works...
-            with self.writer.as_default():
 
-                # TODO: refactor all these endpoints to name *_batch.
-                tf.summary.scalar("in_graph_loss", self.loss)
-                tf.summary.scalar("monolithic_aperture_image_mse",
-                                  self.monolithic_aperture_image_mse)
-                tf.summary.scalar("distributed_aperture_image_mse",
-                                  self.distributed_aperture_image_mse)
-                tf.summary.scalar("da_mse_mono_mse_ratio",
-                                  self.da_mse_mono_mse_ratio)
+            if self.writer:
+                with self.writer.as_default():
+
+                    # TODO: refactor all these endpoints to name *_batch.
+                    tf.summary.scalar("in_graph_loss", self.loss)
+                    tf.summary.scalar("monolithic_aperture_image_mse",
+                                      self.monolithic_aperture_image_mse)
+                    tf.summary.scalar("distributed_aperture_image_mse",
+                                      self.distributed_aperture_image_mse)
+                    tf.summary.scalar("da_mse_mono_mse_ratio",
+                                      self.da_mse_mono_mse_ratio)
                 # tf.compat.v1.summary.scalar("v1_test", self.loss)
 
             with tf.compat.v1.Graph().as_default():
