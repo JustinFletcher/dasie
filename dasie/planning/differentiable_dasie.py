@@ -810,11 +810,11 @@ class DASIEModel(object):
 
         with tf.name_scope("image_spectrum_model"):
 
-            self.perfect_image_spectrum = tf.signal.fft2d(
-                tf.cast(tf.squeeze(self.perfect_image, axis=-1),
-                        dtype=tf.complex128))
             # self.perfect_image_spectrum = tf.signal.fft2d(
-            #     tf.cast(self.perfect_image, dtype=tf.complex128))
+            #     tf.cast(tf.squeeze(self.perfect_image, axis=-1),
+            #             dtype=tf.complex128))
+            self.perfect_image_spectrum = tf.signal.fft2d(
+                tf.cast(self.perfect_image, dtype=tf.complex128))
 
         # TODO: Make the distributed aperture optical model a separate method.
 
