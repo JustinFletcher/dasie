@@ -1175,7 +1175,7 @@ class DASIEModel(object):
             json_file = os.path.join(logdir, "model_save" + ".json")
         print(json_file)
         # json.dump(save_dict, open(json_file, 'w'))
-        json.dumps(save_dict, open(json_file, 'w'), cls=NpEncoder)
+        json.dump(save_dict, open(json_file, 'w'), cls=NpEncoder)
 
         print("I'm trying to save here!")
         die
