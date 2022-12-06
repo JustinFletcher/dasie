@@ -835,8 +835,11 @@ class DASIEModel(object):
 
         # For each exposure, build the pupil function for that exposure.
         self.pupil_planes = list()
+        self.plan = dict()
         for exposure_num in range(num_exposures):
+            self.plan[exposure_num] = dict()
             with tf.name_scope("exposure_" + str(exposure_num)):
+
 
                 # Build the pupil plane quantization grid for this exposure.
                 pupil_plane = tf.zeros((spatial_quantization,
@@ -847,6 +850,7 @@ class DASIEModel(object):
                 with tf.name_scope("pupil_plane_model"):
 
                     for aperture_num in range(num_apertures):
+                        self.plan[exposure_num][aperture_num] = dict()
 
                         print("Building aperture number %d." % aperture_num)
 
@@ -870,6 +874,7 @@ class DASIEModel(object):
                             # Build TF Variables around the coefficients.
                             subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(subap_zernike_coeffs,
                                                                                                         trainable=dm_trainable)
+                            self.plan[exposure_num][aperture_num] = subap_zernike_coefficients_vars
                             # Render this subaperture on the pupil plane grid.
                             # TODO: Ryan: Here's where I can set the phase scale to physical units. Should I?
                             # pupil_plane += self.phase_scale * zernike_aperture_function_2d(X,
@@ -1137,6 +1142,11 @@ class DASIEModel(object):
         """
         # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
         # print([v for v in tf.compat.v1.trainable_variables()])
+        checkpoint_path = os.path.join(logdir, "ckpt")
+        checkpoint = tf.train.Checkpoint(model=self.output_images)
+        save_path = checkpoint.save(checkpoint_path)
+        # checkpoint = tf.train.Checkpoint(model=self.output_images,
+        #                                  zernikes=self.plan)
 
         save_dict = dict()
         for key, value in self.kwargs.items():
@@ -1149,9 +1159,9 @@ class DASIEModel(object):
         print(save_dict)
         if step:
             json_file = os.path.join(logdir,
-                                     "model_checkpoint_" + str(step) + ".json")
+                                     "model_save_" + str(step) + ".json")
         else:
-            json_file = os.path.join(logdir, "model_checkpoint" + ".json")
+            json_file = os.path.join(logdir, "model_save" + ".json")
         print(json_file)
         json.dump(save_dict, open(json_file, 'w'))
 
