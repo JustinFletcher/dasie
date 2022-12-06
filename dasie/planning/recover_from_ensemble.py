@@ -37,4 +37,7 @@ if __name__ == '__main__':
                               the recovered model will infer to produce a \
                               reconstructed image.')
 
-    main(flags)
+    # Parse known arguments.
+    parsed_flags, _ = parser.parse_known_args()
+
+    main(parsed_flags)
