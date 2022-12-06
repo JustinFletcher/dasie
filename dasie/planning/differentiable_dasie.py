@@ -40,6 +40,17 @@ from recovery_models import RecoveryModel
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
 
+# TODO: Externalize.
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
+
 def is_jsonable(x):
     try:
         json.dumps(x)
@@ -1142,9 +1153,9 @@ class DASIEModel(object):
         """
         # var = [v for v in tf.trainable_variables() if v.name == "tower_2/filter:0"][0]
         # print([v for v in tf.compat.v1.trainable_variables()])
-        checkpoint_path = os.path.join(logdir, "ckpt")
-        checkpoint = tf.train.Checkpoint(model=self.output_images)
-        save_path = checkpoint.save(checkpoint_path)
+        # checkpoint_path = os.path.join(logdir, "ckpt")
+        # checkpoint = tf.train.Checkpoint(model=self.output_images)
+        # save_path = checkpoint.save(checkpoint_path)
         # checkpoint = tf.train.Checkpoint(model=self.output_images,
         #                                  zernikes=self.plan)
 
@@ -1163,7 +1174,8 @@ class DASIEModel(object):
         else:
             json_file = os.path.join(logdir, "model_save" + ".json")
         print(json_file)
-        json.dump(save_dict, open(json_file, 'w'))
+        # json.dump(save_dict, open(json_file, 'w'))
+        json.dumps(save_dict, open(json_file, 'w'), cls=NpEncoder)
 
         print("I'm trying to save here!")
         die
