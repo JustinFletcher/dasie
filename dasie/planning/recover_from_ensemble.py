@@ -14,7 +14,7 @@ def main(flags):
 
         restore_dict = json.load(open(flags.dasie_model_save_file, 'r'))
 
-        dasie_model = DASIEModel(sess, restore_dict["kwargs"])
+        dasie_model = DASIEModel(sess, **restore_dict["kwargs"])
 
         dasie_model.restore(flags.dasie_model_save_file)
         print("Recovery Model Restored.")
