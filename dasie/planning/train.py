@@ -80,22 +80,9 @@ def train(sess,
         print("Beginning Epoch %d" % i)
         tf.summary.experimental.set_step(i)
 
-
-
-
-        print("Epoch %d Model Saving." % i)
-        # TODO: Put me back after validation when you're done.
-        save_file_path = os.path.join(logdir, "model_save_" + str(i) + ".json")
-        dasie_model.save(save_file_path)
-        print("Epoch %d Model Saved." % i)
-
-        print("Epoch %d Model Restoring." % i)
-        # TODO: Put me back after validation when you're done.
-        dasie_model.restore(save_file_path)
-        print("Epoch %d Model Restored." % i)
-        die
-
-
+        # print("Epoch %d Model Restoring." % i)
+        # dasie_model.restore(save_file_path)
+        # print("Epoch %d Model Restored." % i)
 
         # First, plot the model status if requested
         print("Epoch %d Plots Plotting." % i)
@@ -113,7 +100,7 @@ def train(sess,
         print("Epoch %d Plots Plotted." % i)
 
         # Initialize the validation dataset iterator to prepare for validation.
-        print("Validating...")
+        print("Epoch %d Validation Beginning..." % i)
         sess.run(valid_dataset_initializer)
 
         # Initialize the validation display metrics.
@@ -157,13 +144,21 @@ def train(sess,
 
             print("Validation Loss: %f" % mean_valid_loss)
             print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
-            print("Epoch %d Validation Complete." % i)
             pass
 
+        print("Epoch %d Validation Complete." % i)
+
+        print("Epoch %d Results Saving." % i)
         # Write the results dict for this epoch.
         json_file = os.path.join(logdir, "results_" + str(i) + ".json")
         json.dump(results_dict, open(json_file, 'w'))
         # data = json.load(open("file_name.json"))
+        print("Epoch %d Results Saved." % i)
+
+        print("Epoch %d Model Saving." % i)
+        save_file_path = os.path.join(logdir, "model_save_" + str(i) + ".json")
+        dasie_model.save(save_file_path)
+        print("Epoch %d Model Saved." % i)
 
         # TODO: Refactor to report at the step scale for training.
         # Execute the summary writer ops to write their values.
@@ -175,7 +170,7 @@ def train(sess,
 
 
         # Initialize the training dataset iterator to prepare for training.
-        print("Training...")
+        print("Epoch %d Training Beginning." % i)
         sess.run(train_dataset_initializer)
 
         # Initialize the training display metrics.
@@ -229,11 +224,12 @@ def train(sess,
             results_dict["results"]["train_mse_ratio_list"].append(mean_train_da_mse_mono_mse_ratio)
             results_dict["results"]["train_epoch_time_list"].append(train_epoch_time)
 
-            print("Train Loss: %f" % mean_train_loss)
-            print("Train DA MSE: %f" % mean_train_distributed_aperture_image_mse)
-            print("Epoch %d Training Complete." % i)
+            print("Mean Train Loss: %f" % mean_train_loss)
+            print("Mean Train DA MSE: %f" % mean_train_distributed_aperture_image_mse)
 
             pass
+
+        print("Epoch %d Training Complete." % i)
 
 
 def speedplus_parse_function(example_proto):

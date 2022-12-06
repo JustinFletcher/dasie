@@ -1153,9 +1153,10 @@ class DASIEModel(object):
         """
 
         save_dict = dict()
+        save_dict["kwargs"] = dict()
         for key, value in self.kwargs.items():
             if is_jsonable(value):
-                save_dict[key] = value
+                save_dict["kwargs"][key] = value
 
         save_dict["variables"] = dict()
         for v in tf.compat.v1.trainable_variables():
@@ -1177,7 +1178,7 @@ class DASIEModel(object):
         # TODO: Implement.
         restore_dict = json.load(open(restore_file_path, 'r'))
         for v in tf.compat.v1.trainable_variables():
-            # v.value = restore_dict["variables"][v.name]
+
             v.load(restore_dict["variables"][v.name], self.sess)
 
         return None
@@ -1202,6 +1203,6 @@ class DASIEModel(object):
 
     def recover(self, images):
 
-        return self.sess.run([self.recovered_image
-                              ],
+        # TODO: implement correctly.
+        return self.sess.run([self.recovered_image],
                              feed_dict={self.handle: self.valid_iterator_handle})
