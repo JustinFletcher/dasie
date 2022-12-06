@@ -3,6 +3,8 @@ import argparse
 
 import tensorflow as tf
 
+from differentiable_dasie import DASIEModel
+
 def main(flags):
 
 
