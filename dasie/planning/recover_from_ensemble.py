@@ -1,5 +1,7 @@
 import argparse
 
+import tensorflow as tf
+
 def main(flags):
 
 
