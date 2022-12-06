@@ -1155,10 +1155,10 @@ class DASIEModel(object):
         save_dict = dict()
         for key, value in self.kwargs.items():
             if is_jsonable(value):
-                save_dict["variables"][key] = value
+                save_dict[key] = value
 
         for v in tf.compat.v1.trainable_variables():
-            save_dict[v.name] = self.sess.run(v)
+            save_dict["variables"][v.name] = self.sess.run(v)
 
         # json.dump(save_dict, open(json_file, 'w'))
         json.dump(save_dict, open(save_file_path, 'w'), cls=NpEncoder)
