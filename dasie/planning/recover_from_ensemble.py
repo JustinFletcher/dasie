@@ -113,11 +113,11 @@ def main(flags):
 
                 # TODO: check extension.
                 filename, extension = os.path.splitext(f)
-                if extension == "jpg":
+                if extension == ".jpg":
                     image = read_jpg(f)
-                elif extension == "png":
+                elif extension == ".png":
                     image = read_png(f)
-                elif extension == "fits":
+                elif extension == ".fits":
                     image = read_fits(f)
                 else:
                     raise NotImplementedError("The supplied file type %s\
@@ -135,11 +135,11 @@ def main(flags):
 
         recovered_image = dasie_model.recover(images)
 
-        if extension == "jpg":
+        if extension == ".jpg":
             write_jpg(recovered_image)
-        elif extension == "png":
+        elif extension == ".png":
             write_png(recovered_image)
-        elif extension == "fits":
+        elif extension == ".fits":
             write_fits(recovered_image)
         else:
             raise NotImplementedError("The supplied file type %s\
