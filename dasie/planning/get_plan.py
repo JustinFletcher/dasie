@@ -42,7 +42,7 @@ def dasie_save_to_plan_arry(dasie_model_save_dict):
 
 def main(flags):
 
-    dasie_model_save_dict = json.load(flags.dasie_model_save_file)
+    dasie_model_save_dict = json.load(open(flags.dasie_model_save_file, 'r'))
 
     plan_array = dasie_save_to_plan_array(dasie_model_save_dict)
 
