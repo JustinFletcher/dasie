@@ -2,6 +2,8 @@ import os
 import json
 import argparse
 
+
+import astropy
 import numpy as np
 import tensorflow as tf
 import matplotlib
@@ -105,18 +107,25 @@ def write_png(image, filepath):
 
 
 def main(flags):
+
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
+
         print("Restoring Recovery Model.")
 
+        # Parse the kwargs that produced the model, and set batch size to 1.
         restore_dict = json.load(open(flags.dasie_model_save_file, 'r'))
         restore_dict["kwargs"]["batch_size"] = 1
 
+        # Instantiate a new model with the same kwargs.
         dasie_model = DASIEModel(sess, **restore_dict["kwargs"])
 
+        # Restore the weights.
         dasie_model.restore(flags.dasie_model_save_file)
         print("Recovery Model Restored.")
 
+
+        print("Loading Ensemble Images.")
         images = list()
 
         # Iterate over each file in the provided directory, loading images.
@@ -124,7 +133,7 @@ def main(flags):
             full_image_path = os.path.join(flags.image_ensemble_path, f)
             if os.path.isfile(full_image_path):
 
-                # TODO: check extension.
+                # Read the files based on the extensions.
                 filename, extension = os.path.splitext(f)
                 if extension == ".jpg":
                     image = read_jpg(full_image_path)
@@ -148,11 +157,13 @@ def main(flags):
                               " % (len(images),
                                    restore_dict["kwargs"]["num_exposures"]))
 
-        recovered_image = dasie_model.recover(images)[0]
-        # print(recovered_image)
-        #
-        # print(recovered_image[0].shape)
+        print("Ensemble Images Loaded.")
 
+        print("Inferring Restored Image.")
+        recovered_image = dasie_model.recover(images)[0]
+        print("Restored Image Inferred.")
+
+        print("Saving Restored Image.")
         full_output_file_path = os.path.join(flags.output_file_path,
                                              flags.output_file_name +
                                              extension)
@@ -168,6 +179,8 @@ def main(flags):
                                        recover_from_ensemble.py to \
                                        add new types." % extension)
 
+        print("Restored Image Saved.")
+
     return
 
 
@@ -181,6 +194,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--dasie_model_save_file',
                         type=str,
+                        default=os.path.join(".",
+                                             "dasie",
+                                             "resources",
+                                             "model_save_0.json"),
                         help='The save file for the model to load.')
 
     parser.add_argument('--image_ensemble_path',
