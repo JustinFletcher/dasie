@@ -1204,7 +1204,7 @@ class DASIEModel(object):
 
         feed_dict = dict()
         for (var, image) in zip(self.distributed_aperture_images, images):
-            feed_dict[var] = image
+            feed_dict[var] = np.expand_dims(image, axis=0)
 
         return self.sess.run([self.recovered_image],
                              feed_dict=feed_dict)
