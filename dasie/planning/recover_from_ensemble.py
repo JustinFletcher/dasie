@@ -2,6 +2,7 @@ import os
 import json
 import argparse
 
+import numpy as np
 import tensorflow as tf
 from matplotlib import image
 
