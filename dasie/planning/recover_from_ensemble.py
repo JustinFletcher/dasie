@@ -79,6 +79,7 @@ def write_jpg(image, filepath):
     :param filepath: a complete filepath, at which to write image as jpg
     :return: None
     """
+    print(filepath)
     matplotlib.image.imsave(filepath, image)
 
     return
