@@ -15,7 +15,7 @@ def dasie_save_to_plan_array(dasie_model_save_dict):
     num_zernike_indices = kwargs["num_zernike_indices"]
     plan_array = np.zeros((num_exposures, num_apertures, num_zernike_indices))
 
-    for (var_name, var_value) in dasie_model_save_dict["variables"]:
+    for (var_name, var_value) in dasie_model_save_dict["variables"].items():
         "dasie_model/exposure_0/pupil_plane_model/subaperture_0/zernike_coefficient_0:0"
         # Split variable name by /.
         var_scope_list = var_name.split('/')
