@@ -51,6 +51,7 @@ def main(flags):
     return plan_array
 
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='provide arguments for training.')
