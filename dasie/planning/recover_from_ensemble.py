@@ -146,7 +146,8 @@ def main(flags):
 
 
         full_output_file_path =  os.path.join(flags.output_file_path,
-                                              flags.output_file_name)
+                                              flags.output_file_name,
+                                              extension)
         if extension == ".jpg":
             write_jpg(recovered_image, full_output_file_path)
         elif extension == ".png":
