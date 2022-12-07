@@ -109,16 +109,17 @@ def main(flags):
 
         # Iterate over each file in the provided directory, loading images.
         for f in os.listdir(flags.image_ensemble_path):
-            if os.path.isfile(os.path.join(flags.image_ensemble_path, f)):
+            full_image_path = os.path.join(flags.image_ensemble_path, f)
+            if os.path.isfile(full_image_path):
 
                 # TODO: check extension.
                 filename, extension = os.path.splitext(f)
                 if extension == ".jpg":
-                    image = read_jpg(f)
+                    image = read_jpg(full_image_path)
                 elif extension == ".png":
-                    image = read_png(f)
+                    image = read_png(full_image_path)
                 elif extension == ".fits":
-                    image = read_fits(f)
+                    image = read_fits(full_image_path)
                 else:
                     raise NotImplementedError("The supplied file type %s\
                                                is not yet supported. Extend\
@@ -135,12 +136,15 @@ def main(flags):
 
         recovered_image = dasie_model.recover(images)
 
+
+        full_output_file_path =  os.path.join(flags.output_file_path,
+                                              flags.output_file_name)
         if extension == ".jpg":
-            write_jpg(recovered_image)
+            write_jpg(recovered_image, full_output_file_path)
         elif extension == ".png":
-            write_png(recovered_image)
+            write_png(recovered_image, full_output_file_path)
         elif extension == ".fits":
-            write_fits(recovered_image)
+            write_fits(recovered_image, full_output_file_path)
         else:
             raise NotImplementedError("The supplied file type %s\
                                        is not yet supported. Extend\
