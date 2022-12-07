@@ -100,6 +100,7 @@ def main(flags):
         print("Restoring Recovery Model.")
 
         restore_dict = json.load(open(flags.dasie_model_save_file, 'r'))
+        restore_dict["kwargs"]["batch_size"] = 1
 
         dasie_model = DASIEModel(sess, **restore_dict["kwargs"])
 
