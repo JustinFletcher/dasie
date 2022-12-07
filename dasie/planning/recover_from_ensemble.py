@@ -9,8 +9,10 @@ from matplotlib import image
 
 from differentiable_dasie import DASIEModel
 
+
 def rgb2gray(rgb):
-    return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
+    return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
+
 
 def convert(img, target_type_min, target_type_max, target_type):
     imin = img.min()
@@ -20,6 +22,7 @@ def convert(img, target_type_min, target_type_max, target_type):
     b = target_type_max - a * imax
     new_img = (a * img + b).astype(target_type)
     return new_img
+
 
 def read_fits(filepath):
     """Reads simple 1-hdu FITS file into a numpy arrays
@@ -33,6 +36,7 @@ def read_fits(filepath):
 
     return a
 
+
 def read_png(filepath):
     """
     Reads a png file into a numpy arrays
@@ -44,6 +48,7 @@ def read_png(filepath):
     png_data = image.imread(filepath, format="png")
     png_data = convert(png_data, 0, 255, np.uint8)
     return png_data
+
 
 def read_jpg(filepath):
     """
@@ -71,6 +76,7 @@ def write_fits(image, filepath):
 
     return
 
+
 def write_jpg(image, filepath):
     """
     Writes a jpg to filepath, give an np.array image.
@@ -84,6 +90,7 @@ def write_jpg(image, filepath):
 
     return
 
+
 def write_png(image, filepath):
     """
     Writes a png to filepath, give an np.array image.
@@ -96,9 +103,8 @@ def write_png(image, filepath):
 
     return
 
+
 def main(flags):
-
-
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
         print("Restoring Recovery Model.")
@@ -144,10 +150,9 @@ def main(flags):
 
         recovered_image = dasie_model.recover(images)
 
-
-        full_output_file_path =  os.path.join(flags.output_file_path,
-                                              flags.output_file_name,
-                                              extension)
+        full_output_file_path = os.path.join(flags.output_file_path,
+                                             flags.output_file_name +
+                                             extension)
         if extension == ".jpg":
             write_jpg(recovered_image, full_output_file_path)
         elif extension == ".png":
@@ -164,7 +169,6 @@ def main(flags):
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser(
         description='provide arguments for training.')
 
