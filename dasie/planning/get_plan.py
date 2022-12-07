@@ -46,7 +46,7 @@ def main(flags):
 
     plan_array = dasie_save_to_plan_array(dasie_model_save_dict)
 
-    print(plan_array, indent=4)
+    print(plan_array)
 
     return plan_array
 
