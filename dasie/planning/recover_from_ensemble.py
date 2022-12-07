@@ -4,6 +4,7 @@ import argparse
 
 import numpy as np
 import tensorflow as tf
+import matplotlib
 from matplotlib import image
 
 from differentiable_dasie import DASIEModel
