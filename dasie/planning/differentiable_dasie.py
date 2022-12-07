@@ -1202,6 +1202,9 @@ class DASIEModel(object):
 
     def recover(self, images):
 
-        # TODO: implement correctly.
+        feed_dict = dict()
+        for (var, image) in zip(self.distributed_aperture_images, images):
+            feed_dict[var] = image
+
         return self.sess.run([self.recovered_image],
-                             feed_dict={self.distributed_aperture_images: images})
+                             feed_dict=feed_dict)
