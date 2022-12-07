@@ -51,6 +51,7 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
+# TODO: Externalize
 def is_jsonable(x):
     try:
         json.dumps(x)
@@ -58,6 +59,7 @@ def is_jsonable(x):
     except (TypeError, OverflowError):
         return False
 
+# TODO: Externalize
 def cosine_similarity(u, v):
     """
     :param u: Any np.array matching u in shape (and semantics probably)
@@ -78,6 +80,7 @@ def cosine_similarity(u, v):
 
     return cos_sim
 
+# TODO: Externalize
 def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
     return r < radius
@@ -469,7 +472,7 @@ def zernike_aperture_function_2d(X,
     print("-Ending aperture function.")
     return tensor_zernike_2d_field
 
-
+# TODO: Externalize
 def set_kwargs_default(key, value, kwargs):
     kwargs[key] = kwargs.get(key, value)
     return (kwargs[key])
@@ -480,21 +483,6 @@ class DASIEModel(object):
                  sess,
                  train_dataset=None,
                  valid_dataset=None,
-                 # batch_size=2,
-                 # loss_name="mse",
-                 # learning_rate=1.0,
-                 # num_apertures=15,
-                 # spatial_quantization=256,
-                 # image_x_scale=256,
-                 # image_y_scale=256,
-                 # subaperture_radius_meters=None,
-                 # num_exposures=1,
-                 # recovery_model_filter_scale=16,
-                 # diameter_meters=2.5,
-                 # num_zernike_indices=1,
-                 # zernike_debug=False,
-                 # hadamard_image_formation=True,
-                 # writer=None,
                  **kwargs):
 
         self.sess = sess
@@ -820,8 +808,6 @@ class DASIEModel(object):
             self.perfect_image_spectrum = tf.signal.fft2d(
                 tf.cast(tf.squeeze(self.perfect_image, axis=-1),
                         dtype=tf.complex128))
-            # self.perfect_image_spectrum = tf.signal.fft2d(
-            #     tf.cast(self.perfect_image, dtype=tf.complex128))
 
         # TODO: Make the distributed aperture optical model a separate method.
 
@@ -1218,4 +1204,4 @@ class DASIEModel(object):
 
         # TODO: implement correctly.
         return self.sess.run([self.recovered_image],
-                             feed_dict={self.handle: self.valid_iterator_handle})
+                             feed_dict={self.distributed_aperture_images: images})
