@@ -149,6 +149,7 @@ def main(flags):
                                    restore_dict["kwargs"]["num_exposures"]))
 
         recovered_image = dasie_model.recover(images)
+        print(recovered_image)
 
         full_output_file_path = os.path.join(flags.output_file_path,
                                              flags.output_file_name +
