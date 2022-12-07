@@ -7,7 +7,7 @@ import numpy as np
 
 
 
-def dasie_save_to_plan_arry(dasie_model_save_dict):
+def dasie_save_to_plan_array(dasie_model_save_dict):
 
     kwargs = dasie_model_save_dict["kwargs"]
     num_exposures = kwargs["num_exposures"]
