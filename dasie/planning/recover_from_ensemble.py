@@ -8,6 +8,8 @@ from matplotlib import image
 
 from differentiable_dasie import DASIEModel
 
+def rgb2gray(rgb):
+    return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
 
 def convert(img, target_type_min, target_type_max, target_type):
     imin = img.min()
@@ -127,6 +129,8 @@ def main(flags):
                                                is not yet supported. Extend\
                                                recover_from_ensemble.py to \
                                                add new types." % extension)
+                if len(image.shape) > 2:
+                    image = rgb2gray(image)
                 images.append(image)
 
         if len(images) != restore_dict["kwargs"]["num_exposures"]:
