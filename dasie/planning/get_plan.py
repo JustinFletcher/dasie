@@ -34,9 +34,9 @@ def dasie_save_to_plan_array(dasie_model_save_dict):
             zernike_coefficient_name = zernike_coefficient_name.split(':')[0]
             zernike_coefficient_num = zernike_coefficient_name.split('_')[-1]
 
-            plan_array[exposure_num,
-                       subaperture_num,
-                       zernike_coefficient_num] = var_value
+            plan_array[int(exposure_num),
+                       int(subaperture_num),
+                       int(zernike_coefficient_num)] = var_value
 
     return plan_array
 
