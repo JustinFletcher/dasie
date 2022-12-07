@@ -148,10 +148,10 @@ def main(flags):
                               " % (len(images),
                                    restore_dict["kwargs"]["num_exposures"]))
 
-        recovered_image = dasie_model.recover(images)
-        print(recovered_image)
-
-        print(recovered_image[0].shape)
+        recovered_image = dasie_model.recover(images)[0]
+        # print(recovered_image)
+        #
+        # print(recovered_image[0].shape)
 
         full_output_file_path = os.path.join(flags.output_file_path,
                                              flags.output_file_name +
