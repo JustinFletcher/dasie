@@ -151,7 +151,7 @@ def main(flags):
         recovered_image = dasie_model.recover(images)
         print(recovered_image)
 
-        print(recovered_image.shape)
+        print(recovered_image[0].shape)
 
         full_output_file_path = os.path.join(flags.output_file_path,
                                              flags.output_file_name +
