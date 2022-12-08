@@ -1,0 +1,37 @@
+aperture_diameter_meters: 2.5
+batch_size: 1
+crop: true
+data:
+  dataset_name: speedplus
+  dataset_root: /home/matthew.phelps/data/datasets/dasie/jfletcher
+gpu_list:
+- 0
+hadamard_image_formation: false
+learning_rate: 0.0001
+log:
+  enable_async: true
+  evaluate_init: true
+  exp_name: debug
+  images: true
+  num_threads: 4
+  plot_freq: 1
+  run_name: run_0
+  save_best: false
+  save_freq: 1
+  save_init: false
+  save_last: false
+  save_plot: true
+  show_plot: false
+  train_freq: 1
+  uri: ~/dev/DASIE/jfletcher/dasie/mlruns
+loss_name: mae
+num_exposures: 1
+num_steps: 2
+num_subapertures: 15
+num_zernike_indices: 1
+object_plane_scale: 1.0
+random_seed: 1928
+recovery_model_filter_scale: 2
+spatial_quantization: 128
+subaperture_spacing_meters: 0.1
+zernike_debug: false
