@@ -1,6 +1,7 @@
 # (MP) ml stack
 **/mlruns
 **/tmp
+**/logs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
