@@ -10,12 +10,12 @@ is in turn solved by gradient descent.
 
 ## Visuomotor Control
 
-To install `gym` using `pip`, simply: 
+To install `gym` and other dependencies using `pip`, simply: 
 
-``pip install gym``
+``pip install gym==0.21.0 Pillow matplotlib joblib hcipy pyglet``
 
 This will be sufficient for most installation use cases, as environment registration is handled by the `gym` [registation
-API][2]. To build form source instead, use:
+API][2]. To build `gym` from source instead, use:
 
 ```
 git clone https://github.com/openai/gym
@@ -66,6 +66,16 @@ env.close()
 Or, simply call `python dasie\visuomotor\run_dasie_via_gym.py`.
 
 ## Open-Loop Planning
+
+To install the MLFlow experiment management and Pyrallis configuration libaries:
+```python
+pip install mlflow pyrallis 
+```
+
+To start an MLFlow tracking server for viewing experiments, runs, and artifacts, navigate to your local `mlruns` directly and run:
+```bash
+mlflow ui
+```
 
 In TF 2.3+, invoke the following command to run the existing training routine
 with sequential Zernike modeling per subaperture.
