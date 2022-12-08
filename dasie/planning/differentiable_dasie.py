@@ -1026,13 +1026,15 @@ class DASIEModel(object):
                             self.monolithic_mtf,
                             self.monolithic_aperture_image],
                            feed_dict={self.handle: self.valid_iterator_handle})
-
         # These are actually batches, so just take the first element.
         perfect_image_flipped = perfect_image_flipped[0]
         perfect_image_spectrum = perfect_image_spectrum[0]
         monolithic_aperture_image = monolithic_aperture_image[0]
-        recovered_image = np.squeeze(recovered_image[0])
-
+        # TODO: (MP) Missing batch dimension given batch_size=1
+        if self.batch_size > 1:
+            recovered_image = np.squeeze(recovered_image[0])
+        else:
+            recovered_image = np.squeeze(recovered_image)
         # Iterate over each element of the ensemble from the DA system.
         for i, (pupil_plane,
                 psf,
@@ -1044,7 +1046,6 @@ class DASIEModel(object):
 
             # These are actually batches, so just take the first one.
             distributed_aperture_image = distributed_aperture_image[0]
-
             # Plot phase angle
             left = self.pupil_dimension_x[0]
             right = self.pupil_dimension_x[-1]
@@ -1165,7 +1166,6 @@ class DASIEModel(object):
         json.dump(save_dict, open(save_file_path, 'w'), cls=NpEncoder)
 
         return None
-
 
     def restore(self, restore_file_path):
         """
