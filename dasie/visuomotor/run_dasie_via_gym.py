@@ -7,6 +7,7 @@ Date: 20 October 2019
 """
 
 import os
+from pathlib import Path
 import argparse
 
 import gym
@@ -32,6 +33,9 @@ def cli_main(flags):
     )
 
     # Build a gym environment; pass the CLI flags to the constructor as kwargs.
+    kwarg_dict = vars(flags)
+    # Make default extended object sample image path OS independent and relative to this script directory.
+    kwarg_dict["extended_object_image_file"] = Path(__file__).parent / kwarg_dict["extended_object_image_file"]
     env = gym.make('Dasie-v0', **vars(flags))
 
     # Iterate over the number of desired episodes.
@@ -155,7 +159,7 @@ if __name__ == "__main__":
 
     ############################ DASIE FLAGS ##################################
     parser.add_argument('--extended_object_image_file', type=str,
-                        default=".\\resources\\sample_image.png",
+                        default="../resources/sample_image.png",
                         help='Filename of image to convolve PSF with (if none, PSF returned)')
 
     parser.add_argument('--extended_object_distance', type=str,
