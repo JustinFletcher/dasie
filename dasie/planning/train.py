@@ -28,7 +28,7 @@ from matplotlib.figure import Figure
 import tensorflow as tf
 # TODO: Implement TF probability.
 # import tensorflow_probability as tfp
-
+import zernike
 from recovery_models import RecoveryModel
 from differentiable_dasie import DASIEModel
 
