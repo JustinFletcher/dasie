@@ -9,7 +9,7 @@ import pyrallis
 class DataConfig:
     """Configuration for dataset specification"""
 
-     # Path to a directory holding all datasets.
+    # Path to a directory holding all datasets.
     dataset_root: str = "/home/matthew.phelps/data/datasets/dasie/jfletcher"
     # Path to the train data TFRecords directory.
     dataset_name: str = "speedplus"
@@ -19,29 +19,29 @@ class DataConfig:
 class LogConfig:
     """Configuration for logging (mlflow) specification"""
 
-    # mlflow tracking uri
+    # Mlflow tracking uri
     uri: Optional[str] = "~/dev/DASIE/jfletcher/dasie/mlruns"
     # MLflow run name.
     run_name: str = "run_0"
     # MLFlow experiment name.
     exp_name: str = "debug"
-    # toggle asynchronous logging (not compatible with ray tune)
+    # Toggle asynchronous logging (not compatible with ray tune)
     enable_async: bool = True
-    # number of threads to use in async logging (2 threads/core typically)
+    # Number of threads to use in async logging (2 threads/core typically)
     num_threads: int = 4
-    # every `train_freq` steps, log training quantities (metrics, single image batch, etc.)
+    # Every `train_freq` steps, log training quantities (metrics, single image batch, etc.)
     train_freq: int = 1
-    # run evaluation before first train step
+    # Run evaluation before first train step
     evaluate_init: bool = True
-    # every `save_freq` epochs save the model checkpoint
+    # Every `save_freq` epochs save the model checkpoint
     save_freq: int = 1
-    # save initial model state
+    # Save initial model state
     save_init: bool = False
-    # save last model state
+    # Save last model state
     save_last: bool = False
-    # save best model state (early stopping)
+    # Save best model state (early stopping)
     save_best: bool = False
-    # log images
+    # Log images
     images: bool = True
     # Show the plot?
     show_plot: bool = False
@@ -54,6 +54,7 @@ class LogConfig:
 @dataclass()
 class TrainConfig:
     """Configuration for training instance"""
+    
     # Configuration for logging specification
     log: LogConfig = field(default_factory=LogConfig)
     # Configuration for dataset specification
