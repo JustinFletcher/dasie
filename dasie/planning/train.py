@@ -249,7 +249,7 @@ def train(sess,
                  step_train_da_ssim_mono_ssim_ratio,
                  step_train_distributed_aperture_image_psnr,
                  step_train_monolithic_aperture_image_psnr,
-                 step_train_da_psrn_mono_psnr_ratio,
+                 step_train_da_psnr_mono_psnr_ratio,
                  _) = dasie_model.train()
                 step_end_time = time.time()
                 step_time = step_end_time - step_start_time
