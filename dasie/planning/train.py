@@ -105,7 +105,7 @@ def train(sess,
                 sess.run(valid_dataset_initializer)
                 print("Plotting...")
                 dasie_model.plot(logdir=logdir,
-                                 show_plot=show_plot,
+                                 # show_plot=show_plot,
                                  step=i)
                 print("Plotting completed.")
 
