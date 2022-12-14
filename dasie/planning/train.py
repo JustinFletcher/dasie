@@ -142,7 +142,7 @@ def train(sess,
                  step_valid_da_ssim_mono_ssim_ratio,
                  step_valid_distributed_aperture_image_psnr,
                  step_valid_monolithic_aperture_image_psnr,
-                 step_valid_da_psrn_mono_psnr_ratio) = dasie_model.validate()
+                 step_valid_da_psnr_mono_psnr_ratio) = dasie_model.validate()
 
                 # Increment all of our metrics.
                 # TODO: Eventually refactor to summaries.
@@ -155,7 +155,7 @@ def train(sess,
                 valid_da_ssim_mono_ssim_ratio += step_valid_da_ssim_mono_ssim_ratio
                 valid_distributed_aperture_image_psnr += step_valid_distributed_aperture_image_psnr
                 valid_monolithic_aperture_image_psnr += step_valid_monolithic_aperture_image_psnr
-                valid_da_psnr_mono_psnr_ratio += step_valid_da_psrn_mono_psnr_ratio
+                valid_da_psnr_mono_psnr_ratio += step_valid_da_psnr_mono_psnr_ratio
                 valid_steps += 1.0
 
         # ...there are no more validate batches.
@@ -265,7 +265,7 @@ def train(sess,
                 train_da_ssim_mono_ssim_ratio += step_train_da_ssim_mono_ssim_ratio
                 train_distributed_aperture_image_psnr += step_train_distributed_aperture_image_psnr
                 train_monolithic_aperture_image_psnr += step_train_monolithic_aperture_image_psnr
-                train_da_psnr_mono_psnr_ratio += step_train_da_psrn_mono_psnr_ratio
+                train_da_psnr_mono_psnr_ratio += step_train_da_psnr_mono_psnr_ratio
                 train_steps += 1.0
                 print("...step_train_loss = %f..." % step_train_loss)
                 print("...step_train_da_mse_mono_mse_ratio = %f..." % step_train_da_mse_mono_mse_ratio)
