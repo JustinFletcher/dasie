@@ -36,7 +36,7 @@ def cli_main(flags):
     kwarg_dict = vars(flags)
     # Make default extended object sample image path OS independent and relative to this script directory.
     kwarg_dict["extended_object_image_file"] = Path(__file__).parent / kwarg_dict["extended_object_image_file"]
-    env = gym.make('Dasie-v0', **vars(flags))
+    env = gym.make('Dasie-v0', **kwarg_dict)
 
     # Iterate over the number of desired episodes.
     for i_episode in range(flags.num_episodes):
