@@ -44,13 +44,13 @@ tf.compat.v1.disable_eager_execution()
 # TODO: Externalize.
 def ssim(x_batch, y_batch):
     # TODO: Implement batch SSIM.
-    return (1.0)
+    return (tf.constant(1.0))
 
 
 # TODO: Externalize.
 def psnr(x_batch, y_batch):
     # TODO: Implement batch PSNR.
-    return (1.0)
+    return (tf.constant(1.0))
 
 
 # TODO: Externalize.
