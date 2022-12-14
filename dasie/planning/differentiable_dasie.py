@@ -32,6 +32,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 # TODO: Refactor this import.
 import zernike
+from zernike import init_zernike_coefficients
 from dataset_generator import DatasetGenerator
 from recovery_models import RecoveryModel
 
