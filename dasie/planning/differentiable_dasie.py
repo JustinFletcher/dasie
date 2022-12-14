@@ -242,7 +242,7 @@ class DASIEModel(object):
             # Compute PSNR.
             self.monolithic_aperture_image_psnr = psnr(self.monolithic_aperture_image,
                                                        self.flipped_object_batch)
-            self.distributed_aperture_image_psnr = psrnr(self.recovered_image,
+            self.distributed_aperture_image_psnr = psnr(self.recovered_image,
                                                          self.flipped_object_batch)
             self.da_psnr_mono_psnr_ratio = self.distributed_aperture_image_psnr / self.monolithic_aperture_image_psnr
 
