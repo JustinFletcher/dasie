@@ -15,6 +15,12 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+
+# TODO: Externalize and join.
+def circle_mask(X, Y, x_center, y_center, radius):
+    r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
+    return r < radius
+
 def zernike_0(T):
 
     z = 1.0
