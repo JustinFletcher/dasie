@@ -1,5 +1,17 @@
-"""Sample configuration dataclass for training repo."""
-from typing import List, Optional, Union
+"""
+Sample configuration dataclasses for training repo.
+
+The python built-in `dataclass` decorator adds several features to a class, including the ability
+to automatically generate and specialize __init__ and __repr__, and the ability to easily access 
+the class's fields using the `.` operator.
+
+Here we also use dataclasses to separate groups of configuration parameters from one another and
+enable hierarchial relationships.
+
+The comments within the configuration dataclasses are able to be read, tokenized, and used to
+form the help documentation for a CLI.
+"""
+from typing import List, Optional
 from dataclasses import dataclass, field
 import numpy as np
 import pyrallis
@@ -54,7 +66,7 @@ class LogConfig:
 @dataclass()
 class TrainConfig:
     """Configuration for training instance"""
-    
+
     # Configuration for logging specification
     log: LogConfig = field(default_factory=LogConfig)
     # Configuration for dataset specification

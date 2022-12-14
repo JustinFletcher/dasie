@@ -212,9 +212,9 @@ def train(
         # Run training steps until the iterator is exhausted.
         start_time = time.time()
         try:
-            while True:
+            # while True:
             # (MP) debug/testing
-            # while train_steps < 10:
+            while train_steps < 10:
 
                 # Execute one gradient update and get our tracked results.
                 print("Starting train step %d..." % train_steps)
@@ -249,11 +249,11 @@ def train(
                     recorder.log_metrics(train_step_metrics, step=int(train_steps))
 
             # (MP) debug/testing
-            # raise StopIteration()
+            raise StopIteration()
 
         # OutOfRangeError indicates we've finished the iterator, so report out.
-        # except (tf.errors.OutOfRangeError, StopIteration):
-        except tf.errors.OutOfRangeError:
+        except (tf.errors.OutOfRangeError, StopIteration):
+        # except tf.errors.OutOfRangeError:
 
             end_time = time.time()
             train_epoch_time = end_time - start_time
@@ -325,7 +325,7 @@ def speedplus_parse_function(example_proto):
 
 
 def main():
-    # parse CLI args or yaml config
+    # parse CLI args or yaml config (via sys.argv)
     cfg = pyrallis.parse(config_class=TrainConfig)
 
     # beta = 32.0
@@ -554,8 +554,8 @@ def main():
 
 
 if __name__ == "__main__":
-
     # TODO: I need to enable a test of negligable, random, and learned articulations to measure validation set reconstructions.
-    
-    # CLI args are passed into main and parsed with pyrallis, even though the behavior is hidden here.
+
+    # CLI args are implicitly stored in sys.argv. As global vars, they remain within the scope of `main`
+    # and are passed to pyrallis.
     main()
