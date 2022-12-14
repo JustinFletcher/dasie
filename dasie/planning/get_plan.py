@@ -2,10 +2,7 @@ import os
 import json
 import argparse
 
-
 import numpy as np
-
-
 
 def dasie_save_to_plan_array(dasie_model_save_dict):
 

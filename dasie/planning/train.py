@@ -65,10 +65,22 @@ def train(sess,
     results_dict["results"]["train_dist_mse_list"] = list()
     results_dict["results"]["train_mono_mse_list"] = list()
     results_dict["results"]["train_mse_ratio_list"] = list()
+    results_dict["results"]["train_dist_ssim_list"] = list()
+    results_dict["results"]["train_mono_ssim_list"] = list()
+    results_dict["results"]["train_ssim_ratio_list"] = list()
+    results_dict["results"]["train_dist_psnr_list"] = list()
+    results_dict["results"]["train_mono_psnr_list"] = list()
+    results_dict["results"]["train_psnr_ratio_list"] = list()
     results_dict["results"]["valid_loss_list"] = list()
     results_dict["results"]["valid_dist_mse_list"] = list()
     results_dict["results"]["valid_mono_mse_list"] = list()
     results_dict["results"]["valid_mse_ratio_list"] = list()
+    results_dict["results"]["valid_dist_ssim_list"] = list()
+    results_dict["results"]["valid_mono_ssim_list"] = list()
+    results_dict["results"]["valid_ssim_ratio_list"] = list()
+    results_dict["results"]["valid_dist_psnr_list"] = list()
+    results_dict["results"]["valid_mono_psnr_list"] = list()
+    results_dict["results"]["valid_psnr_ratio_list"] = list()
     results_dict["results"]["train_epoch_time_list"] = list()
 
     sess.run(tf.compat.v1.global_variables_initializer())
@@ -108,6 +120,13 @@ def train(sess,
         valid_monolithic_aperture_image_mse = 0.0
         valid_distributed_aperture_image_mse = 0.0
         valid_da_mse_mono_mse_ratio = 0.0
+        valid_monolithic_aperture_image_ssim = 0.0
+        valid_distributed_aperture_image_ssim = 0.0
+        valid_da_ssim_mono_ssim_ratio = 0.0
+        valid_monolithic_aperture_image_psnr = 0.0
+        valid_distributed_aperture_image_psnr = 0.0
+        valid_da_psnr_mono_psnr_ratio = 0.0
+
         valid_steps = 0.0
 
         # Validate by looping an calling validate batches, until...
@@ -117,7 +136,13 @@ def train(sess,
                 (step_valid_loss,
                  step_valid_monolithic_aperture_image_mse,
                  step_valid_distributed_aperture_image_mse,
-                 step_valid_da_mse_mono_mse_ratio) = dasie_model.validate()
+                 step_valid_da_mse_mono_mse_ratio,
+                 step_valid_distributed_aperture_image_ssim,
+                 step_valid_monolithic_aperture_image_ssim,
+                 step_valid_da_ssim_mono_ssim_ratio,
+                 step_valid_distributed_aperture_image_psnr,
+                 step_valid_monolithic_aperture_image_psnr,
+                 step_valid_da_psrn_mono_psnr_ratio) = dasie_model.validate()
 
                 # Increment all of our metrics.
                 # TODO: Eventually refactor to summaries.
@@ -125,6 +150,12 @@ def train(sess,
                 valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
                 valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
                 valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
+                valid_distributed_aperture_image_ssim += step_valid_distributed_aperture_image_ssim
+                valid_monolithic_aperture_image_ssim += step_valid_monolithic_aperture_image_ssim
+                valid_da_ssim_mono_ssim_ratio += step_valid_da_ssim_mono_ssim_ratio
+                valid_distributed_aperture_image_psnr += step_valid_distributed_aperture_image_psnr
+                valid_monolithic_aperture_image_psnr += step_valid_monolithic_aperture_image_psnr
+                valid_da_psnr_mono_psnr_ratio += step_valid_da_psrn_mono_psnr_ratio
                 valid_steps += 1.0
 
         # ...there are no more validate batches.
@@ -135,15 +166,29 @@ def train(sess,
             mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
             mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
             mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
+            mean_valid_distributed_aperture_image_ssim = valid_distributed_aperture_image_ssim / valid_steps
+            mean_valid_monolithic_aperture_image_ssim = valid_monolithic_aperture_image_ssim / valid_steps
+            mean_valid_da_ssim_mono_ssim_ratio = valid_da_ssim_mono_ssim_ratio / valid_steps
+            mean_valid_distributed_aperture_image_psnr = valid_distributed_aperture_image_psnr / valid_steps
+            mean_valid_monolithic_aperture_image_psnr = valid_monolithic_aperture_image_psnr / valid_steps
+            mean_valid_da_psnr_mono_psnr_ratio = valid_da_psnr_mono_psnr_ratio / valid_steps
 
             # Store the epoch results.
             results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
             results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
             results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
             results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
+            results_dict["results"]["valid_dist_ssim_list"].append(mean_valid_distributed_aperture_image_ssim)
+            results_dict["results"]["valid_mono_ssim_list"].append(mean_valid_monolithic_aperture_image_ssim)
+            results_dict["results"]["valid_ssim_ratio_list"].append(mean_valid_da_ssim_mono_ssim_ratio)
+            results_dict["results"]["valid_dist_psnr_list"].append(mean_valid_distributed_aperture_image_psnr)
+            results_dict["results"]["valid_mono_psnr_list"].append(mean_valid_monolithic_aperture_image_psnr)
+            results_dict["results"]["valid_psnr_ratio_list"].append(mean_valid_da_psnr_mono_psnr_ratio)
 
             print("Validation Loss: %f" % mean_valid_loss)
             print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
+            print("Validation DA SSIM: %f" % mean_valid_distributed_aperture_image_ssim)
+            print("Validation DA PSNR: %f" % mean_valid_distributed_aperture_image_psnr)
             pass
 
         print("Epoch %d Validation Complete." % i)
@@ -178,6 +223,12 @@ def train(sess,
         train_monolithic_aperture_image_mse = 0.0
         train_distributed_aperture_image_mse = 0.0
         train_da_mse_mono_mse_ratio = 0.0
+        train_monolithic_aperture_image_ssim = 0.0
+        train_distributed_aperture_image_ssim = 0.0
+        train_da_ssim_mono_ssim_ratio = 0.0
+        train_monolithic_aperture_image_psnr = 0.0
+        train_distributed_aperture_image_psnr = 0.0
+        train_da_psnr_mono_psnr_ratio = 0.0
         train_steps = 0.0
 
         # Run training steps until the iterator is exhausted.
@@ -193,6 +244,12 @@ def train(sess,
                  step_train_monolithic_aperture_image_mse,
                  step_train_distributed_aperture_image_mse,
                  step_train_da_mse_mono_mse_ratio,
+                 step_train_distributed_aperture_image_ssim,
+                 step_train_monolithic_aperture_image_ssim,
+                 step_train_da_ssim_mono_ssim_ratio,
+                 step_train_distributed_aperture_image_psnr,
+                 step_train_monolithic_aperture_image_psnr,
+                 step_train_da_psrn_mono_psnr_ratio,
                  _) = dasie_model.train()
                 step_end_time = time.time()
                 step_time = step_end_time - step_start_time
@@ -203,9 +260,17 @@ def train(sess,
                 train_distributed_aperture_image_mse += step_train_distributed_aperture_image_mse
                 train_monolithic_aperture_image_mse += step_train_monolithic_aperture_image_mse
                 train_da_mse_mono_mse_ratio += step_train_da_mse_mono_mse_ratio
+                train_distributed_aperture_image_ssim += step_train_distributed_aperture_image_ssim
+                train_monolithic_aperture_image_ssim += step_train_monolithic_aperture_image_ssim
+                train_da_ssim_mono_ssim_ratio += step_train_da_ssim_mono_ssim_ratio
+                train_distributed_aperture_image_psnr += step_train_distributed_aperture_image_psnr
+                train_monolithic_aperture_image_psnr += step_train_monolithic_aperture_image_psnr
+                train_da_psnr_mono_psnr_ratio += step_train_da_psrn_mono_psnr_ratio
                 train_steps += 1.0
                 print("...step_train_loss = %f..." % step_train_loss)
                 print("...step_train_da_mse_mono_mse_ratio = %f..." % step_train_da_mse_mono_mse_ratio)
+                print("...step_train_da_ssim_mono_ssim_ratio = %f..." % step_train_da_ssim_mono_ssim_ratio)
+                print("...step_train_da_psnr_mono_psnr_ratio = %f..." % step_train_da_psnr_mono_psnr_ratio)
                 print("...train step %d complete in %f sec." % (train_steps, step_time))
 
         # OutOfRangeError indicates we've finished the iterator, so report out.
@@ -217,15 +282,29 @@ def train(sess,
             mean_train_distributed_aperture_image_mse = train_distributed_aperture_image_mse / train_steps
             mean_train_monolithic_aperture_image_mse = train_monolithic_aperture_image_mse / train_steps
             mean_train_da_mse_mono_mse_ratio = train_da_mse_mono_mse_ratio / train_steps
+            mean_train_distributed_aperture_image_ssim = train_distributed_aperture_image_ssim / train_steps
+            mean_train_monolithic_aperture_image_ssim = train_monolithic_aperture_image_ssim / train_steps
+            mean_train_da_ssim_mono_ssim_ratio = train_da_ssim_mono_ssim_ratio / train_steps
+            mean_train_distributed_aperture_image_psnr = train_distributed_aperture_image_psnr / train_steps
+            mean_train_monolithic_aperture_image_psnr = train_monolithic_aperture_image_psnr / train_steps
+            mean_train_da_psnr_mono_psnr_ratio = train_da_psnr_mono_psnr_ratio / train_steps
 
             results_dict["results"]["train_loss_list"].append(mean_train_loss)
             results_dict["results"]["train_dist_mse_list"].append(mean_train_distributed_aperture_image_mse)
             results_dict["results"]["train_mono_mse_list"].append(mean_train_monolithic_aperture_image_mse)
             results_dict["results"]["train_mse_ratio_list"].append(mean_train_da_mse_mono_mse_ratio)
+            results_dict["results"]["train_dist_ssim_list"].append(mean_train_distributed_aperture_image_ssim)
+            results_dict["results"]["train_mono_ssim_list"].append(mean_train_monolithic_aperture_image_ssim)
+            results_dict["results"]["train_ssim_ratio_list"].append(mean_train_da_ssim_mono_ssim_ratio)
+            results_dict["results"]["train_dist_psnr_list"].append(mean_train_distributed_aperture_image_psnr)
+            results_dict["results"]["train_mono_psnr_list"].append(mean_train_monolithic_aperture_image_psnr)
+            results_dict["results"]["train_psnr_ratio_list"].append(mean_train_da_psnr_mono_psnr_ratio)
             results_dict["results"]["train_epoch_time_list"].append(train_epoch_time)
 
             print("Mean Train Loss: %f" % mean_train_loss)
             print("Mean Train DA MSE: %f" % mean_train_distributed_aperture_image_mse)
+            print("Mean Train DA SSIM: %f" % mean_train_distributed_aperture_image_ssim)
+            print("Mean Train DA PSNR: %f" % mean_train_distributed_aperture_image_psnr)
 
             pass
 
