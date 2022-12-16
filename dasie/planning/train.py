@@ -375,7 +375,7 @@ def main(flags):
     total_subap_area = subap_area * flags.num_subapertures
     mono_ap_area = np.pi * (ap_radius_meters ** 2)
     mono_to_dist_aperture_ratio = mono_ap_area / total_subap_area
-    print(mono_to_dist_aperture_ratio)
+    print("mono_to_dist_aperture_ratio = " + str(mono_to_dist_aperture_ratio))
 
     # TODO: [Ryan and Matthew] I could use help here.
     # TODO: Document how distance to the target is quantified implicitly.
