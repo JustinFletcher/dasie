@@ -38,6 +38,10 @@ from train import generate_datasets, train
 
 def run(tune_config, checkpoint_dir=None, cfg=None):
     """Execute training, testing, or inference run based on cfg"""
+    # Apply the hyperparms from tune to our TrainConfig
+    cfg.batch_size = tune_config["batch_size"]
+    cfg.learning_rate = tune_config["lr"]
+
     # Set up logging (within an individual run)
     logger = logging.getLogger(__name__)
     logging.basicConfig(
