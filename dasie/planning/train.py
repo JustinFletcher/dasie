@@ -1,46 +1,18 @@
 import os
-import math
 import time
-import copy
-import json
-import math
-import glob
-import codecs
-import joblib
-import datetime
-import argparse
-import itertools
+from pathlib import Path
 
-import pandas as pd
 import numpy as np
-
-from decimal import Decimal
-
-# TODO: Refactor this import.
-from dataset_generator import DatasetGenerator
-
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
-# Tentative.
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
-
+import pyrallis
 import tensorflow as tf
+from cfg import TrainConfig
+from dataset_generator import DatasetGenerator
+from differentiable_dasie import DASIEModel
+from ray import tune as tune
+from recorder import Recorder
 
 # TODO: Implement TF probability.
 # import tensorflow_probability as tfp
-
-from recovery_models import RecoveryModel
-from differentiable_dasie import DASIEModel
-
-# mlflow experiment tracking and pyrallis config manager
-from pathlib import Path
-from recorder import Recorder
-from dataclasses import dataclass, field
-from typing import List, Optional, Literal, Union
-import pyrallis
-from cfg import TrainConfig
 
 
 def train(
@@ -59,6 +31,7 @@ def train(
     show_plot=False,
     results_dict=None,
     recorder=None,
+    ray_tune=False,
 ):
 
     # Build the initializers for the required datasets.
@@ -68,6 +41,7 @@ def train(
     # Create the checkpoint root dir for mlflow model saving
     ckpt_root = recorder.root / "checkpoints"
     ckpt_root.mkdir(parents=True, exist_ok=True)
+    tune_linked = False
 
     # If no results dict is provided, make a blank one.
     if not results_dict:
@@ -127,16 +101,22 @@ def train(
         try:
             while True:
                 # Execute one gradient update step.
-                (step_valid_loss,
-                 step_valid_monolithic_aperture_image_mse,
-                 step_valid_distributed_aperture_image_mse,
-                 step_valid_da_mse_mono_mse_ratio) = dasie_model.validate()
+                (
+                    step_valid_loss,
+                    step_valid_monolithic_aperture_image_mse,
+                    step_valid_distributed_aperture_image_mse,
+                    step_valid_da_mse_mono_mse_ratio,
+                ) = dasie_model.validate()
 
                 # Increment all of our metrics.
                 # TODO: Eventually refactor to summaries.
                 valid_loss += step_valid_loss
-                valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
-                valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
+                valid_distributed_aperture_image_mse += (
+                    step_valid_distributed_aperture_image_mse
+                )
+                valid_monolithic_aperture_image_mse += (
+                    step_valid_monolithic_aperture_image_mse
+                )
                 valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
                 valid_steps += 1.0
 
@@ -145,15 +125,25 @@ def train(
 
             # Compute the epoch results.
             mean_valid_loss = valid_loss / valid_steps
-            mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
-            mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
+            mean_valid_distributed_aperture_image_mse = (
+                valid_distributed_aperture_image_mse / valid_steps
+            )
+            mean_valid_monolithic_aperture_image_mse = (
+                valid_monolithic_aperture_image_mse / valid_steps
+            )
             mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
 
             # Store the epoch results.
             results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
-            results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
-            results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
-            results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
+            results_dict["results"]["valid_dist_mse_list"].append(
+                mean_valid_distributed_aperture_image_mse
+            )
+            results_dict["results"]["valid_mono_mse_list"].append(
+                mean_valid_monolithic_aperture_image_mse
+            )
+            results_dict["results"]["valid_mse_ratio_list"].append(
+                mean_valid_da_mse_mono_mse_ratio
+            )
 
             # log validation epoch metrics to mlflow
             val_metrics = {
@@ -168,27 +158,26 @@ def train(
             pass
 
         print("Epoch %d Validation Complete." % i)
- 
+
+        # Report metrics back to Ray Tune
+        if ray_tune:
+            with tune.checkpoint_dir(step=i) as checkpoint_dir:
+                ckpt_path = Path(checkpoint_dir) / f"model_save_{i}.json"
+                dasie_model.save(ckpt_path)
+                tune.report(valid_loss=mean_valid_loss, step=i)
+                # link mlflow artifacts/tune to tune run directory if unlinked
+                if not tune_linked:
+                    tune_root = Path(checkpoint_dir).parent
+                    (recorder.root / "tune").symlink_to(tune_root)
+                    tune_linked = True
+
         # Save the model to mlflow
-        if i % recorder.cfg.log.save_freq == 0:
-            print("Epoch %d Model Saving." % i)
-            ckpt_path = ckpt_root / f"model_save_{i}.json"
-            dasie_model.save(ckpt_path)
-            print("Epoch %d Model Saved." % i)
-
-        # Save the model and results in logdir (w/o recorder)
-     
-        # print("Epoch %d Results Saving." % i)
-        # # Write the results dict for this epoch.
-        # json_file = os.path.join(logdir, "results_" + str(i) + ".json")
-        # json.dump(results_dict, open(json_file, 'w'))
-        # # data = json.load(open("file_name.json"))
-        # print("Epoch %d Results Saved." % i)
-
-        # print("Epoch %d Model Saving." % i)
-        # save_file_path = os.path.join(logdir, "model_save_" + str(i) + ".json")
-        # dasie_model.save(save_file_path)
-        # print("Epoch %d Model Saved." % i)
+        else:
+            if i % recorder.cfg.log.save_freq == 0:
+                print("Epoch %d Model Saving." % i)
+                ckpt_path = ckpt_root / f"model_save_{i}.json"
+                dasie_model.save(ckpt_path)
+                print("Epoch %d Model Saved." % i)
 
         # TODO: Refactor to report at the step scale for training.
         # Execute the summary writer ops to write their values.
@@ -220,23 +209,32 @@ def train(
                 print("Starting train step %d..." % train_steps)
 
                 step_start_time = time.time()
-                (step_train_loss,
-                 step_train_monolithic_aperture_image_mse,
-                 step_train_distributed_aperture_image_mse,
-                 step_train_da_mse_mono_mse_ratio,
-                 _) = dasie_model.train()
+                (
+                    step_train_loss,
+                    step_train_monolithic_aperture_image_mse,
+                    step_train_distributed_aperture_image_mse,
+                    step_train_da_mse_mono_mse_ratio,
+                    _,
+                ) = dasie_model.train()
                 step_end_time = time.time()
                 step_time = step_end_time - step_start_time
 
                 # Increment all of our metrics.
                 # TODO: Eventually refactor to summaries.
                 train_loss += step_train_loss
-                train_distributed_aperture_image_mse += step_train_distributed_aperture_image_mse
-                train_monolithic_aperture_image_mse += step_train_monolithic_aperture_image_mse
+                train_distributed_aperture_image_mse += (
+                    step_train_distributed_aperture_image_mse
+                )
+                train_monolithic_aperture_image_mse += (
+                    step_train_monolithic_aperture_image_mse
+                )
                 train_da_mse_mono_mse_ratio += step_train_da_mse_mono_mse_ratio
                 train_steps += 1.0
                 print("...step_train_loss = %f..." % step_train_loss)
-                print("...step_train_da_mse_mono_mse_ratio = %f..." % step_train_da_mse_mono_mse_ratio)
+                print(
+                    "...step_train_da_mse_mono_mse_ratio = %f..."
+                    % step_train_da_mse_mono_mse_ratio
+                )
                 print("...train step %d complete in %f sec." % (train_steps, step_time))
 
                 # log train metrics to mlflow according to train_freq (step snapshots, non-aggregated)
@@ -253,19 +251,29 @@ def train(
 
         # OutOfRangeError indicates we've finished the iterator, so report out.
         except (tf.errors.OutOfRangeError, StopIteration):
-        # except tf.errors.OutOfRangeError:
+            # except tf.errors.OutOfRangeError:
 
             end_time = time.time()
             train_epoch_time = end_time - start_time
             mean_train_loss = train_loss / train_steps
-            mean_train_distributed_aperture_image_mse = train_distributed_aperture_image_mse / train_steps
-            mean_train_monolithic_aperture_image_mse = train_monolithic_aperture_image_mse / train_steps
+            mean_train_distributed_aperture_image_mse = (
+                train_distributed_aperture_image_mse / train_steps
+            )
+            mean_train_monolithic_aperture_image_mse = (
+                train_monolithic_aperture_image_mse / train_steps
+            )
             mean_train_da_mse_mono_mse_ratio = train_da_mse_mono_mse_ratio / train_steps
 
             results_dict["results"]["train_loss_list"].append(mean_train_loss)
-            results_dict["results"]["train_dist_mse_list"].append(mean_train_distributed_aperture_image_mse)
-            results_dict["results"]["train_mono_mse_list"].append(mean_train_monolithic_aperture_image_mse)
-            results_dict["results"]["train_mse_ratio_list"].append(mean_train_da_mse_mono_mse_ratio)
+            results_dict["results"]["train_dist_mse_list"].append(
+                mean_train_distributed_aperture_image_mse
+            )
+            results_dict["results"]["train_mono_mse_list"].append(
+                mean_train_monolithic_aperture_image_mse
+            )
+            results_dict["results"]["train_mse_ratio_list"].append(
+                mean_train_da_mse_mono_mse_ratio
+            )
             results_dict["results"]["train_epoch_time_list"].append(train_epoch_time)
 
             print("Mean Train Loss: %f" % mean_train_loss)
@@ -324,6 +332,63 @@ def speedplus_parse_function(example_proto):
     return image
 
 
+def generate_datasets(dataset_root, dataset_name, batch_size, crop_size):
+    """Generate training and validation dataset generators."""
+    # Map our dataset name to relative locations and parse functions.
+    if dataset_name == "speedplus":
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(dataset_root, "speedplus_tfrecords", "train")
+        valid_data_dir = os.path.join(dataset_root, "speedplus_tfrecords", "valid")
+
+    elif dataset_name == "inria_holiday":
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(dataset_root, "inria_holiday_tfrecords", "train")
+        valid_data_dir = os.path.join(dataset_root, "inria_holiday_tfrecords", "valid")
+
+    elif dataset_name == "speedplus_one":
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(dataset_root, "speedplus_one_tfrecords", "train")
+        valid_data_dir = os.path.join(dataset_root, "speedplus_one_tfrecords", "valid")
+
+    else:
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(dataset_root, "onesat_example_tfrecords", "train")
+        valid_data_dir = os.path.join(dataset_root, "onesat_example_tfrecords", "valid")
+
+    # Build our datasets.
+    train_dataset = DatasetGenerator(
+        train_data_dir,
+        parse_function=parse_function,
+        augment=False,
+        shuffle=False,
+        crop_size=crop_size,
+        batch_size=batch_size,
+        num_threads=2,
+        buffer=32,
+        encoding_function=None,
+        cache_dataset_memory=False,
+        cache_dataset_file=False,
+        cache_path="",
+    )
+
+    # We create a tf.data.Dataset object wrapping the valid dataset here.
+    valid_dataset = DatasetGenerator(
+        valid_data_dir,
+        parse_function=parse_function,
+        augment=False,
+        shuffle=False,
+        crop_size=crop_size,
+        batch_size=batch_size,
+        num_threads=2,
+        buffer=32,
+        encoding_function=None,
+        cache_dataset_memory=False,
+        cache_dataset_file=False,
+        cache_path="",
+    )
+    return train_dataset, valid_dataset
+
+
 def main():
     # parse CLI args or yaml config (via sys.argv)
     cfg = pyrallis.parse(config_class=TrainConfig)
@@ -359,32 +424,11 @@ def main():
     # TODO: Document how distance to the target is quantified implicitly.
     # TODO: Document how extent of the target is quantified implicitly.
     derived_optical_params = {
-                "mono_to_dist_aperture_ratio": mono_to_dist_aperture_ratio, 
-                "ap_radius_meters": ap_radius_meters,
-                "subap_radius_meters": subap_radius_meters,
-            }
+        "mono_to_dist_aperture_ratio": mono_to_dist_aperture_ratio,
+        "ap_radius_meters": ap_radius_meters,
+        "subap_radius_meters": subap_radius_meters,
+    }
     # TODO: Append all other derived optical information here!
-
-    # Map our dataset name to relative locations and parse functions.
-    if cfg.data.dataset_name == "speedplus":
-        parse_function = speedplus_parse_function
-        train_data_dir = os.path.join(cfg.data.dataset_root, "speedplus_tfrecords", "train")
-        valid_data_dir = os.path.join(cfg.data.dataset_root, "speedplus_tfrecords", "valid")
-
-    elif cfg.data.dataset_name == "inria_holiday":
-        parse_function = speedplus_parse_function
-        train_data_dir = os.path.join(cfg.data.dataset_root, "inria_holiday_tfrecords", "train")
-        valid_data_dir = os.path.join(cfg.data.dataset_root, "inria_holiday_tfrecords", "valid")
-
-    elif cfg.data.dataset_name == "speedplus_one":
-        parse_function = speedplus_parse_function
-        train_data_dir = os.path.join(cfg.data.dataset_root, "speedplus_one_tfrecords", "train")
-        valid_data_dir = os.path.join(cfg.data.dataset_root, "speedplus_one_tfrecords", "valid")
-
-    else:
-        parse_function = speedplus_parse_function
-        train_data_dir = os.path.join(cfg.data.dataset_root, "onesat_example_tfrecords", "train")
-        valid_data_dir = os.path.join(cfg.data.dataset_root, "onesat_example_tfrecords", "valid")
 
     # Set the crop size to the spatial quantization scale.
     if cfg.crop:
@@ -421,85 +465,14 @@ def main():
 
             print("\n\n\n\n\n\n\n\n\n Building Dataset... \n\n\n\n\n\n\n\n\n")
             # Build our datasets.
-            train_dataset = DatasetGenerator(
-                train_data_dir,
-                parse_function=parse_function,
-                augment=False,
-                shuffle=False,
-                crop_size=crop_size,
-                batch_size=cfg.batch_size,
-                num_threads=2,
-                buffer=32,
-                encoding_function=None,
-                cache_dataset_memory=False,
-                cache_dataset_file=False,
-                cache_path="",
-            )
-
-            # We create a tf.data.Dataset object wrapping the valid dataset here.
-            valid_dataset = DatasetGenerator(
-                valid_data_dir,
-                parse_function=parse_function,
-                augment=False,
-                shuffle=False,
-                crop_size=crop_size,
-                batch_size=cfg.batch_size,
-                num_threads=2,
-                buffer=32,
-                encoding_function=None,
-                cache_dataset_memory=False,
-                cache_dataset_file=False,
-                cache_path="",
+            train_dataset, valid_dataset = generate_datasets(
+                cfg.data.dataset_root, cfg.data.dataset_name, cfg.batch_size, crop_size
             )
             print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
 
             # Get the image shapes stored during dataset construction.
             image_x_scale = train_dataset.image_shape[0]
             image_y_scale = train_dataset.image_shape[1]
-
-            # Manual debug here, to diagnose data problems.
-            plot_data = False
-            if plot_data:
-
-                for i in range(16):
-
-                    # Generate the iterator for the train dataset.
-                    train_iterator = train_dataset.get_iterator()
-                    train_dataset_batch = train_iterator.get_next()
-                    train_dataset_initializer = train_dataset.get_initializer()
-                    sess.run(train_dataset_initializer)
-
-                    # Generate the iterator for the validation dataset.
-                    valid_iterator = valid_dataset.get_iterator()
-                    valid_dataset_batch = valid_iterator.get_next()
-                    valid_dataset_initializer = valid_dataset.get_initializer()
-                    sess.run(valid_dataset_initializer)
-
-                    for j in range(2):
-
-                        np_train_dataset_batch = sess.run(train_dataset_batch)
-                        np_valid_dataset_batch = sess.run(valid_dataset_batch)
-
-                        plt.subplot(241)
-                        plt.imshow(np_train_dataset_batch[0])
-                        plt.subplot(242)
-                        plt.imshow(np_train_dataset_batch[1])
-                        plt.subplot(243)
-                        plt.imshow(np_train_dataset_batch[2])
-                        plt.subplot(244)
-                        plt.imshow(np_train_dataset_batch[3])
-
-                        plt.subplot(245)
-                        plt.imshow(np_valid_dataset_batch[0])
-                        plt.subplot(246)
-                        plt.imshow(np_valid_dataset_batch[1])
-                        plt.subplot(247)
-                        plt.imshow(np_valid_dataset_batch[2])
-                        plt.subplot(248)
-                        plt.imshow(np_valid_dataset_batch[3])
-                        plt.show()
-
-
 
             # Build a DA model.
             dasie_model = DASIEModel(
@@ -544,9 +517,10 @@ def main():
                 logdir=save_dir,
                 save_plot=cfg.log.save_plot,
                 show_plot=cfg.log.show_plot,
-                #results_dict=base_results_dict,
+                # results_dict=base_results_dict,
                 results_dict=None,
                 recorder=recorder,
+                ray_tune=False,
             )
 
             # stop mlflow run, exit gracefully

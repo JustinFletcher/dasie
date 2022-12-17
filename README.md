@@ -117,8 +117,19 @@ dictionary and constructs a numpy array. To print this array, invoke
 saved model in `./dasie/resources/model_save_0.json` by default, but exposes 
 flags for easy reuse.
 
+## Ray Tune (Hyperparameter Tuning)
+Dependecies:
+```python
+pip install ray[tune]
+```
 
-
+Navigate to `/dasie/dasie/planning` and run
+```
+# for single gpu
+CUDA_VISIBLE_DEVICES=0 tune.py --log.exp_id hyperparam_experiment_1
+# for multi gpu
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 tune.py --log.exp_id hyperparam_experiment_1
+```
 
 [1]: https://gym.openai.com/docs/
 

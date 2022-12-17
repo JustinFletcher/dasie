@@ -30,7 +30,7 @@ num_steps: 2
 num_subapertures: 15
 num_zernike_indices: 1
 object_plane_scale: 1.0
-random_seed: 1928
+random_seed: 1333
 recovery_model_filter_scale: 2
 spatial_quantization: 128
 subaperture_spacing_meters: 0.1
