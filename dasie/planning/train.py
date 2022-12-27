@@ -94,11 +94,11 @@ def train(sess,
 
         # print("Epoch %d Model Restoring." % i)
         # dasie_model.restore(save_file_path)
+
         # print("Epoch %d Model Restored." % i)
 
         # First, plot the model status if requested
         print("Epoch %d Plots Plotting." % i)
-
         if save_plot:
             if (i % plot_periodicity) == 0:
 
@@ -108,6 +108,10 @@ def train(sess,
                                  # show_plot=show_plot,
                                  step=i)
                 print("Plotting completed.")
+            else:
+
+                print("No plots this epoch.")
+
 
         print("Epoch %d Plots Plotted." % i)
 
@@ -362,28 +366,31 @@ def main(flags):
     save_dir = os.path.join(".", "logs", dir_name)
     os.makedirs(save_dir, exist_ok=True)
 
-    # Compute the scaling factor from meters to alpha for a GG PDF over meters.
-    # alpha = np.log(-np.log(epsilon)) / np.log(beta) * ap_radius_meters
-    # alpha = alpha / (flags.num_subapertures)
-    # epsilon = 1e-15
+    # Physical computations from flags.
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
-    subap_radius_meters = ((ap_radius_meters * np.sin(np.pi / flags.num_subapertures)) - (flags.subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
-    # meters_to_alpha = 1 /  (2 * (np.log(-np.log(epsilon)) / np.log(beta)))
-    # subap_alpha = subap_radius_meters * meters_to_alpha / 2
-    # monolithic_alpha = flags.aperture_diameter_meters * meters_to_alpha * 2
+    subap_radius_meters = (((ap_radius_meters / ((1.0 + flags.edge_padding_factor) / 2)) * np.sin(np.pi / flags.num_subapertures)) - (flags.subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
     subap_area = np.pi * (subap_radius_meters ** 2)
     total_subap_area = subap_area * flags.num_subapertures
     mono_ap_area = np.pi * (ap_radius_meters ** 2)
     mono_to_dist_aperture_ratio = mono_ap_area / total_subap_area
-    print("mono_to_dist_aperture_ratio = " + str(mono_to_dist_aperture_ratio))
-
-    # TODO: [Ryan and Matthew] I could use help here.
-    # TODO: Document how distance to the target is quantified implicitly.
-    # TODO: Document how extent of the target is quantified implicitly.
+    object_distance_meters = flags.object_plane_extent_meters / (np.tan((flags.field_of_view_degrees / 2)  * (np.pi / 180)))
+    """
+    TODO: [Ryan and Matthew] I could use help here.
+    Right now, neither wavelength nor FOV have any impact on the image
+    formation, except that I normalize lengths to wavelengths. This seems wrong
+    but I can't find any issues.
+    """
     base_results_dict = vars(flags)
     base_results_dict["mono_to_dist_aperture_ratio"] = mono_to_dist_aperture_ratio
     base_results_dict["ap_radius_meters"] = ap_radius_meters
     base_results_dict["subap_radius_meters"] = subap_radius_meters
+    base_results_dict["object_scale_meters"] = flags.object_plane_extent_meters
+    base_results_dict["object_distance_meters"] = object_distance_meters
+
+    print("mono_to_dist_aperture_ratio = " + str(mono_to_dist_aperture_ratio))
+    print("object_distance_meters = " + str(object_distance_meters))
+    print("flags.object_plane_extent_meters = " + str(flags.object_plane_extent_meters))
+    print("flags.field_of_view_degrees = " + str(flags.field_of_view_degrees))
     # TODO: Append all other derived optical information here!
 
     # Map our dataset name to relative locations and parse functions.
@@ -407,6 +414,7 @@ def main(flags):
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "valid")
+
 
     # Set the crop size to the spatial quantization scale.
     if flags.crop:
@@ -506,24 +514,37 @@ def main(flags):
                     plt.show()
 
         # Build a DA model.
-        dasie_model = DASIEModel(sess,
-                                 writer=writer,
-                                 batch_size=flags.batch_size,
-                                 train_dataset=train_dataset,
-                                 valid_dataset=valid_dataset,
-                                 num_exposures=flags.num_exposures,
-                                 spatial_quantization=flags.spatial_quantization,
-                                 image_x_scale=image_x_scale,
-                                 image_y_scale=image_y_scale,
-                                 learning_rate=flags.learning_rate,
-                                 diameter_meters=flags.aperture_diameter_meters,
-                                 num_apertures=flags.num_subapertures,
-                                 subaperture_radius_meters=subap_radius_meters,
-                                 recovery_model_filter_scale=flags.recovery_model_filter_scale,
-                                 loss_name=flags.loss_name,
-                                 num_zernike_indices=flags.num_zernike_indices,
-                                 hadamard_image_formation=flags.hadamard_image_formation,
-                                 zernike_debug=flags.zernike_debug)
+        dasie_model = DASIEModel(
+            sess,
+            writer=writer,
+            batch_size=flags.batch_size,
+            train_dataset=train_dataset,
+            valid_dataset=valid_dataset,
+            num_exposures=flags.num_exposures,
+            spatial_quantization=flags.spatial_quantization,
+            image_x_scale=image_x_scale,
+            image_y_scale=image_y_scale,
+            learning_rate=flags.learning_rate,
+            diameter_meters=flags.aperture_diameter_meters,
+            num_apertures=flags.num_subapertures,
+            subaperture_radius_meters=subap_radius_meters,
+            edge_padding_factor=flags.edge_padding_factor,
+            recovery_model_filter_scale=flags.recovery_model_filter_scale,
+            loss_name=flags.loss_name,
+            num_zernike_indices=flags.num_zernike_indices,
+            hadamard_image_formation=flags.hadamard_image_formation,
+            zernike_debug=flags.zernike_debug,
+            ap_radius_meters=ap_radius_meters,
+            subap_radius_meters=subap_radius_meters,
+            subap_area=subap_area,
+            total_subap_area=total_subap_area,
+            mono_ap_area=mono_ap_area,
+            mono_to_dist_aperture_ratio=mono_to_dist_aperture_ratio,
+            object_plane_extent_meters=flags.object_plane_extent_meters,
+            object_distance_meters=object_distance_meters,
+            zernike_init_type=flags.zernike_init_type,
+            filter_wavelength_micron=flags.filter_wavelength_micron,
+        )
 
         # Merge all the summaries from the graphs, flush and init the nodes.
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
@@ -595,17 +616,20 @@ if __name__ == '__main__':
                         default=15,
                         help='Number of DASIE subapertures.')
 
-
     parser.add_argument('--subaperture_spacing_meters',
                         type=float,
                         default=0.1,
                         help='Meters of space between subapertures.')
 
-
     parser.add_argument('--num_zernike_indices',
                         type=int,
                         default=1,
                         help='Number of Zernike terms to simulate.')
+
+    parser.add_argument('--edge_padding_factor',
+                        type=float,
+                        default=0.1,
+                        help='Factor to expand the pupil simulation grid.')
 
     parser.add_argument('--aperture_diameter_meters',
                         type=float,
@@ -657,9 +681,15 @@ if __name__ == '__main__':
                         default="speedplus",
                         help='Path to the train data TFRecords directory.')
 
-    parser.add_argument('--object_plane_scale', type=float,
+    parser.add_argument('--object_plane_extent_meters', type=float,
                         default=1.0,
-                        help='The angular scale/pixel of the object plane.')
+                        help='The size of the object plane in meters.')
+
+    # One arcminute = 0.0166667. 67 arcminutes is 0.0186111.
+    # 0.0001145 ~= 1m at 1 Mm (LEO)
+    parser.add_argument('--field_of_view_degrees', type=float,
+                        default=0.0001145,
+                        help='The FOV of the optical system in degrees.')
 
     parser.add_argument('--recovery_model_filter_scale',
                         type=int,
@@ -671,6 +701,16 @@ if __name__ == '__main__':
                         help="If true, each subaperture is constrained such \
                               that only the Zernike coefficient with the same \
                               index as the subaperture index is none-zero.")
+
+    parser.add_argument("--zernike_init_type",  type=str,
+                        default="np.random.uniform",
+                        help="An np function signature to use with default \
+                              arguments to init the zernike plan variables.")
+
+    parser.add_argument('--filter_wavelength_micron', type=float,
+                        default=1.0,
+                        help='The wavelength of monochromatic light used \
+                              in this simulation.')
 
 
 

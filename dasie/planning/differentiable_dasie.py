@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 # TODO: Implement TF probability.
-# import tensorflow_probability as tfp
+import tensorflow_probability as tfp
 
 from decimal import Decimal
 from matplotlib import pyplot as plt
@@ -29,8 +29,11 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
+from hcipy import *
 
 # TODO: Refactor this import.
+import atmosphere
+from atmosphere import *
 import zernike
 from zernike import *
 from dataset_generator import DatasetGenerator
@@ -135,6 +138,8 @@ class DASIEModel(object):
             'num_exposures', 1, kwargs)
         self.subaperture_radius_meters = set_kwargs_default(
             'subaperture_radius_meters', None, kwargs)
+        self.edge_padding_factor = set_kwargs_default(
+            'edge_padding_factor', 0.1, kwargs)
         self.diameter_meters = set_kwargs_default(
             'diameter_meters', 2.5, kwargs)
         self.recovery_model_filter_scale = set_kwargs_default(
@@ -145,6 +150,21 @@ class DASIEModel(object):
             'zernike_debug', False, kwargs)
         self.hadamard_image_formation = set_kwargs_default(
             'hadamard_image_formation', True, kwargs)
+        self.subap_area = set_kwargs_default(
+            'subap_area', None, kwargs)
+        self.mono_ap_area = set_kwargs_default(
+            'mono_ap_area', (np.pi * (self.diameter_meters / 2)) ** 2, kwargs)
+        self.mono_to_dist_aperture_ratio = set_kwargs_default(
+            'mono_to_dist_aperture_ratio', None, kwargs)
+        self.object_plane_extent_meters = set_kwargs_default(
+            'object_plane_extent_meters', 1.0, kwargs)
+        self.object_distance_meters = set_kwargs_default(
+            'object_distance_meters', 1000000.0, kwargs)
+        self.zernike_init_type = set_kwargs_default(
+            'zernike_init_type', "np.random.uniform", kwargs)
+        self.filter_wavelength_micron = set_kwargs_default(
+            'filter_wavelength_micron', 1.0, kwargs)
+
 
         # Store a reference field to kwargs to enable model saving & recovery.
         self.kwargs = kwargs
@@ -194,6 +214,7 @@ class DASIEModel(object):
                 num_zernike_indices=self.num_zernike_indices,
                 zernike_debug=self.zernike_debug,
                 hadamard_image_formation=self.hadamard_image_formation,
+                zernike_init_type=self.zernike_init_type,
                 )
 
         with tf.name_scope("distributed_aperture_image_recovery_model"):
@@ -201,27 +222,46 @@ class DASIEModel(object):
             # Combine the ensemble of images with the restoration function.
             self.recovered_image = self._build_recovery_model(
                 self.distributed_aperture_images,
-                filter_scale=self.recovery_model_filter_scale)
+                filter_scale=self.recovery_model_filter_scale
+            )
 
         with tf.name_scope("dasie_loss"):
 
             # First, add some bookeeping nodes.
             self.flipped_object_batch = tf.reverse(
-                tf.reverse(tf.squeeze(self.object_batch, axis=-1), [-1]), [1])
+                tf.reverse(
+                    tf.squeeze(
+                        self.object_batch,
+                        axis=-1
+                    ),
+                    [-1]
+                ),
+                [1]
+            )
             self.image_mse = tf.reduce_mean(
-                (self.recovered_image - self.flipped_object_batch) ** 2)
+                (self.recovered_image - self.flipped_object_batch) ** 2
+            )
 
             # Then build the selected loss function.
             if self.loss_name == "mse":
                 loss = self.image_mse
             if self.loss_name == "mae":
-                loss = tf.reduce_mean(tf.math.abs(
-                    self.recovered_image - self.flipped_object_batch))
+                loss = tf.reduce_mean(
+                    tf.math.abs(
+                        self.recovered_image - self.flipped_object_batch
+                    )
+                )
             if self.loss_name == "l2":
-                loss = tf.math.sqrt(tf.math.reduce_sum((self.recovered_image - self.flipped_object_batch) ** 2))
+                loss = tf.math.sqrt(
+                    tf.math.reduce_sum(
+                        (self.recovered_image - self.flipped_object_batch) ** 2
+                    )
+                )
             if self.loss_name == "cos":
-                loss = -cosine_similarity(self.recovered_image,
-                                          self.flipped_object_batch)
+                loss = -cosine_similarity(
+                    self.recovered_image,
+                    self.flipped_object_batch
+                )
 
             self.loss = loss
 
@@ -314,9 +354,14 @@ class DASIEModel(object):
 
         # Compute the PSF from the pupil plane.
         with tf.name_scope("psf_model"):
-            shifted_pupil_plane = tf.signal.ifftshift(pupil_plane)
-            shifted_pupil_spectrum = tf.signal.fft2d(shifted_pupil_plane)
-            psf = tf.abs(tf.signal.fftshift(shifted_pupil_spectrum)) ** 2
+            # shifted_pupil_plane = tf.signal.ifftshift(pupil_plane)
+            # shifted_pupil_spectrum = tf.signal.fft2d(shifted_pupil_plane)
+            # psf = tf.abs(tf.signal.fftshift(shifted_pupil_spectrum)) ** 2
+            pupil_spectrum = tf.signal.fft2d(pupil_plane)
+            shifted_pupil_spectrum = tf.signal.fftshift(pupil_spectrum)
+            psf = tf.abs(shifted_pupil_spectrum) ** 2
+
+            # psf = shifted_pupil_spectrum * np.conjugate(shifted_pupil_spectrum)
 
         # Compute the OTF, which is the Fourier transform of the PSF.
         with tf.name_scope("otf_model"):
@@ -362,15 +407,17 @@ class DASIEModel(object):
                      gaussian_mean=1e-5,
                      poisson_mean_arrival=4e-5):
 
-        # TODO: Implement Gaussian and Poisson process noise.
-        # Apply the reparameterization trick from kingma2014autovariational
+        # Strip any imaginary image component.
+        image = tf.math.abs(image)
+
+        # Apply the reparameterization trick from kingma2014autovariational.
         gaussian_dist = tfp.distributions.Normal(loc=tf.zeros_like(image),
                                                  scale=tf.ones_like(image))
 
-        gaussian_sample = tfp.distributions.Sample(gaussian_dist)
+        gaussian_sample = tfp.distributions.Sample(gaussian_dist).sample()
         gaussian_noise = image + (gaussian_mean ** 2) * gaussian_sample
 
-        # Apply the score-gradient trick from williams1992simple
+        # Apply the score-gradient trick from williams1992simple.
         rate = image / poisson_mean_arrival
         p = tfp.distributions.Poisson(rate=rate, validate_args=True)
         sampled = tfp.monte_carlo.expectation(f=lambda z: z,
@@ -394,10 +441,8 @@ class DASIEModel(object):
                            filter_wavelength_micron=1.0,
                            num_zernike_indices=1,
                            zernike_debug=False,
-                           hadamard_image_formation=True):
-
-        # TODO: Externalize
-        zernike_init_type = "np.random.uniform"
+                           hadamard_image_formation=True,
+                           zernike_init_type="np.random.uniform"):
 
         # TODO: Externalize.
         lock_dm_values = False
@@ -406,9 +451,11 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
+        # TODO: Externalize.
+        sensor_gaussian_mean = 1e-5
+        sensor_poisson_mean_arrival = 4e-5
+
         # Build object plane image batch tensor objects.
-        # TODO: Externalize
-        batch_shape = (self.image_x_scale, self.image_y_scale)
         if inputs is not None:
             self.object_batch = inputs
         else:
@@ -423,10 +470,14 @@ class DASIEModel(object):
         with tf.name_scope("image_spectrum_model"):
 
             self.object_spectrum_batch = tf.signal.fft2d(
-                tf.cast(tf.squeeze(self.object_batch, axis=-1),
-                        dtype=tf.complex128))
-
-        # TODO: Make the distributed aperture optical model a separate method.
+                tf.cast(
+                    tf.squeeze(
+                        self.object_batch,
+                        axis=-1
+                    ),
+                    dtype=tf.complex128
+                )
+            )
 
         # TODO: Modularize physics stuff.
         # Start: physics stuff.
@@ -438,12 +489,20 @@ class DASIEModel(object):
         # pupil_extent = [meters] / [radian]
         # TODO: Ask Ryan for help: What are these units?
         pupil_extent = filter_wavelength_micron * spatial_quantization / (4.848 * field_of_view_arcsec)
+        pupil_extent = (2 * radius_meters) * (1 + self.edge_padding_factor)
         self.pupil_extent = pupil_extent
         print("pupil_extent=" + str(pupil_extent))
-        self.phase_scale = 2 * np.pi / filter_wavelength_micron
+        # This converts radians to radians to meters, in filter wavelengths.
+        # TODO: Externalize.
+        dm_stroke_microns = 8.0
+        # self.phase_scale = 2 * np.pi / filter_wavelength_micron
+        self.phase_scale_wavelengths = dm_stroke_microns / filter_wavelength_micron
+
         # Compute the subaperture pixel extent.
         self.pupil_meters_per_pixel = radius_meters / spatial_quantization
-        self.subaperture_size_pixels = int(subaperture_radius_meters // self.pupil_meters_per_pixel)
+        self.subaperture_size_pixels = int(
+            subaperture_radius_meters // self.pupil_meters_per_pixel
+        )
 
 
         # Build the simulation mesh grid.
@@ -453,25 +512,81 @@ class DASIEModel(object):
         self.pupil_dimension_x = x
         self.pupil_dimension_y = y
         X, Y = np.meshgrid(x, y)
+
+        # TODO: Decouple all grids.
+        # TODO: Externalize.
+        focal_extent = 0.1
+        # TODO: Verify these physical coordinates; clarify pupil vs radius.
+        x = np.linspace(-focal_extent/2, focal_extent/2, spatial_quantization)
+        y = np.linspace(-focal_extent/2, focal_extent/2, spatial_quantization)
+        self.focal_dimension_x = x
+        self.focal_dimension_y = y
+        focal_X, focal_Y = np.meshgrid(x, y)
+
+
         # End: Physics stuff.
 
+        # Object properties to store intermediary objects.
+        self.optics_only_pupil_planes = list()
+        self.optics_only_psfs = list()
+        self.optics_only_otfs = list()
+        self.optics_only_mtfs = list()
         self.psfs = list()
         self.otfs = list()
         self.mtfs = list()
+        self.distributed_aperture_image_planes = list()
+        self.atmosphere_phase_screens = list()
+        self.da_post_atmosphere_image_planes = list()
         self.distributed_aperture_images = list()
-
-        # For each exposure, build the pupil function for that exposure.
         self.pupil_planes = list()
         self.plan = dict()
+
+        # For each exposure, build the pupil function for that exposure.
         for exposure_num in range(num_exposures):
+
+            # Prepare a dict-valued key-value pair for this exposure.
             self.plan[exposure_num] = dict()
             with tf.name_scope("exposure_" + str(exposure_num)):
 
+                pupil_size = (spatial_quantization,
+                               spatial_quantization)
 
                 # Build the pupil plane quantization grid for this exposure.
-                pupil_plane = tf.zeros((spatial_quantization,
-                                        spatial_quantization),
-                                       dtype=tf.complex128)
+                optics_only_pupil_plane = tf.zeros(pupil_size,
+                                                   dtype=tf.complex128)
+
+                # TODO: externalize or internally vary for each exposure.
+                r0 = 0.020
+                #https://arxiv.org/ftp/arxiv/papers/1112/1112.6033.pdf
+                outer_scale = 2000.0
+                # outer_scale = 0.020
+                # outer_scale = 0.300
+                inner_scale = 0.008
+                effective_dm_update_rate_hz = 1000
+                exposure_interval_sec = 1 / effective_dm_update_rate_hz
+                greenwood_time_constant_sec = 1.0
+                # TODO: relate exposure_interval_sec and greenwood_time_constant_sec to set atmosphere_sample_scale
+                atmosphere_sample_scale = 1.0
+
+                # Build a static phase grid for reuse in this ensemble.
+                static_phase_grid = make_static_phase_grid(r0,
+                                                           spatial_quantization,
+                                                           self.pupil_extent,
+                                                           outer_scale,
+                                                           inner_scale)
+
+                # Initialize base sample matrices for atmosphere evolution.
+                gaussian_dist = tfp.distributions.Normal(
+                    loc=tf.zeros(pupil_size, dtype=tf.float64),
+                    scale=tf.ones(pupil_size, dtype=tf.float64))
+                real_sample = tfp.distributions.Sample(
+                    gaussian_dist).sample()
+
+                gaussian_dist = tfp.distributions.Normal(
+                    loc=tf.zeros(pupil_size, dtype=tf.float64),
+                    scale=tf.ones(pupil_size, dtype=tf.float64))
+                img_sample = tfp.distributions.Sample(
+                    gaussian_dist).sample()
 
                 # Build the model of the pupil plane, using the Variables.
                 with tf.name_scope("pupil_plane_model"):
@@ -482,10 +597,10 @@ class DASIEModel(object):
                         print("Building aperture number %d." % aperture_num)
 
                         # Compute the subap centroid cartesian coordinates.
-                        # TODO: correct radius to place the edge, rather than the center, at radius
                         rotation = (aperture_num + 1) / self.num_apertures
-                        mu_u = radius_meters * np.cos((2 * np.pi) * rotation)
-                        mu_v = radius_meters * np.sin((2 * np.pi) * rotation)
+                        edge_radius = radius_meters - subaperture_radius_meters
+                        mu_u = edge_radius * np.cos((2 * np.pi) * rotation)
+                        mu_v = edge_radius * np.sin((2 * np.pi) * rotation)
 
                         # Build the variables for this subaperture.
                         with tf.name_scope("subaperture_"+ str(aperture_num)):
@@ -499,87 +614,247 @@ class DASIEModel(object):
                             )
 
                             # Build TF Variables around the coefficients.
-                            subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(subap_zernike_coeffs,
-                                                                                                        trainable=dm_trainable)
+                            subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(
+                                subap_zernike_coeffs,
+                                trainable=dm_trainable
+                            )
+
+                            # Add Zernike Variables to the bookeeeping dict.
                             self.plan[exposure_num][aperture_num] = subap_zernike_coefficients_vars
+
                             # Render this subaperture on the pupil plane grid.
-                            # TODO: Ryan: Here's where I can set the phase scale to physical units. Should I?
-                            # pupil_plane += self.phase_scale * zernike_aperture_function_2d(X,
-                            #                                                                Y,
-                            #                                                                mu_u,
-                            #                                                                mu_v,
-                            #                                                                radius_meters,
-                            #                                                                subaperture_radius_meters,
-                            #                                                                subap_zernike_coefficients_variables,
-                            #                                                                )
+                            # Set the pupil plane units to wavelengths.
+                            optics_only_pupil_plane += zernike_aperture_function_2d(
+                                X,
+                                Y,
+                                mu_u,
+                                mu_v,
+                                radius_meters,
+                                subaperture_radius_meters,
+                                subap_zernike_coefficients_vars
+                            )
+
+                    # TODO: Ryan, is this appropriate?
+                    # Standardize the pupil plane, then physically scale it.
+                    zernike_min = tf.cast(
+                        tf.math.reduce_min(
+                            tf.math.real(
+                                optics_only_pupil_plane
+                            )
+                        ),
+                        dtype=tf.complex128
+                    )
+                    zernike_max = tf.cast(
+                        tf.math.reduce_max(
+                            tf.math.real(
+                                optics_only_pupil_plane
+                            )
+                        ),
+                        dtype=tf.complex128
+                    )
+                    zernike_range = (zernike_max - zernike_min)
+
+                    optics_only_pupil_plane = (optics_only_pupil_plane - zernike_min) / zernike_range
+
+                    optics_only_pupil_plane = optics_only_pupil_plane * self.phase_scale_wavelengths
 
 
-                            pupil_plane += zernike_aperture_function_2d(X,
-                                                                        Y,
-                                                                        mu_u,
-                                                                        mu_v,
-                                                                        radius_meters,
-                                                                        subaperture_radius_meters,
-                                                                        subap_zernike_coefficients_vars,
-                                                                        )
+                    # This pupil plane is complete, now add it to the list.
+                    self.optics_only_pupil_planes.append(optics_only_pupil_plane)
 
-                # This pupil plane is complete, now add it to the list.
-                self.pupil_planes.append(pupil_plane)
+                    # Build the optics-only transfer functions.
+                    (optics_only_psf,
+                     optics_only_otf,
+                     optics_only_mtf) = self._build_geometric_optics(
+                        optics_only_pupil_plane
+                    )
+
+                    # Store the psf, otf, and mtf tensors for later use.
+                    self.optics_only_psfs.append(optics_only_psf)
+                    self.optics_only_otfs.append(optics_only_otf)
+                    self.optics_only_mtfs.append(optics_only_mtf)
+
+                    # For this exposure, develop an atmosphere.
+                    with tf.name_scope("atmosphere_model"):
+
+                        # Take a step on a random walk, evolving the atmosphere.
+                        # TODO: refactor to a single standard-norm operator.
+                        gaussian_dist = tfp.distributions.Normal(
+                            loc=tf.zeros(
+                                pupil_size,
+                                dtype=tf.float64
+                            ),
+                            scale=tf.ones(
+                                pupil_size,
+                                dtype=tf.float64
+                            )
+                        )
+                        real_evo_sample = tfp.distributions.Sample(
+                            gaussian_dist).sample()
+
+                        gaussian_dist = tfp.distributions.Normal(
+                            loc=tf.zeros(
+                                pupil_size,
+                                dtype=tf.float64
+                            ),
+                            scale=tf.ones(
+                                pupil_size,
+                                dtype=tf.float64
+                            )
+                        )
+                        img_evo_sample = tfp.distributions.Sample(
+                            gaussian_dist
+                        ).sample()
+
+                        real_sample += atmosphere_sample_scale * real_evo_sample
+                        img_sample += atmosphere_sample_scale * img_evo_sample
+
+                        # Build and store the phase screen in radians.
+                        phase_screen_radians = make_phase_screen_radians(
+                            self.pupil_extent,
+                            spatial_quantization,
+                            static_phase_grid,
+                            real_sample,
+                            img_sample
+                        )
+
+                        # Convert the phase screen to wavelength-base-microns.
+                        # phase_screen_mircons = (filter_wavelength_micron / (2 * np.pi)) * phase_screen_radians
+                        # self.atmosphere_phase_screens.append(phase_screen_mircons)
+                        phase_screen_wavelengths = (filter_wavelength_micron / (2 * np.pi)) * phase_screen_radians
+                        self.atmosphere_phase_screens.append(phase_screen_wavelengths)
 
 
-                psf, otf, mtf = self._build_geometric_optics(pupil_plane)
+                        # Apply the micron displacements to the pupil.
+                        # phase_screen_mircons_masked = phase_screen_mircons * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
+                        # da_post_atmosphere_pupil_plane = tf.cast(phase_screen_mircons_masked, dtype=tf.complex128) + optics_only_pupil_plane
 
-                # Store the psf, otf, and mtf tensors for later evaluation.
-                self.psfs.append(psf)
-                self.otfs.append(otf)
-                self.mtfs.append(mtf)
+                        phase_screen_wavelenghts_masked = phase_screen_wavelengths * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
+                        da_post_atmosphere_pupil_plane = tf.cast(phase_screen_wavelenghts_masked, dtype=tf.complex128) + optics_only_pupil_plane
 
-                distributed_aperture_image_plane = self._image_model(
-                    hadamard_image_formation=hadamard_image_formation,
-                    psf=psf,
-                    mtf=mtf)
+                        self.pupil_planes.append(
+                            da_post_atmosphere_pupil_plane
+                        )
+
+                    # Finally, produce the full-path transfer functions.
+                    psf, otf, mtf = self._build_geometric_optics(
+                        da_post_atmosphere_pupil_plane
+                    )
+
+                    # Store the psf, otf, and mtf tensors for later evaluation.
+                    self.psfs.append(psf)
+                    self.otfs.append(otf)
+                    self.mtfs.append(mtf)
+
+                    distributed_aperture_image_plane = self._image_model(
+                        hadamard_image_formation=hadamard_image_formation,
+                        psf=psf,
+                        mtf=mtf)
+
+                    self.distributed_aperture_image_planes.append(
+                        distributed_aperture_image_plane
+                    )
 
                 with tf.name_scope("sensor_model"):
 
-                    # # TODO: Implement Gaussian and Poisson process noise.
-                    # distributed_aperture_image = self._apply_noise(distributed_aperture_image_plane)
-                    distributed_aperture_image = distributed_aperture_image_plane
-
+                    # Apply Gaussian and Poisson process noise.
+                    distributed_aperture_image = self._apply_noise(
+                        distributed_aperture_image_plane,
+                        gaussian_mean=sensor_gaussian_mean,
+                        poisson_mean_arrival=sensor_poisson_mean_arrival
+                    )
 
                 # Finally, add the image from this pupil to the list.
-                self.distributed_aperture_images.append(distributed_aperture_image)
+                self.distributed_aperture_images.append(
+                    distributed_aperture_image
+                )
 
         # Now, construct a monolithic aperture of the same radius.
         with tf.name_scope("monolithic_aperture"):
 
             with tf.name_scope("pupil_plane"):
 
-                self.monolithic_pupil_plane = zernike_aperture_function_2d(
-                    X,
-                    Y,
-                    0.0,
-                    0.0,
-                    radius_meters,
-                    radius_meters,
-                    zernike_coefficients=[0.001])
+                # self.optics_only_monolithic_pupil_plane = zernike_aperture_function_2d(
+                #     X,
+                #     Y,
+                #     0.0,
+                #     0.0,
+                #     radius_meters,
+                #     radius_meters,
+                #     zernike_coefficients=[1.0],
+                # )
 
-            # Compute the PSF from the pupil plane.
-            with tf.name_scope("psf_model"):
-                self.monolithic_psf = tf.math.abs(tf.signal.fftshift(tf.signal.fft2d(tf.signal.ifftshift(self.monolithic_pupil_plane)))) ** 2
+                self.optics_only_monolithic_pupil_plane = circle_mask(X,
+                                                                      Y,
+                                                                      0.0,
+                                                                      0.0,
+                                                                      radius_meters)
 
-            # Compute the OTF, which is the Fourier transform of the PSF.
-            with tf.name_scope("otf_model"):
-                self.monolithic_otf = tf.signal.fft2d(tf.cast(self.monolithic_psf, tf.complex128))
+            self.optics_only_monolithic_pupil_plane = self.optics_only_monolithic_pupil_plane.astype(float)
 
-            # Compute the mtf, which is the real component of the OTF.
-            with tf.name_scope("mtf_model"):
-                self.monolithic_mtf = tf.math.abs(self.monolithic_otf)
+            self.optics_only_monolithic_pupil_plane = tf.constant(self.optics_only_monolithic_pupil_plane)
+            self.optics_only_monolithic_pupil_plane = tf.cast(self.optics_only_monolithic_pupil_plane, dtype=tf.complex128)
+            # Finally, produce the full-path transfer functions.
+            (self.optics_only_monolithic_psf,
+             self.optics_only_monolithic_otf,
+             self.optics_only_monolithic_mtf) = self._build_geometric_optics(
+                self.optics_only_monolithic_pupil_plane
+            )
 
+            self.optics_only_monolithic_aperture_image_plane = self._image_model(
+                hadamard_image_formation=hadamard_image_formation,
+                psf=self.optics_only_monolithic_psf,
+                mtf=self.optics_only_monolithic_mtf
+            )
 
-            self.monolithic_aperture_image = self._image_model(
+            with tf.name_scope("optics_only_sensor_model"):
+                # Apply Gaussian and Poisson process noise.
+                self.optics_only_monolithic_aperture_image = self._apply_noise(
+                    self.optics_only_monolithic_aperture_image_plane,
+                    gaussian_mean=sensor_gaussian_mean,
+                    poisson_mean_arrival=sensor_poisson_mean_arrival
+                )
+
+            #
+            with tf.name_scope("atmosphere_model"):
+                phase_screen_wavelenghts_masked = tf.cast(
+                    tf.math.greater(
+                        tf.math.abs(
+                            self.optics_only_monolithic_pupil_plane
+                        ),
+                        tf.zeros_like(
+                            tf.math.abs(
+                                self.optics_only_monolithic_pupil_plane
+                            )
+                        )
+                    ),
+                    dtype=tf.float64
+                ) * phase_screen_wavelengths
+                self.mono_post_atmosphere_pupil_plane = tf.cast(
+                    phase_screen_wavelenghts_masked,
+                    dtype=tf.complex128
+                ) + self.optics_only_monolithic_pupil_plane
+
+            (self.monolithic_psf,
+             self.monolithic_otf,
+             self.monolithic_mtf) = self._build_geometric_optics(
+                self.mono_post_atmosphere_pupil_plane
+            )
+
+            self.monolithic_aperture_image_plane = self._image_model(
                 hadamard_image_formation=hadamard_image_formation,
                 psf=self.monolithic_psf,
-                mtf=self.monolithic_mtf)
+                mtf=self.monolithic_mtf
+            )
+
+            with tf.name_scope("sensor_model"):
+                # Apply Gaussian and Poisson process noise.
+                self.monolithic_aperture_image = self._apply_noise(
+                    self.monolithic_aperture_image_plane,
+                    gaussian_mean=sensor_gaussian_mean,
+                    poisson_mean_arrival=sensor_poisson_mean_arrival
+                )
+
 
     def _build_recovery_model(self,
                               distributed_aperture_images_batch,
@@ -612,34 +887,51 @@ class DASIEModel(object):
         if not os.path.exists(step_plot_dir):
             os.makedirs(step_plot_dir)
 
-        def save_and_close_current_plot(logdir, plot_name="default"):
+        def save_and_close_current_plot(logdir, plot_name="default", dpi=600):
             fig_path = os.path.join(logdir, str(plot_name) + '.png')
-            plt.gcf().set_dpi(600)
+            plt.gcf().set_dpi(dpi)
             plt.savefig(fig_path)
             plt.close()
+
 
         # Do a single sess.run to get all the values from a single batch.
         (pupil_planes,
          psfs,
          mtfs,
+         atmosphere_phase_screens,
+         optics_only_pupil_planes,
+         optics_only_psfs,
+         optics_only_mtfs,
          distributed_aperture_images,
          flipped_object_batch,
          object_spectrum_batch,
          object_batch,
          recovered_image,
-         monolithic_pupil_plane,
+         optics_only_monolithic_pupil_plane,
+         optics_only_monolithic_psf,
+         optics_only_monolithic_mtf,
+         optics_only_monolithic_aperture_image,
+         mono_post_atmosphere_pupil_plane,
          monolithic_psf,
          monolithic_mtf,
          monolithic_aperture_image
          ) = self.sess.run([self.pupil_planes,
                             self.psfs,
                             self.mtfs,
+                            self.atmosphere_phase_screens,
+                            self.optics_only_pupil_planes,
+                            self.optics_only_psfs,
+                            self.optics_only_mtfs,
                             self.distributed_aperture_images,
                             self.flipped_object_batch,
                             self.object_spectrum_batch,
                             self.object_batch,
                             self.recovered_image,
-                            self.monolithic_pupil_plane,
+                            self.optics_only_monolithic_pupil_plane,
+                            self.optics_only_monolithic_psf,
+                            self.optics_only_monolithic_mtf,
+                            self.optics_only_monolithic_aperture_image,
+                            self.mono_post_atmosphere_pupil_plane,
                             self.monolithic_psf,
                             self.monolithic_mtf,
                             self.monolithic_aperture_image],
@@ -649,15 +941,24 @@ class DASIEModel(object):
         flipped_object_example = flipped_object_batch[0]
         object_spectrum_example = object_spectrum_batch[0]
         monolithic_aperture_image = monolithic_aperture_image[0]
+        optics_only_monolithic_aperture_image = optics_only_monolithic_aperture_image[0]
         recovered_image = np.squeeze(recovered_image[0])
 
         # Iterate over each element of the ensemble from the DA system.
-        for i, (pupil_plane,
+        for i, (optics_only_pupil_plane,
+                optics_only_psf,
+                optics_only_mtf,
+                pupil_plane,
                 psf,
                 mtf,
-                distributed_aperture_image) in enumerate(zip(pupil_planes,
+                atmosphere_phase_screen,
+                distributed_aperture_image) in enumerate(zip(optics_only_pupil_planes,
+                                                             optics_only_psfs,
+                                                             optics_only_mtfs,
+                                                             pupil_planes,
                                                              psfs,
                                                              mtfs,
+                                                             atmosphere_phase_screens,
                                                              distributed_aperture_images)):
 
             # These are actually batches, so just take the first one.
@@ -668,35 +969,36 @@ class DASIEModel(object):
             right = self.pupil_dimension_x[-1]
             bottom = self.pupil_dimension_y[0]
             top = self.pupil_dimension_y[-1]
+            pupil_extent = [left, right, bottom, top]
             # plt.imshow(np.angle(pupil_plane),
             #            cmap='twilight_shifted',
             #            extent=[left,right,bottom,top])
             # Overlay aperture mask
             plt.imshow(np.real(pupil_plane), cmap='inferno',
-                       extent=[left, right, bottom, top])
+                       extent=pupil_extent)
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="pupil_plane_" + str(i))
 
             # Plot phase angle
-            left = self.pupil_dimension_x[0]
-            right = self.pupil_dimension_x[-1]
-            bottom = self.pupil_dimension_y[0]
-            top = self.pupil_dimension_y[-1]
+            # left = self.pupil_dimension_x[0]
+            # right = self.pupil_dimension_x[-1]
+            # bottom = self.pupil_dimension_y[0]
+            # top = self.pupil_dimension_y[-1]
             # Overlay aperture mask
-            ax1 = plt.subplot(1, 2, 1)
-            ax1.set_title('np.imag')
-            plt.imshow(np.imag(pupil_plane), cmap='Greys',
-                       extent=[left, right, bottom, top])
-            plt.colorbar()
-
-            ax2 = plt.subplot(1, 2, 2)
-            plt.imshow(np.real(pupil_plane), cmap='Greys',
-                       extent=[left, right, bottom, top])
-            ax2.set_title('np.real')
-            plt.colorbar()
-            save_and_close_current_plot(step_plot_dir,
-                                        plot_name="raw_pupil_plane_" + str(i))
+            # ax1 = plt.subplot(1, 2, 1)
+            # ax1.set_title('np.imag')
+            # plt.imshow(np.imag(pupil_plane), cmap='Greys',
+            #            extent=[left, right, bottom, top])
+            # plt.colorbar()
+            #
+            # ax2 = plt.subplot(1, 2, 2)
+            # plt.imshow(np.real(pupil_plane), cmap='Greys',
+            #            extent=[left, right, bottom, top])
+            # ax2.set_title('np.real')
+            # plt.colorbar()
+            # save_and_close_current_plot(step_plot_dir,
+            #                             plot_name="raw_pupil_plane_" + str(i))
 
             plt.imshow(np.log10(psf), cmap='inferno')
             plt.colorbar()
@@ -708,6 +1010,30 @@ class DASIEModel(object):
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="log_mtf_" + str(i))
 
+            plt.imshow(atmosphere_phase_screen,
+                       cmap='inferno',
+                       extent=pupil_extent)
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="atmosphere_phase_screen_" + str(i))
+
+            plt.imshow(np.real(optics_only_pupil_plane),
+                       cmap='inferno',
+                       extent=pupil_extent)
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="optics_only_pupil_plane_" + str(i))
+
+            plt.imshow(np.log10(optics_only_psf), cmap='inferno')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="log_optics_only_psf_" + str(i))
+
+            plt.imshow(np.log10(optics_only_mtf), cmap='inferno')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="log_optics_only_mtf_" + str(i))
+
             plt.imshow(distributed_aperture_image, cmap='inferno')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
@@ -715,22 +1041,18 @@ class DASIEModel(object):
 
         plt.imshow(recovered_image, cmap='inferno')
         plt.colorbar()
-
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="recovered_image")
 
-        # Plot phase angle
-        left = self.pupil_dimension_x[0]
-        right = self.pupil_dimension_x[-1]
-        bottom = self.pupil_dimension_y[0]
-        top = self.pupil_dimension_y[-1]
-
         # Overlay aperture mask
-        plt.imshow(np.abs(monolithic_pupil_plane), cmap='inferno',
-                   extent=[left, right, bottom, top])
+        plt.imshow(abs(mono_post_atmosphere_pupil_plane),
+                   cmap='inferno',
+                   extent=pupil_extent)
         plt.colorbar()
-        save_and_close_current_plot(step_plot_dir,
-                                    plot_name="monolithic_pupil_plane")
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="mono_post_atmosphere_pupil_plane"
+        )
 
         plt.imshow(np.log10(monolithic_psf), cmap='inferno')
         plt.colorbar()
@@ -747,6 +1069,35 @@ class DASIEModel(object):
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="monolithic_aperture_image")
 
+        plt.imshow(optics_only_monolithic_aperture_image, cmap='inferno')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="monolithic_aperture_image")
+
+        plt.imshow(np.abs(optics_only_monolithic_pupil_plane),
+                   cmap='inferno',
+                   extent=pupil_extent)
+        plt.colorbar()
+        plt.xlabel('x [m]')
+        plt.ylabel('y [m]')
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="optics_only_monolithic_pupil_plane",
+            dpi=1200
+        )
+
+        plt.imshow(np.log10(optics_only_monolithic_psf),
+                   cmap='inferno')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="log_optics_only_monolithic_psf")
+
+        plt.imshow(np.log10(optics_only_monolithic_mtf), cmap='inferno')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="log_optics_only_monolithic_mtf")
+
+
         plt.imshow(flipped_object_example, cmap='inferno')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
@@ -756,6 +1107,211 @@ class DASIEModel(object):
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
+
+        # End of standard plots, now we do some calibration/sanity checks.
+        def crop_center(img, crop_x, crop_y):
+            y, x = img.shape
+            start_x = x // 2 - crop_x // 2
+            start_y = y // 2 - crop_y // 2
+            return img[start_y:start_y + crop_y, start_x:start_x + crop_x]
+
+        center_chip = crop_center(optics_only_monolithic_psf, 128, 128)
+        norm_center_chip = center_chip / np.max(center_chip)
+        plt.imshow(np.log10(norm_center_chip), cmap='inferno')
+        plt.colorbar()
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="log_optics_only_monolithic_psf_chip"
+        )
+
+        # Line plot
+        center_line = crop_center(
+            optics_only_monolithic_psf,
+            1,
+            self.spatial_quantization
+        )
+        norm_center_line = center_line / np.max(center_line)
+        plt.plot(norm_center_line)
+        plt.ylabel('Normalised intensity [I]')
+        plt.xlabel('Focal plane distance [pixels]')
+        plt.yscale('log')
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="log_optics_only_monolithic_psf_line"
+        )
+
+        # Line plot zoom
+        center_line = crop_center(
+            optics_only_monolithic_psf,
+            1,
+            64
+        )
+        norm_center_line = center_line / np.max(center_line)
+        plt.plot(norm_center_line)
+        plt.ylabel('Normalised intensity [I]')
+        plt.xlabel('Focal plane distance [pixels]')
+        plt.yscale('log')
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="log_optics_only_monolithic_psf_line_zoom"
+        )
+
+        pupil_diameter = self.diameter_meters  # m
+        # pupil_diameter = 6.5  # m
+        effective_focal_length = 726.0  # m
+        wavelength_meters = 1e-6 * self.filter_wavelength_micron  # m
+        # wavelength = 750e-9 # m
+        # pupil_grid = make_pupil_grid(self.spatial_quantization,
+        #                              diameter=pupil_diameter)
+        # telescope_pupil_generator = make_magellan_aperture()
+        # telescope_pupil = telescope_pupil_generator(pupil_grid)
+
+        pupil_grid = make_pupil_grid(
+            self.spatial_quantization,
+            (1 + self.edge_padding_factor) * pupil_diameter
+        )
+        oversampling_factor = 1
+        aperture_circ = evaluate_supersampled(
+            circular_aperture(pupil_diameter),
+            pupil_grid,
+            oversampling_factor
+        )
+
+        wavefront = Wavefront(aperture_circ, wavelength_meters)
+
+        # wavefront = Wavefront(telescope_pupil, wavelength)
+        # q is the number of pixels per diffraction width.
+        # num_airy is half size (ie. radius) of the image in the number of diffraction widths
+        # TODO: set q and num_airy from properties.
+        focal_grid = make_focal_grid(q=4,
+                                     num_airy=16,
+                                     pupil_diameter=pupil_diameter,
+                                     focal_length=effective_focal_length,
+                                     reference_wavelength=wavelength_meters)
+        prop = FraunhoferPropagator(pupil_grid,
+                                    focal_grid,
+                                    focal_length=effective_focal_length)
+
+        focal_image = prop.forward(wavefront)
+
+        # hcipy pupil
+        imshow_field(aperture_circ, cmap='inferno')
+        plt.colorbar()
+        plt.xlabel('x [m]')
+        plt.ylabel('y [m]')
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="hcipy_circular_pupil"
+        )
+
+        # hcipy circular psf line plot.
+        psf = focal_image.intensity
+        psf_shape = psf.grid.shape
+        slicefoc = psf.shaped[:, psf_shape[0] // 2]
+        slicefoc_normalised = slicefoc / psf.max()
+        plt.plot(focal_grid.x.reshape(psf_shape)[0, :] * 1e6,
+                 slicefoc_normalised)
+        plt.xlabel('Focal plane distance [$\mu m$]')
+        plt.ylabel('Normalised intensity [I]')
+        plt.yscale('log')
+        plt.title('hcipy circular telescope PSF')
+        # plt.xlim(-10, 10)
+        # plt.ylim(5e-6, 2)
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="hcipy_circular_line"
+        )
+
+        # hcipy focal psf
+        imshow_field(
+            np.log10(focal_image.intensity / focal_image.intensity.max()),
+            vmin=-5,
+            grid_units=1e-6,
+            cmap = 'inferno'
+        )
+        plt.title('Log Normalized Intensity - HCIpy')
+        plt.xlabel('Focal plane distance [um]')
+        plt.ylabel('Focal plane distance [um]')
+        plt.colorbar()
+        save_and_close_current_plot(
+            step_plot_dir,
+            plot_name="hcipy_circular_focal_psf"
+        )
+
+        plt.imshow(np.log10(optics_only_monolithic_psf / np.max(optics_only_monolithic_psf)),
+                   cmap='inferno',
+                   vmin=-5,)
+        plt.title('Log Normalized Intensity - DASIE')
+        plt.xlabel('Focal plane distance [pixels]')
+        plt.ylabel('Focal plane distance [pixels]')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="log_normal_optics_only_monolithic_psf")
+
+        # Direct 2d comparison plot
+        ax1 = plt.subplot(1, 2, 1)
+        ax1.set_title('Log Normalized Intensity - HCIpy')
+        imshow_field(
+            np.log10(focal_image.intensity / focal_image.intensity.max()),
+            vmin=-5,
+            grid_units=1e-6,
+            cmap = 'inferno'
+        )
+        plt.xlabel('Focal plane distance [um]')
+        plt.ylabel('Focal plane distance [um]')
+        plt.colorbar()
+
+        ax2 = plt.subplot(1, 2, 2)
+        ax2.set_title('Log Normalized Intensity - DASIE')
+        plt.imshow(np.log10(optics_only_monolithic_psf / np.max(optics_only_monolithic_psf)),
+                   cmap='inferno',
+                   vmin=-5,)
+        plt.xlabel('Focal plane distance [pixels]')
+        plt.ylabel('Focal plane distance [pixels]')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="focal_psf_compare")
+
+        # Direct line comparison plot
+        ax1 = plt.subplot(1, 2, 1)
+        ax1.set_title('Log Normalized Intensity - HCIpy')
+        psf = focal_image.intensity
+        psf_shape = psf.grid.shape
+        slicefoc = psf.shaped[:, psf_shape[0] // 2]
+        slicefoc_normalised = slicefoc / psf.max()
+        plt.plot(focal_grid.x.reshape(psf_shape)[0, :] * 1e6,
+                 slicefoc_normalised)
+        plt.xlabel('Focal plane distance [$\mu m$]')
+        plt.ylabel('Normalised intensity [I]')
+        plt.yscale('log')
+        plt.title('hcipy circular telescope PSF')
+        # plt.xlim(-10, 10)
+        # plt.ylim(5e-6, 2)
+
+
+        ax2 = plt.subplot(1, 2, 2)
+        center_line = crop_center(
+            optics_only_monolithic_psf,
+            1,
+            self.spatial_quantization
+        )
+        norm_center_line = center_line / np.max(center_line)
+        plt.plot(norm_center_line)
+        plt.ylabel('Normalised intensity [I]')
+        plt.xlabel('Focal plane distance [pixels]')
+        plt.yscale('log')
+
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="focal_psf_line_compare")
+
+        #
+        # ax3 = plt.subplot(1, 3, 3)
+        # plt.plot(norm_center_line - slicefoc_normalised)
+        # plt.ylabel('Residual Normalised Intensity  [I]')
+        # plt.xlabel('Focal plane distance [pixels]')
+        # plt.yscale('log')
+
+        # PSF profile residuals.
 
     def save(self, save_file_path):
         """

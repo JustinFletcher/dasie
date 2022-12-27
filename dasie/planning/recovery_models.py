@@ -560,7 +560,7 @@ class RecoveryModel(object):
 
             # Given the base quantization, div by downsample, mul by stride.
             # print(self.image_x_scale)
-            # output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
+            output_x_scale = (self.image_x_scale // input_downsample_factor) * stride
             output_y_scale = (self.image_y_scale // input_downsample_factor) * stride
             output_shape = (self.batch_size,
                             output_x_scale,

@@ -344,6 +344,10 @@ def init_zernike_coefficients(num_zernike_indices=1,
 
                 zernike_coefficient = np.random.uniform(0.0, 1.0)
 
+            elif zernike_init_type == "np.random.normal":
+
+                zernike_coefficient = np.random.normal(0.1, 0.01)
+
             else:
 
                 raise ValueError("You provided --zernike_init_type of %s, but \
@@ -393,6 +397,13 @@ def zernike_aperture_function_2d(X,
 
         print("--End of Zernike Term.")
 
+    # Map the zernike domain from [-1, 1] to [0, 1], per term
+    # Each term can contribute as much as -1, and has a range of size 2.
+    # TODO: Ryan, talk with me about this. It changes the mapping from Zernike
+    # TODO: coefficients to Z in a way that might be problematic on the bench.
+    num_terms = len(zernike_coefficients)
+    tensor_zernike_2d_sample = (tensor_zernike_2d_sample + num_terms) / (2 * num_terms)
+
     # Apply a circle mask to set all non-aperture pixels to 0.0.
     print("-Masking subaperture.")
     pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
@@ -402,9 +413,15 @@ def zernike_aperture_function_2d(X,
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     print("-Generating phase angle field.")
     # TODO: Reinstate after debug? Talk to Ryan: Why should I do this?
-    tensor_zernike_2d_field = tensor_masked_zernike_2d_sample
+    # Normalize the zernike field so that it may be returned as
+    # zernike_min = tf.cast(tf.math.reduce_min(tf.math.abs(tensor_masked_zernike_2d_sample)), dtype=tf.complex128)
+    # zernike_max = tf.cast(tf.math.reduce_max(tf.math.abs(tensor_masked_zernike_2d_sample)), dtype=tf.complex128)
+    # zernike_range = (zernike_max - zernike_min)
+    # tensor_zernike_2d_field = (tensor_masked_zernike_2d_sample - zernike_min) / zernike_range
     # tensor_zernike_2d_field = tf.exp(tensor_masked_zernike_2d_sample)
     # tensor_zernike_2d_field = tensor_zernike_2d_field * pupil_mask
+
+    tensor_zernike_2d_field = tensor_masked_zernike_2d_sample
 
     print("-Ending aperture function.")
     return tensor_zernike_2d_field

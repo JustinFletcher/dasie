@@ -89,7 +89,7 @@ class DatasetGenerator(object):
                  parse_function,
                  augment=False,
                  shuffle=False,
-                 crop_size=None,
+                 crop_size=512,
                  batch_size=1,
                  num_threads=1,
                  buffer=30,
@@ -123,6 +123,7 @@ class DatasetGenerator(object):
         self.batch_size = batch_size
         self.encode_for_network = encoding_function
         self._parse_function = parse_function
+        self.spatial_quantization = crop_size
 
         # Collect paths to the input tfrecords file(s)
         if type(tfrecords) != list:
@@ -226,23 +227,26 @@ class DatasetGenerator(object):
         # If augmentation is to be applied
         if augment:
             # The only pixel-wise mutation possible on single channel imagery
-            data = data.map(_vary_contrast, num_parallel_calls=num_threads)
+            data = data.map(self._vary_contrast,
+                            num_parallel_calls=num_threads)
 
             # Technically, we only need rotation and one flip to get all
             # possible orientations. But they are all here
             # anyways because it makes me feel better.
-            data = data.map(_flip_left_right, num_parallel_calls=num_threads)
-            data = data.map(_flip_up_down, num_parallel_calls=num_threads)
-            data = data.map(_rotate_random, num_parallel_calls=num_threads)
+            data = data.map(self._flip_left_right,
+                            num_parallel_calls=num_threads)
+            data = data.map(self._flip_up_down,
+                            num_parallel_calls=num_threads)
+            data = data.map(self._rotate_random,
+                            num_parallel_calls=num_threads)
 
         # Crop the data to a specified size.
-        # TODO: Figure out how to configure this... maybe make it a method?
         if crop_size:
 
-            data = data.map(_perform_center_crop,
+            data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads).prefetch(buffer)
 
-        data = data.map(_normalize,
+        data = data.map(self._normalize,
                         num_parallel_calls=num_threads).prefetch(buffer)
 
         # Force images to the same size
@@ -293,6 +297,315 @@ class DatasetGenerator(object):
         # Return a reference to this data pipeline
         return data
 
+    def _vary_contrast(self, image, bboxs, filename=None):
+        """
+        Randomly varies the pixel-wise contrast of the image. This is the only
+        pixel-wise augmentation that can be performed on single-channel imagery.
+         The bounding boxes are not changed in any way by this function.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :return: the image and transformed bounding box tensor
+        """
+
+        cond_contrast = tf.cast(
+            tf.random.uniform([], maxval=2, dtype=tf.int32),
+            tf.bool)
+        image = tf.cond(cond_contrast,
+                        lambda: tf.image.random_contrast(image, 0.2, 1.8),
+                        lambda: tf.identity(image))
+        if filename is not None:
+            return image, bboxs, filename
+        else:
+            return image, bboxs
+
+    def _crop_random(self, image, bboxs, filename=None):
+        """
+        Randomly either applies the crop function or returns the unchanged input.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :return: the image and transformed bounding box tensor
+        """
+
+        cond_crop = tf.cast(tf.random.uniform([], maxval=2, dtype=tf.int32),
+                            tf.bool)
+        image, bboxs = tf.cond(cond_crop,
+                               lambda: _perform_crop(image, bboxs),
+                               lambda: (
+                               tf.identity(image), tf.identity(bboxs)))
+        if filename is not None:
+            return image, bboxs, filename
+        else:
+            return image, bboxs
+
+    def _normalize(self, image):
+
+        # Move the entire dynamic range up above zero.
+        # image = image + tf.abs(tf.reduce_min(image))
+        #
+        # # If it was already above zero, or is now, bring it to zero.
+        # image = image - tf.reduce_min(image)
+        #
+        # # And divide by the largest value to normalize the range to [0, 1] exactly.
+        # image = image / tf.reduce_max(image)
+
+        image_min = tf.reduce_min(image)
+        image_max = tf.reduce_max(image)
+
+        a = (1.0 - 0.0) / (image_max - image_min)
+        b = 1.0 - (a * image_max)
+        image = (a * image) + b
+        return image
+
+    def _standardize(self, image):
+
+        image = (image - tf.reduce_mean(image)) / tf.reduce_std(image)
+
+        return image
+
+    def _perform_center_crop(self, image, filename=None, min_crop_size=(256, 256)):
+        """
+        Randomly crops the image. Crop positions are chosen randomly, as well as
+        the size (provided it is above the requested minimum size). If any bounding
+        boxes are only partially included in the crop, the crop is enlarged so that
+        the bounding box falls totally within the crop.
+
+        Note: this makes batching difficult, as image sizes will no longer be
+        consistent. To use this function in the augmentation chain, resizing will be
+        needed after cropping but before batching.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :param min_crop_size: the smallest dimensions that a crop can take
+        :return: the image and transformed bounding box tensor
+        """
+
+        # Get the image shape tensor
+        img_shape = tf.shape(image)
+
+        # First come up with a desired crop size, from given mins to the whole image
+        #  (maxval is exclusive)
+        # crop_width = tf.random.uniform(
+        #     [],
+        #     minval=min_crop_size[1],
+        #     maxval=max_crop_width,
+        #     dtype=tf.int32
+        # )
+        # crop_height = tf.random.uniform(
+        #     [],
+        #     minval=min_crop_size[0],
+        #     maxval=max_crop_width,
+        #     dtype=tf.int32
+        # )
+        crop_width = self.spatial_quantization
+        crop_height = self.spatial_quantization
+
+        # Now come up with crop offsets
+        offset_width = tf.random.uniform(
+            [],
+            minval=0,
+            maxval=img_shape[1] - crop_width,
+            dtype=tf.int32
+        )
+        offset_height = tf.random.uniform(
+            [],
+            minval=0,
+            maxval=img_shape[0] - crop_height,
+            dtype=tf.int32
+        )
+
+        # The heavy lifting is done, time to make us a crop and transform our
+        # bounding boxes to the new coordinates
+        image = tf.image.crop_to_bounding_box(image,
+                                              (img_shape[0] // 2) - (
+                                                          offset_height // 2),
+                                              (img_shape[1] // 2) - (
+                                                          offset_width // 2),
+                                              crop_height,
+                                              crop_width)
+
+        if filename is not None:
+            return image, filename
+        else:
+            return image
+
+    def _flip_left_right(self, image, bboxs, filename=None):
+        """
+        Randomly flips the image left or right, and transforms the bounding boxes.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :return: the image and transformed bounding box tensor
+        """
+
+        # Do the random image flip
+        image_after = tf.image.random_flip_left_right(image)
+
+        # Determine if a flip happened or not
+        # Have to convert out of uint16...because tf apparently can't check
+        # equality of uint16...smh...
+        image_one = tf.cast(image_after, dtype=tf.float32)
+        image_two = tf.cast(image, dtype=tf.float32)
+
+        # If every pixel were equal, this would be a NOT flip, hence the outer NOT
+        # to determine if this is a flip
+        cond_flip = tf.logical_not(
+            tf.reduce_all(tf.equal(image_one, image_two)))
+
+        # This makes the computations a bit easier
+        ymin = bboxs[:, 0]
+        xmin = bboxs[:, 1]
+        ymax = bboxs[:, 2]
+        xmax = bboxs[:, 3]
+        classes = bboxs[:, 4]
+
+        # If we flipped, also flip the bounding boxes
+        bboxs = tf.cond(cond_flip,
+                        lambda: (tf.stack([ymin,
+                                           1 - xmax,
+                                           ymax,
+                                           1 - xmin,
+                                           classes], axis=1)),
+                        lambda: tf.identity(bboxs))
+
+        if filename is not None:
+            return image_after, bboxs, filename
+        else:
+            return image_after, bboxs
+
+    def _flip_up_down(self, image, bboxs, filename=None):
+        """
+        Randomly flips the image up or down, and transforms the bounding boxes.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :return: the image and transformed bounding box tensor
+        """
+
+        # Do the random image flip
+        image_after = tf.image.random_flip_up_down(image)
+
+        # Determine if a flip happened or not
+        # Have to convert out of uint16...because tf apparently can't check equality
+        #  of uint16...smh...
+        image_one = tf.cast(image_after, dtype=tf.float32)
+        image_two = tf.cast(image, dtype=tf.float32)
+
+        # If every pixel were equal, this would be a NOT flip, hence the outer NOT
+        #  to determine if this is a flip
+        cond_flip = tf.logical_not(
+            tf.reduce_all(tf.equal(image_one, image_two)))
+
+        # This makes the computations a bit easier
+        ymin = bboxs[:, 0]
+        xmin = bboxs[:, 1]
+        ymax = bboxs[:, 2]
+        xmax = bboxs[:, 3]
+        classes = bboxs[:, 4]
+
+        # If we flipped, also flip the bounding boxes
+        bboxs = tf.cond(cond_flip,
+                        lambda: (tf.stack([1 - ymax,
+                                           xmin,
+                                           1 - ymin,
+                                           xmax,
+                                           classes], axis=1)),
+                        lambda: tf.identity(bboxs))
+
+        if filename is not None:
+            return image_after, bboxs, filename
+        else:
+            return image_after, bboxs
+
+    def _rotate_random(self, image, bboxs, filename=None):
+        """
+        Randomly applies the rotation function or returns the unchanged input.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :return: the image and transformed bounding box tensor
+        """
+        cond_rotate = tf.cast(tf.random.uniform([], maxval=2, dtype=tf.int32),
+                              tf.bool)
+        image, bboxs = tf.cond(cond_rotate,
+                               lambda: _perform_rotation(image, bboxs),
+                               lambda: (
+                               tf.identity(image), tf.identity(bboxs)))
+
+        if filename is not None:
+            return image, bboxs, filename
+        else:
+            return image, bboxs
+
+    def _perform_rotation(self, image, bboxs, filename=None):
+        """
+        Rotates images randomly either 90 degrees left or right.
+        The decision to rotate or not is decided by _rotate_random.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :return: the image and transformed bounding box tensor
+        """
+        # Either rotate once clockwise or counter clockwise
+        cond_direction = tf.cast(
+            tf.random.uniform([], maxval=2, dtype=tf.int32),
+            tf.bool)
+        num_rotations = tf.cond(cond_direction,
+                                lambda: 1,
+                                lambda: -1)
+
+        image = tf.image.rot90(image, k=num_rotations)
+
+        # Rotate the bounding boxes with the image
+        ymin = bboxs[:, 0]
+        xmin = bboxs[:, 1]
+        ymax = bboxs[:, 2]
+        xmax = bboxs[:, 3]
+
+        ymin, xmin, ymax, xmax = tf.cond(cond_direction,
+                                         lambda: (
+                                         1 - xmax, ymin, 1 - xmin, ymax),
+                                         lambda: (
+                                         xmin, 1 - ymax, xmax, 1 - ymin))
+
+        bbox_new = tf.stack([ymin, xmin, ymax, xmax, bboxs[:, 4]], axis=1)
+        if filename is not None:
+            return image, bbox_new, filename
+        else:
+            return image, bbox_new
+
+    def _resize_data(self, image, bboxs, filename=None, image_size=(2048, 2048)):
+        """
+        Resizes images to specified size. Intended to be applied as an element of
+        the augmentation chain via the Tensorflow Dataset API map call.
+
+        Note: Currently this is not used, and is WRONG for use in SatNet. Resizing,
+         if used, should be done via padding.
+
+        :param image: input image tensor of Shape = Height X Width X #Channels
+        :param bboxs: input bounding boxes of Shape = #Boxes X 4
+        (ymin, xmin, ymax, xmax)
+        :param image_size: desired/output image size
+        :return: the image and transformed bounding box tensor
+        """
+
+        image = tf.expand_dims(image, axis=0)
+        image = tf.image.resize_images(image, image_size)
+        image = tf.squeeze(image, axis=0)
+
+        if filename is not None:
+            return image, bboxs, filename
+        else:
+            return image, bboxs
+
 
 def get_num_examples(dataset_no_repeat):
     # Do a single pass to get the size of the dataset
@@ -321,316 +634,3 @@ def get_input_shape(dataset_no_repeat):
     images = sess.run(next_elem)
     return images.shape
 
-
-def _vary_contrast(image, bboxs, filename=None):
-    """
-    Randomly varies the pixel-wise contrast of the image. This is the only
-    pixel-wise augmentation that can be performed on single-channel imagery.
-     The bounding boxes are not changed in any way by this function.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :return: the image and transformed bounding box tensor
-    """
-
-    cond_contrast = tf.cast(tf.random.uniform([], maxval=2, dtype=tf.int32),
-                            tf.bool)
-    image = tf.cond(cond_contrast,
-                    lambda: tf.image.random_contrast(image, 0.2, 1.8),
-                    lambda: tf.identity(image))
-    if filename is not None:
-        return image, bboxs, filename
-    else:
-        return image, bboxs
-
-
-def _crop_random(image, bboxs, filename=None):
-    """
-    Randomly either applies the crop function or returns the unchanged input.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :return: the image and transformed bounding box tensor
-    """
-
-    cond_crop = tf.cast(tf.random.uniform([], maxval=2, dtype=tf.int32),
-                        tf.bool)
-    image, bboxs = tf.cond(cond_crop,
-                           lambda: _perform_crop(image, bboxs),
-                           lambda: (tf.identity(image), tf.identity(bboxs)))
-    if filename is not None:
-        return image, bboxs, filename
-    else:
-        return image, bboxs
-
-
-def _normalize(image):
-
-    # Move the entire dynamic range up above zero.
-    # image = image + tf.abs(tf.reduce_min(image))
-    #
-    # # If it was already above zero, or is now, bring it to zero.
-    # image = image - tf.reduce_min(image)
-    #
-    # # And divide by the largest value to normalize the range to [0, 1] exactly.
-    # image = image / tf.reduce_max(image)
-
-    image_min = tf.reduce_min(image)
-    image_max = tf.reduce_max(image)
-
-    a = (1.0 - 0.0) / (image_max - image_min)
-    b = 1.0 - (a * image_max)
-    image = (a * image) + b
-    return image
-
-    return image
-
-
-def _standardize(image):
-
-    image = (image - tf.reduce_mean(image)) / tf.reduce_std(image)
-
-    return image
-
-
-def _perform_center_crop(image, filename=None, min_crop_size=(256, 256)):
-    """
-    Randomly crops the image. Crop positions are chosen randomly, as well as
-    the size (provided it is above the requested minimum size). If any bounding
-    boxes are only partially included in the crop, the crop is enlarged so that
-    the bounding box falls totally within the crop.
-
-    Note: this makes batching difficult, as image sizes will no longer be
-    consistent. To use this function in the augmentation chain, resizing will be
-    needed after cropping but before batching.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :param min_crop_size: the smallest dimensions that a crop can take
-    :return: the image and transformed bounding box tensor
-    """
-
-    # Get the image shape tensor
-    img_shape = tf.shape(image)
-
-    # First come up with a desired crop size, from given mins to the whole image
-    #  (maxval is exclusive)
-    # TODO: Externalize this value and make it spatial_quantization.
-    crop_size = 512
-    # crop_width = tf.random.uniform(
-    #     [],
-    #     minval=min_crop_size[1],
-    #     maxval=max_crop_width,
-    #     dtype=tf.int32
-    # )
-    # crop_height = tf.random.uniform(
-    #     [],
-    #     minval=min_crop_size[0],
-    #     maxval=max_crop_width,
-    #     dtype=tf.int32
-    # )
-    crop_width = crop_size
-    crop_height = crop_size
-
-    # Now come up with crop offsets
-    offset_width = tf.random.uniform(
-        [],
-        minval=0,
-        maxval=img_shape[1] - crop_width,
-        dtype=tf.int32
-    )
-    offset_height = tf.random.uniform(
-        [],
-        minval=0,
-        maxval=img_shape[0] - crop_height,
-        dtype=tf.int32
-    )
-
-
-    # The heavy lifting is done, time to make us a crop and transform our
-    # bounding boxes to the new coordinates
-    image = tf.image.crop_to_bounding_box(image,
-                                          (img_shape[0]//2) - (offset_height//2),
-                                          (img_shape[1]//2) - (offset_width//2),
-                                          crop_height,
-                                          crop_width)
-
-    if filename is not None:
-        return image, filename
-    else:
-        return image
-
-
-def _flip_left_right(image, bboxs, filename=None):
-    """
-    Randomly flips the image left or right, and transforms the bounding boxes.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :return: the image and transformed bounding box tensor
-    """
-
-    # Do the random image flip
-    image_after = tf.image.random_flip_left_right(image)
-
-    # Determine if a flip happened or not
-    # Have to convert out of uint16...because tf apparently can't check
-    # equality of uint16...smh...
-    image_one = tf.cast(image_after, dtype=tf.float32)
-    image_two = tf.cast(image, dtype=tf.float32)
-
-    # If every pixel were equal, this would be a NOT flip, hence the outer NOT
-    # to determine if this is a flip
-    cond_flip = tf.logical_not(tf.reduce_all(tf.equal(image_one, image_two)))
-
-    # This makes the computations a bit easier
-    ymin = bboxs[:, 0]
-    xmin = bboxs[:, 1]
-    ymax = bboxs[:, 2]
-    xmax = bboxs[:, 3]
-    classes = bboxs[:, 4]
-
-    # If we flipped, also flip the bounding boxes
-    bboxs = tf.cond(cond_flip,
-                    lambda: (tf.stack([ymin,
-                                       1 - xmax,
-                                       ymax,
-                                       1 - xmin,
-                                       classes], axis=1)),
-                    lambda: tf.identity(bboxs))
-
-    if filename is not None:
-        return image_after, bboxs, filename
-    else:
-        return image_after, bboxs
-
-
-def _flip_up_down(image, bboxs, filename=None):
-    """
-    Randomly flips the image up or down, and transforms the bounding boxes.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :return: the image and transformed bounding box tensor
-    """
-
-    # Do the random image flip
-    image_after = tf.image.random_flip_up_down(image)
-
-    # Determine if a flip happened or not
-    # Have to convert out of uint16...because tf apparently can't check equality
-    #  of uint16...smh...
-    image_one = tf.cast(image_after, dtype=tf.float32)
-    image_two = tf.cast(image, dtype=tf.float32)
-
-    # If every pixel were equal, this would be a NOT flip, hence the outer NOT
-    #  to determine if this is a flip
-    cond_flip = tf.logical_not(tf.reduce_all(tf.equal(image_one, image_two)))
-
-    # This makes the computations a bit easier
-    ymin = bboxs[:, 0]
-    xmin = bboxs[:, 1]
-    ymax = bboxs[:, 2]
-    xmax = bboxs[:, 3]
-    classes = bboxs[:, 4]
-
-    # If we flipped, also flip the bounding boxes
-    bboxs = tf.cond(cond_flip,
-                    lambda: (tf.stack([1 - ymax,
-                                       xmin,
-                                       1 - ymin,
-                                       xmax,
-                                       classes], axis=1)),
-                    lambda: tf.identity(bboxs))
-
-    if filename is not None:
-        return image_after, bboxs, filename
-    else:
-        return image_after, bboxs
-
-
-def _rotate_random(image, bboxs, filename=None):
-    """
-    Randomly applies the rotation function or returns the unchanged input.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :return: the image and transformed bounding box tensor
-    """
-    cond_rotate = tf.cast(tf.random.uniform([], maxval=2, dtype=tf.int32),
-                          tf.bool)
-    image, bboxs = tf.cond(cond_rotate,
-                           lambda: _perform_rotation(image, bboxs),
-                           lambda: (tf.identity(image), tf.identity(bboxs)))
-
-    if filename is not None:
-        return image, bboxs, filename
-    else:
-        return image, bboxs
-
-
-def _perform_rotation(image, bboxs, filename=None):
-    """
-    Rotates images randomly either 90 degrees left or right.
-    The decision to rotate or not is decided by _rotate_random.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :return: the image and transformed bounding box tensor
-    """
-    # Either rotate once clockwise or counter clockwise
-    cond_direction = tf.cast(tf.random.uniform([], maxval=2, dtype=tf.int32),
-                             tf.bool)
-    num_rotations = tf.cond(cond_direction,
-                            lambda: 1,
-                            lambda: -1)
-
-    image = tf.image.rot90(image, k=num_rotations)
-
-    # Rotate the bounding boxes with the image
-    ymin = bboxs[:, 0]
-    xmin = bboxs[:, 1]
-    ymax = bboxs[:, 2]
-    xmax = bboxs[:, 3]
-
-    ymin, xmin, ymax, xmax = tf.cond(cond_direction,
-                                     lambda: (1 - xmax, ymin, 1 - xmin, ymax),
-                                     lambda: (xmin, 1 - ymax, xmax, 1 - ymin))
-
-    bbox_new = tf.stack([ymin, xmin, ymax, xmax, bboxs[:, 4]], axis=1)
-    if filename is not None:
-        return image, bbox_new, filename
-    else:
-        return image, bbox_new
-
-
-def _resize_data(image, bboxs, filename=None, image_size=(2048, 2048)):
-    """
-    Resizes images to specified size. Intended to be applied as an element of
-    the augmentation chain via the Tensorflow Dataset API map call.
-
-    Note: Currently this is not used, and is WRONG for use in SatNet. Resizing,
-     if used, should be done via padding.
-
-    :param image: input image tensor of Shape = Height X Width X #Channels
-    :param bboxs: input bounding boxes of Shape = #Boxes X 4
-    (ymin, xmin, ymax, xmax)
-    :param image_size: desired/output image size
-    :return: the image and transformed bounding box tensor
-    """
-
-    image = tf.expand_dims(image, axis=0)
-    image = tf.image.resize_images(image, image_size)
-    image = tf.squeeze(image, axis=0)
-
-    if filename is not None:
-        return image, bboxs, filename
-    else:
-        return image, bboxs
