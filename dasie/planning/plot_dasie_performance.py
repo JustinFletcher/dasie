@@ -96,13 +96,15 @@ def plot_dasie_performance(logdir, step=None):
         title='DASIE Training Learning Curve',
         plot_name="learning_curve",
     )
+
+
     plot_train_vs_loss_values(
         results_dict,
         plot_logdir=plot_logdir,
         train_value="train_mse_ratio_list",
         valid_value="valid_mse_ratio_list",
         ylabel=r'$\mathbf{MSE}_{\mathbf{m} / \mathbf{d}}$',
-        title='DASIE Training Learning Curve',
+        title='DASIE MSE Curve',
         plot_name="mse_ratio_curve",
         invert=True,
     )
@@ -111,8 +113,8 @@ def plot_dasie_performance(logdir, step=None):
         plot_logdir=plot_logdir,
         train_value="train_ssim_ratio_list",
         valid_value="valid_ssim_ratio_list",
-        ylabel='Loss Value (%s)' % results_dict["loss_name"],
-        title='DASIE Training Learning Curve',
+        ylabel=r'$\mathbf{SSIM}_{\mathbf{m} / \mathbf{d}}$',
+        title='DASIE SSIM Curve',
         plot_name="ssim_ratio_curve",
         invert=True,
     )
@@ -121,8 +123,8 @@ def plot_dasie_performance(logdir, step=None):
         plot_logdir=plot_logdir,
         train_value="train_psnr_ratio_list",
         valid_value="valid_psnr_ratio_list",
-        ylabel='Loss Value (%s)' % results_dict["loss_name"],
-        title='DASIE Training Learning Curve',
+        ylabel=r'$\mathbf{PSNR}_{\mathbf{m} / \mathbf{d}}$',
+        title='DASIE PSNR Curve',
         plot_name="psnr_ratio_curve",
         invert=True,
     )

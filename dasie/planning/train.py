@@ -146,11 +146,11 @@ def train(sess,
                  step_valid_monolithic_aperture_image_mse,
                  step_valid_distributed_aperture_image_mse,
                  step_valid_da_mse_mono_mse_ratio,
-                 step_valid_distributed_aperture_image_ssim,
                  step_valid_monolithic_aperture_image_ssim,
+                 step_valid_distributed_aperture_image_ssim,
                  step_valid_da_ssim_mono_ssim_ratio,
-                 step_valid_distributed_aperture_image_psnr,
                  step_valid_monolithic_aperture_image_psnr,
+                 step_valid_distributed_aperture_image_psnr,
                  step_valid_da_psnr_mono_psnr_ratio) = dasie_model.validate()
 
                 # Increment all of our metrics.
@@ -253,13 +253,15 @@ def train(sess,
                  step_train_monolithic_aperture_image_mse,
                  step_train_distributed_aperture_image_mse,
                  step_train_da_mse_mono_mse_ratio,
-                 step_train_distributed_aperture_image_ssim,
                  step_train_monolithic_aperture_image_ssim,
+                 step_train_distributed_aperture_image_ssim,
                  step_train_da_ssim_mono_ssim_ratio,
-                 step_train_distributed_aperture_image_psnr,
                  step_train_monolithic_aperture_image_psnr,
+                 step_train_distributed_aperture_image_psnr,
                  step_train_da_psnr_mono_psnr_ratio,
                  _) = dasie_model.train()
+
+
                 step_end_time = time.time()
                 step_time = step_end_time - step_start_time
 

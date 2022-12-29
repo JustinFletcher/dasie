@@ -840,6 +840,9 @@ class DASIEModel(object):
                         poisson_mean_arrival=self.sensor_poisson_mean_arrival
                     )
 
+                # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
+                distributed_aperture_image = distributed_aperture_image / tf.reduce_max(distributed_aperture_image)
+
                 # Finally, add the image from this pupil to the list.
                 self.distributed_aperture_images.append(
                     distributed_aperture_image
@@ -882,6 +885,8 @@ class DASIEModel(object):
                 )
 
 
+            # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
+            self.optics_only_monolithic_aperture_image = self.optics_only_monolithic_aperture_image  / tf.reduce_max(self.optics_only_monolithic_aperture_image)
             with tf.name_scope("atmosphere_model"):
 
                 # Produce a pupil mask and multiply it by the phase screen.
@@ -922,6 +927,9 @@ class DASIEModel(object):
                     gaussian_mean=self.sensor_gaussian_mean,
                     poisson_mean_arrival=self.sensor_poisson_mean_arrival
                 )
+
+            # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
+            self.monolithic_aperture_image = self.monolithic_aperture_image  / tf.reduce_max(self.monolithic_aperture_image)
 
 
     def _build_recovery_model(self,
@@ -1397,8 +1405,15 @@ class DASIEModel(object):
                 save_dict["kwargs"][key] = value
 
         save_dict["variables"] = dict()
-        for v in tf.compat.v1.trainable_variables():
-            save_dict["variables"][v.name] = self.sess.run(v)
+        print(
+            "Found %i variables to save." %
+            len(tf.compat.v1.trainable_variables())
+        )
+
+        variable_names = [v.name for v in tf.compat.v1.trainable_variables()]
+        variable_values = self.sess.run(tf.compat.v1.trainable_variables())
+        for name, value in zip(variable_names, variable_values):
+            save_dict["variables"][name] = value
 
         # json.dump(save_dict, open(json_file, 'w'))
         json.dump(save_dict, open(save_file_path, 'w'), cls=NpEncoder)
