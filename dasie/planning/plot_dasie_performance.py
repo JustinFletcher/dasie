@@ -17,6 +17,43 @@ def save_and_close_current_plot(logdir, plot_name="default", dpi=600):
     plt.savefig(fig_path)
     plt.close()
 
+def plot_train_vs_loss_values(results_dict,
+                              plot_logdir,
+                              train_value="train_loss_list",
+                              valid_value="valid_loss_list",
+                              ylabel='Value',
+                              title='Title',
+                              plot_name="plot",
+                              invert=False):
+    fig, ax = plt.subplots()
+
+    if invert:
+
+        ax.plot(1 / np.array(results_dict["results"][train_value]),
+                label="Training")
+
+        ax.plot(1 / np.array(results_dict["results"][valid_value]),
+                label="Validation")
+
+    else:
+
+        ax.plot(results_dict["results"][train_value],
+                label="Training")
+
+        ax.plot(results_dict["results"][valid_value],
+                label="Validation")
+
+    ax.set(xlabel='Epoch',
+           ylabel=ylabel,
+           title=title)
+
+    ax.legend()
+
+    ax.grid()
+
+    save_and_close_current_plot(plot_logdir, plot_name=plot_name)
+
+    return
 
 def plot_dasie_performance(logdir, step=None):
     results_dict = get_latest_results_dict(logdir)
@@ -50,25 +87,45 @@ def plot_dasie_performance(logdir, step=None):
     else:
         plot_logdir = logdir
 
-    fig, ax = plt.subplots()
-
-    ax.plot(results_dict["results"]["train_loss_list"],
-            label="Training Loss")
-
-    ax.plot(results_dict["results"]["valid_loss_list"],
-            label="Validation Loss")
-
-    ax.set(xlabel='Epoch',
-           ylabel='Loss Value (%s)' % results_dict["loss_name"],
-           title='DASIE Training Learning Curve')
-
-    ax.legend()
-
-    ax.grid()
-
-    save_and_close_current_plot(plot_logdir, plot_name="learning_curve")
-
-    return
+    plot_train_vs_loss_values(
+        results_dict,
+        plot_logdir=plot_logdir,
+        train_value="train_loss_list",
+        valid_value="valid_loss_list",
+        ylabel='Loss Value (%s)' % results_dict["loss_name"],
+        title='DASIE Training Learning Curve',
+        plot_name="learning_curve",
+    )
+    plot_train_vs_loss_values(
+        results_dict,
+        plot_logdir=plot_logdir,
+        train_value="train_mse_ratio_list",
+        valid_value="valid_mse_ratio_list",
+        ylabel=r'$\mathbf{MSE}_{\mathbf{m} / \mathbf{d}}$',
+        title='DASIE Training Learning Curve',
+        plot_name="mse_ratio_curve",
+        invert=True,
+    )
+    plot_train_vs_loss_values(
+        results_dict,
+        plot_logdir=plot_logdir,
+        train_value="train_ssim_ratio_list",
+        valid_value="valid_ssim_ratio_list",
+        ylabel='Loss Value (%s)' % results_dict["loss_name"],
+        title='DASIE Training Learning Curve',
+        plot_name="ssim_ratio_curve",
+        invert=True,
+    )
+    plot_train_vs_loss_values(
+        results_dict,
+        plot_logdir=plot_logdir,
+        train_value="train_psnr_ratio_list",
+        valid_value="valid_psnr_ratio_list",
+        ylabel='Loss Value (%s)' % results_dict["loss_name"],
+        title='DASIE Training Learning Curve',
+        plot_name="psnr_ratio_curve",
+        invert=True,
+    )
 
 def get_latest_results_dict(logdir):
 
