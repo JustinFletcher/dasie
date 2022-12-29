@@ -240,8 +240,11 @@ class DatasetGenerator(object):
             data = data.map(self._rotate_random,
                             num_parallel_calls=num_threads)
 
-        # Crop the data to a specified size.
-        if crop_size:
+        image_batch_shape = get_input_shape(data)
+        if crop_size and ((crop_size < image_batch_shape[0])
+                          and
+                          (crop_size < image_batch_shape[1])):
+
 
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads).prefetch(buffer)
@@ -404,6 +407,7 @@ class DatasetGenerator(object):
         crop_width = self.spatial_quantization
         crop_height = self.spatial_quantization
 
+
         # Now come up with crop offsets
         offset_width = tf.random.uniform(
             [],
@@ -420,6 +424,7 @@ class DatasetGenerator(object):
 
         # The heavy lifting is done, time to make us a crop and transform our
         # bounding boxes to the new coordinates
+
         image = tf.image.crop_to_bounding_box(image,
                                               (img_shape[0] // 2) - (
                                                           offset_height // 2),
@@ -427,6 +432,7 @@ class DatasetGenerator(object):
                                                           offset_width // 2),
                                               crop_height,
                                               crop_width)
+
 
         if filename is not None:
             return image, filename

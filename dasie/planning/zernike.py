@@ -400,7 +400,7 @@ def zernike_aperture_function_2d(X,
     # Map the zernike domain from [-1, 1] to [0, 1], per term
     # Each term can contribute as much as -1, and has a range of size 2.
     # TODO: Ryan, talk with me about this. It changes the mapping from Zernike
-    # TODO: coefficients to Z in a way that might be problematic on the bench.
+    #       coefficients to Z in a way that might be problematic on the bench.
     num_terms = len(zernike_coefficients)
     tensor_zernike_2d_sample = (tensor_zernike_2d_sample + num_terms) / (2 * num_terms)
 
@@ -410,9 +410,9 @@ def zernike_aperture_function_2d(X,
     pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
     tensor_masked_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
 
-    # The piston tip and tilt are encoded as the phase-angle of pupil plane
-    print("-Generating phase angle field.")
     # TODO: Reinstate after debug? Talk to Ryan: Why should I do this?
+    # The piston tip and tilt are encoded as the phase-angle of pupil plane
+    # print("-Generating phase angle field.")
     # Normalize the zernike field so that it may be returned as
     # zernike_min = tf.cast(tf.math.reduce_min(tf.math.abs(tensor_masked_zernike_2d_sample)), dtype=tf.complex128)
     # zernike_max = tf.cast(tf.math.reduce_max(tf.math.abs(tensor_masked_zernike_2d_sample)), dtype=tf.complex128)

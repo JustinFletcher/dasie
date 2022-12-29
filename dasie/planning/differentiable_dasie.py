@@ -46,14 +46,30 @@ tf.compat.v1.disable_eager_execution()
 
 # TODO: Externalize.
 def ssim(x_batch, y_batch):
-    # TODO: Implement batch SSIM.
-    return (tf.constant(1.0))
+
+
+    x_batch = x_batch / tf.math.reduce_max(x_batch)
+    y_batch = y_batch / tf.math.reduce_max(y_batch)
+    ssim_batch = tf.image.ssim(
+        x_batch,
+        y_batch,
+        max_val=1.0,
+        filter_size=4,
+        filter_sigma=1.5,
+        k1=0.01,
+        k2=0.03,
+    )
+
+    return tf.math.reduce_mean(ssim_batch)
 
 
 # TODO: Externalize.
 def psnr(x_batch, y_batch):
-    # TODO: Implement batch PSNR.
-    return (tf.constant(1.0))
+
+    x_batch = x_batch / tf.math.reduce_max(x_batch)
+    y_batch = y_batch / tf.math.reduce_max(y_batch)
+    psnr_batch = tf.image.psnr(x_batch, y_batch, max_val=1.0)
+    return tf.math.reduce_mean(psnr_batch)
 
 
 # TODO: Externalize.
@@ -117,54 +133,121 @@ class DASIEModel(object):
         # A session is the only positional (i.e., required) parameter.
         self.sess = sess
 
-        # We set the kwargs outside of the signature, enabling persistence.
+        # We set the kwargs outside of the signature, simplifying persistence.
         self.learning_rate = set_kwargs_default(
             'learning_rate', 1.0, kwargs)
+
         self.num_apertures = set_kwargs_default(
             'num_apertures', 15, kwargs)
+
         self.batch_size = set_kwargs_default(
             'batch_size', 2, kwargs)
+
         self.spatial_quantization = set_kwargs_default(
             'spatial_quantization', 256, kwargs)
+
         self.image_x_scale = set_kwargs_default(
             'image_x_scale', 256, kwargs)
+
         self.image_y_scale = set_kwargs_default(
             'image_y_scale', 256, kwargs)
+
         self.writer = set_kwargs_default(
             'writer', None, kwargs)
+
         self.loss_name = set_kwargs_default(
             'loss_name', "mse", kwargs)
+
         self.num_exposures = set_kwargs_default(
             'num_exposures', 1, kwargs)
+
         self.subaperture_radius_meters = set_kwargs_default(
             'subaperture_radius_meters', None, kwargs)
+
         self.edge_padding_factor = set_kwargs_default(
             'edge_padding_factor', 0.1, kwargs)
+
         self.diameter_meters = set_kwargs_default(
             'diameter_meters', 2.5, kwargs)
+
         self.recovery_model_filter_scale = set_kwargs_default(
             'recovery_model_filter_scale', 16, kwargs)
+
         self.num_zernike_indices = set_kwargs_default(
             'num_zernike_indices', 15, kwargs)
+
         self.zernike_debug = set_kwargs_default(
             'zernike_debug', False, kwargs)
+
         self.hadamard_image_formation = set_kwargs_default(
             'hadamard_image_formation', True, kwargs)
+
         self.subap_area = set_kwargs_default(
             'subap_area', None, kwargs)
+
         self.mono_ap_area = set_kwargs_default(
             'mono_ap_area', (np.pi * (self.diameter_meters / 2)) ** 2, kwargs)
+
         self.mono_to_dist_aperture_ratio = set_kwargs_default(
             'mono_to_dist_aperture_ratio', None, kwargs)
+
         self.object_plane_extent_meters = set_kwargs_default(
             'object_plane_extent_meters', 1.0, kwargs)
+
         self.object_distance_meters = set_kwargs_default(
             'object_distance_meters', 1000000.0, kwargs)
+
         self.zernike_init_type = set_kwargs_default(
             'zernike_init_type', "np.random.uniform", kwargs)
+
+        # TODO: Not in use.
         self.filter_wavelength_micron = set_kwargs_default(
             'filter_wavelength_micron', 1.0, kwargs)
 
+        self.sensor_gaussian_mean = set_kwargs_default(
+            'sensor_gaussian_mean', 1e-5, kwargs)
+
+        self.sensor_poisson_mean_arrival = set_kwargs_default(
+            'sensor_poisson_mean_arrival', 4e-5, kwargs)
+
+        self.dm_stroke_microns = set_kwargs_default(
+            'dm_stroke_microns', 8.0, kwargs)
+
+        # TODO: Not in use.
+        self.focal_extent_meters = set_kwargs_default(
+            'focal_extent_meters', 0.1, kwargs)
+
+        self.r0_mean = set_kwargs_default(
+            'r0_mean', 0.020, kwargs)
+
+        self.r0_std = set_kwargs_default(
+            'r0_std', 0.0, kwargs)
+
+        self.outer_scale_mean = set_kwargs_default(
+            'outer_scale_mean', 2000.0, kwargs)
+
+        self.outer_scale_std = set_kwargs_default(
+            'outer_scale_std', 0.0, kwargs)
+
+        self.inner_scale_mean = set_kwargs_default(
+            'inner_scale_mean', 0.008, kwargs)
+
+        self.inner_scale_std = set_kwargs_default(
+            'inner_scale_std', 0.0, kwargs)
+
+        # TODO: Not in use.
+        self.greenwood_time_constant_sec_mean = set_kwargs_default(
+            'greenwood_time_constant_sec_mean', 1.0, kwargs)
+
+        # TODO: Not in use.
+        self.greenwood_time_constant_sec_std = set_kwargs_default(
+            'greenwood_time_constant_sec_std', 0.0, kwargs)
+
+        self.greenwood_time_constant_sec_std = set_kwargs_default(
+            'greenwood_time_constant_sec_std', 0.0, kwargs)
+
+        self.effective_focal_length_meters = set_kwargs_default(
+            'effective_focal_length_meters', 726.0 , kwargs)
 
         # Store a reference field to kwargs to enable model saving & recovery.
         self.kwargs = kwargs
@@ -245,18 +328,21 @@ class DASIEModel(object):
             # Then build the selected loss function.
             if self.loss_name == "mse":
                 loss = self.image_mse
+
             if self.loss_name == "mae":
                 loss = tf.reduce_mean(
                     tf.math.abs(
                         self.recovered_image - self.flipped_object_batch
                     )
                 )
+
             if self.loss_name == "l2":
                 loss = tf.math.sqrt(
                     tf.math.reduce_sum(
                         (self.recovered_image - self.flipped_object_batch) ** 2
                     )
                 )
+
             if self.loss_name == "cos":
                 loss = -cosine_similarity(
                     self.recovered_image,
@@ -273,17 +359,27 @@ class DASIEModel(object):
             self.distributed_aperture_image_mse = tf.reduce_mean(
                 (self.recovered_image - self.flipped_object_batch) ** 2)
             self.da_mse_mono_mse_ratio = self.distributed_aperture_image_mse / self.monolithic_aperture_image_mse
+
             # Compute SSIM.
-            self.monolithic_aperture_image_ssim = ssim(self.monolithic_aperture_image,
-                                                       self.flipped_object_batch)
-            self.distributed_aperture_image_ssim  = ssim(self.recovered_image,
-                                                         self.flipped_object_batch)
+            self.monolithic_aperture_image_ssim = ssim(
+                self.monolithic_aperture_image,
+                self.flipped_object_batch
+            )
+            self.distributed_aperture_image_ssim  = ssim(
+                self.recovered_image,
+                self.flipped_object_batch
+            )
             self.da_ssim_mono_ssim_ratio = self.distributed_aperture_image_ssim / self.monolithic_aperture_image_ssim
+
             # Compute PSNR.
-            self.monolithic_aperture_image_psnr = psnr(self.monolithic_aperture_image,
-                                                       self.flipped_object_batch)
-            self.distributed_aperture_image_psnr = psnr(self.recovered_image,
-                                                         self.flipped_object_batch)
+            self.monolithic_aperture_image_psnr = psnr(
+                self.monolithic_aperture_image,
+                self.flipped_object_batch
+            )
+            self.distributed_aperture_image_psnr = psnr(
+                self.recovered_image,
+                self.flipped_object_batch
+            )
             self.da_psnr_mono_psnr_ratio = self.distributed_aperture_image_psnr / self.monolithic_aperture_image_psnr
 
             if self.writer:
@@ -321,6 +417,7 @@ class DASIEModel(object):
             self.optimize = tf.compat.v1.train.AdamOptimizer(
                 self.learning_rate).minimize(self.loss)
 
+        # Finally, build externally accessible references to operators.
         self.inputs = self.object_batch
         self.output_images = self.recovered_image
 
@@ -354,14 +451,10 @@ class DASIEModel(object):
 
         # Compute the PSF from the pupil plane.
         with tf.name_scope("psf_model"):
-            # shifted_pupil_plane = tf.signal.ifftshift(pupil_plane)
-            # shifted_pupil_spectrum = tf.signal.fft2d(shifted_pupil_plane)
-            # psf = tf.abs(tf.signal.fftshift(shifted_pupil_spectrum)) ** 2
             pupil_spectrum = tf.signal.fft2d(pupil_plane)
             shifted_pupil_spectrum = tf.signal.fftshift(pupil_spectrum)
             psf = tf.abs(shifted_pupil_spectrum) ** 2
 
-            # psf = shifted_pupil_spectrum * np.conjugate(shifted_pupil_spectrum)
 
         # Compute the OTF, which is the Fourier transform of the PSF.
         with tf.name_scope("otf_model"):
@@ -451,9 +544,7 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
-        # TODO: Externalize.
-        sensor_gaussian_mean = 1e-5
-        sensor_poisson_mean_arrival = 4e-5
+
 
         # Build object plane image batch tensor objects.
         if inputs is not None:
@@ -493,10 +584,10 @@ class DASIEModel(object):
         self.pupil_extent = pupil_extent
         print("pupil_extent=" + str(pupil_extent))
         # This converts radians to radians to meters, in filter wavelengths.
-        # TODO: Externalize.
-        dm_stroke_microns = 8.0
         # self.phase_scale = 2 * np.pi / filter_wavelength_micron
-        self.phase_scale_wavelengths = dm_stroke_microns / filter_wavelength_micron
+        self.phase_scale_wavelengths = self.dm_stroke_microns / filter_wavelength_micron
+
+        focal_extent = self.focal_extent_meters
 
         # Compute the subaperture pixel extent.
         self.pupil_meters_per_pixel = radius_meters / spatial_quantization
@@ -507,21 +598,18 @@ class DASIEModel(object):
 
         # Build the simulation mesh grid.
         # TODO: Verify these physical coordinates; clarify pupil vs radius.
-        x = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
-        y = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
-        self.pupil_dimension_x = x
-        self.pupil_dimension_y = y
-        X, Y = np.meshgrid(x, y)
+        u = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        v = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        self.pupil_dimension_u = u
+        self.pupil_dimension_v = v
+        pupil_grid_u, pupil_grid_v = np.meshgrid(u, v)
 
-        # TODO: Decouple all grids.
-        # TODO: Externalize.
-        focal_extent = 0.1
-        # TODO: Verify these physical coordinates; clarify pupil vs radius.
+        # TODO: this grid is never used right now. It probably should be.
         x = np.linspace(-focal_extent/2, focal_extent/2, spatial_quantization)
         y = np.linspace(-focal_extent/2, focal_extent/2, spatial_quantization)
         self.focal_dimension_x = x
         self.focal_dimension_y = y
-        focal_X, focal_Y = np.meshgrid(x, y)
+        focal_grid_u, focal_grid_v = np.meshgrid(x, y)
 
 
         # End: Physics stuff.
@@ -555,36 +643,47 @@ class DASIEModel(object):
                 optics_only_pupil_plane = tf.zeros(pupil_size,
                                                    dtype=tf.complex128)
 
-                # TODO: externalize or internally vary for each exposure.
-                r0 = 0.020
-                #https://arxiv.org/ftp/arxiv/papers/1112/1112.6033.pdf
-                outer_scale = 2000.0
-                # outer_scale = 0.020
-                # outer_scale = 0.300
-                inner_scale = 0.008
-                effective_dm_update_rate_hz = 1000
-                exposure_interval_sec = 1 / effective_dm_update_rate_hz
-                greenwood_time_constant_sec = 1.0
+                r0 = np.random.normal(
+                    self.r0_mean,
+                    self.r0_std
+                )
+
+                outer_scale = np.random.normal(
+                    self.outer_scale_mean,
+                    self.outer_scale_std
+                )
+
+                inner_scale = np.random.normal(
+                    self.inner_scale_mean,
+                    self.inner_scale_std
+                )
+
+                self.effective_dm_update_rate_hz = 1000
+                exposure_interval_sec = 1 / self.effective_dm_update_rate_hz
+
+                greenwood_time_constant_sec = np.random.normal(
+                    self.greenwood_time_constant_sec_mean,
+                    self.greenwood_time_constant_sec_std
+                )
+
                 # TODO: relate exposure_interval_sec and greenwood_time_constant_sec to set atmosphere_sample_scale
                 atmosphere_sample_scale = 1.0
 
                 # Build a static phase grid for reuse in this ensemble.
-                static_phase_grid = make_static_phase_grid(r0,
-                                                           spatial_quantization,
-                                                           self.pupil_extent,
-                                                           outer_scale,
-                                                           inner_scale)
+                static_phase_grid = make_von_karman_phase_grid(
+                    r0,
+                    spatial_quantization,
+                    self.pupil_extent,
+                    outer_scale,
+                    inner_scale)
 
                 # Initialize base sample matrices for atmosphere evolution.
                 gaussian_dist = tfp.distributions.Normal(
                     loc=tf.zeros(pupil_size, dtype=tf.float64),
-                    scale=tf.ones(pupil_size, dtype=tf.float64))
+                    scale=tf.ones(pupil_size, dtype=tf.float64)
+                )
                 real_sample = tfp.distributions.Sample(
                     gaussian_dist).sample()
-
-                gaussian_dist = tfp.distributions.Normal(
-                    loc=tf.zeros(pupil_size, dtype=tf.float64),
-                    scale=tf.ones(pupil_size, dtype=tf.float64))
                 img_sample = tfp.distributions.Sample(
                     gaussian_dist).sample()
 
@@ -623,10 +722,9 @@ class DASIEModel(object):
                             self.plan[exposure_num][aperture_num] = subap_zernike_coefficients_vars
 
                             # Render this subaperture on the pupil plane grid.
-                            # Set the pupil plane units to wavelengths.
                             optics_only_pupil_plane += zernike_aperture_function_2d(
-                                X,
-                                Y,
+                                pupil_grid_u,
+                                pupil_grid_v,
                                 mu_u,
                                 mu_v,
                                 radius_meters,
@@ -653,9 +751,7 @@ class DASIEModel(object):
                         dtype=tf.complex128
                     )
                     zernike_range = (zernike_max - zernike_min)
-
                     optics_only_pupil_plane = (optics_only_pupil_plane - zernike_min) / zernike_range
-
                     optics_only_pupil_plane = optics_only_pupil_plane * self.phase_scale_wavelengths
 
 
@@ -678,30 +774,10 @@ class DASIEModel(object):
                     with tf.name_scope("atmosphere_model"):
 
                         # Take a step on a random walk, evolving the atmosphere.
-                        # TODO: refactor to a single standard-norm operator.
-                        gaussian_dist = tfp.distributions.Normal(
-                            loc=tf.zeros(
-                                pupil_size,
-                                dtype=tf.float64
-                            ),
-                            scale=tf.ones(
-                                pupil_size,
-                                dtype=tf.float64
-                            )
-                        )
                         real_evo_sample = tfp.distributions.Sample(
-                            gaussian_dist).sample()
+                            gaussian_dist
+                        ).sample()
 
-                        gaussian_dist = tfp.distributions.Normal(
-                            loc=tf.zeros(
-                                pupil_size,
-                                dtype=tf.float64
-                            ),
-                            scale=tf.ones(
-                                pupil_size,
-                                dtype=tf.float64
-                            )
-                        )
                         img_evo_sample = tfp.distributions.Sample(
                             gaussian_dist
                         ).sample()
@@ -726,9 +802,7 @@ class DASIEModel(object):
 
 
                         # Apply the micron displacements to the pupil.
-                        # phase_screen_mircons_masked = phase_screen_mircons * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
-                        # da_post_atmosphere_pupil_plane = tf.cast(phase_screen_mircons_masked, dtype=tf.complex128) + optics_only_pupil_plane
-
+                        # TODO: Clean this mess.
                         phase_screen_wavelenghts_masked = phase_screen_wavelengths * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
                         da_post_atmosphere_pupil_plane = tf.cast(phase_screen_wavelenghts_masked, dtype=tf.complex128) + optics_only_pupil_plane
 
@@ -760,8 +834,8 @@ class DASIEModel(object):
                     # Apply Gaussian and Poisson process noise.
                     distributed_aperture_image = self._apply_noise(
                         distributed_aperture_image_plane,
-                        gaussian_mean=sensor_gaussian_mean,
-                        poisson_mean_arrival=sensor_poisson_mean_arrival
+                        gaussian_mean=self.sensor_gaussian_mean,
+                        poisson_mean_arrival=self.sensor_poisson_mean_arrival
                     )
 
                 # Finally, add the image from this pupil to the list.
@@ -774,27 +848,17 @@ class DASIEModel(object):
 
             with tf.name_scope("pupil_plane"):
 
-                # self.optics_only_monolithic_pupil_plane = zernike_aperture_function_2d(
-                #     X,
-                #     Y,
-                #     0.0,
-                #     0.0,
-                #     radius_meters,
-                #     radius_meters,
-                #     zernike_coefficients=[1.0],
-                # )
+                self.optics_only_monolithic_pupil_plane = zernike_aperture_function_2d(
+                    pupil_grid_u,
+                    pupil_grid_v,
+                    0.0,
+                    0.0,
+                    radius_meters,
+                    radius_meters,
+                    zernike_coefficients=[1.0],
+                )
 
-                self.optics_only_monolithic_pupil_plane = circle_mask(X,
-                                                                      Y,
-                                                                      0.0,
-                                                                      0.0,
-                                                                      radius_meters)
-
-            self.optics_only_monolithic_pupil_plane = self.optics_only_monolithic_pupil_plane.astype(float)
-
-            self.optics_only_monolithic_pupil_plane = tf.constant(self.optics_only_monolithic_pupil_plane)
-            self.optics_only_monolithic_pupil_plane = tf.cast(self.optics_only_monolithic_pupil_plane, dtype=tf.complex128)
-            # Finally, produce the full-path transfer functions.
+            # Produce the full-path transfer functions.
             (self.optics_only_monolithic_psf,
              self.optics_only_monolithic_otf,
              self.optics_only_monolithic_mtf) = self._build_geometric_optics(
@@ -811,13 +875,15 @@ class DASIEModel(object):
                 # Apply Gaussian and Poisson process noise.
                 self.optics_only_monolithic_aperture_image = self._apply_noise(
                     self.optics_only_monolithic_aperture_image_plane,
-                    gaussian_mean=sensor_gaussian_mean,
-                    poisson_mean_arrival=sensor_poisson_mean_arrival
+                    gaussian_mean=self.sensor_gaussian_mean,
+                    poisson_mean_arrival=self.sensor_poisson_mean_arrival
                 )
 
-            #
+
             with tf.name_scope("atmosphere_model"):
-                phase_screen_wavelenghts_masked = tf.cast(
+
+                # Produce a pupil mask and multiply it by the phase screen.
+                masekd_phase_screen_wavelenghts= tf.cast(
                     tf.math.greater(
                         tf.math.abs(
                             self.optics_only_monolithic_pupil_plane
@@ -831,7 +897,7 @@ class DASIEModel(object):
                     dtype=tf.float64
                 ) * phase_screen_wavelengths
                 self.mono_post_atmosphere_pupil_plane = tf.cast(
-                    phase_screen_wavelenghts_masked,
+                    masekd_phase_screen_wavelenghts,
                     dtype=tf.complex128
                 ) + self.optics_only_monolithic_pupil_plane
 
@@ -851,8 +917,8 @@ class DASIEModel(object):
                 # Apply Gaussian and Poisson process noise.
                 self.monolithic_aperture_image = self._apply_noise(
                     self.monolithic_aperture_image_plane,
-                    gaussian_mean=sensor_gaussian_mean,
-                    poisson_mean_arrival=sensor_poisson_mean_arrival
+                    gaussian_mean=self.sensor_gaussian_mean,
+                    poisson_mean_arrival=self.sensor_poisson_mean_arrival
                 )
 
 
@@ -871,14 +937,14 @@ class DASIEModel(object):
             distributed_aperture_images_batch,
             axis=-1)
 
-        recovery_model = RecoveryModel()
+        recovery_model = RecoveryModel(distributed_aperture_images_batch,
+                                       filter_scale,
+                                       self.num_exposures,
+                                       self.image_x_scale,
+                                       self.image_y_scale,
+                                       self.batch_size)
 
-        return recovery_model.build(distributed_aperture_images_batch,
-                                    filter_scale,
-                                    self.num_exposures,
-                                    self.image_x_scale,
-                                    self.image_y_scale,
-                                    self.batch_size)
+        return recovery_model.recovered_image_batch
 
     def plot(self, logdir=None, step=None):
 
@@ -964,11 +1030,11 @@ class DASIEModel(object):
             # These are actually batches, so just take the first one.
             distributed_aperture_image = distributed_aperture_image[0]
 
-            # Plot phase angle
-            left = self.pupil_dimension_x[0]
-            right = self.pupil_dimension_x[-1]
-            bottom = self.pupil_dimension_y[0]
-            top = self.pupil_dimension_y[-1]
+            # Build pupil extent helper variables .
+            left = self.pupil_dimension_u[0]
+            right = self.pupil_dimension_u[-1]
+            bottom = self.pupil_dimension_v[0]
+            top = self.pupil_dimension_v[-1]
             pupil_extent = [left, right, bottom, top]
             # plt.imshow(np.angle(pupil_plane),
             #            cmap='twilight_shifted',
@@ -1078,8 +1144,8 @@ class DASIEModel(object):
                    cmap='inferno',
                    extent=pupil_extent)
         plt.colorbar()
-        plt.xlabel('x [m]')
-        plt.ylabel('y [m]')
+        plt.xlabel('u [m]')
+        plt.ylabel('v [m]')
         save_and_close_current_plot(
             step_plot_dir,
             plot_name="optics_only_monolithic_pupil_plane",
@@ -1158,7 +1224,6 @@ class DASIEModel(object):
 
         pupil_diameter = self.diameter_meters  # m
         # pupil_diameter = 6.5  # m
-        effective_focal_length = 726.0  # m
         wavelength_meters = 1e-6 * self.filter_wavelength_micron  # m
         # wavelength = 750e-9 # m
         # pupil_grid = make_pupil_grid(self.spatial_quantization,
@@ -1186,19 +1251,19 @@ class DASIEModel(object):
         focal_grid = make_focal_grid(q=4,
                                      num_airy=16,
                                      pupil_diameter=pupil_diameter,
-                                     focal_length=effective_focal_length,
+                                     focal_length=self.effective_focal_length_meters,
                                      reference_wavelength=wavelength_meters)
         prop = FraunhoferPropagator(pupil_grid,
                                     focal_grid,
-                                    focal_length=effective_focal_length)
+                                    focal_length=self.effective_focal_length_meters)
 
         focal_image = prop.forward(wavefront)
 
         # hcipy pupil
         imshow_field(aperture_circ, cmap='inferno')
         plt.colorbar()
-        plt.xlabel('x [m]')
-        plt.ylabel('y [m]')
+        plt.xlabel('u [m]')
+        plt.ylabel('v [m]')
         save_and_close_current_plot(
             step_plot_dir,
             plot_name="hcipy_circular_pupil"
@@ -1290,6 +1355,7 @@ class DASIEModel(object):
 
 
         ax2 = plt.subplot(1, 2, 2)
+        ax2.set_title('Log Normalized Intensity - DASIE')
         center_line = crop_center(
             optics_only_monolithic_psf,
             1,

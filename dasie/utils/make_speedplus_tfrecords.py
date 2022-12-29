@@ -116,14 +116,51 @@ def _floats_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
 
+def crop_center(img, crop_x, crop_y):
+    y, x = img.shape
+    start_x = x // 2 - crop_x // 2
+    start_y = y // 2 - crop_y // 2
+    return img[start_y:start_y + crop_y, start_x:start_x + crop_x]
+
 def build_speedplus_tf_example(example):
 
     (image_path) = example
 
     # Read in the files for this example
     image = read_jpg(image_path)
+
+    image = crop_center(image, 512, 512)
+
     image_height = image.shape[1]
     image_width = image.shape[0]
+    # Ada: You'll need to read from annotation_path to get, e.g., class labels.
+
+    # Create the features for this example
+    # Ada: Note here how I'm serializing the image and then binarizing it.
+    features = {
+        "image_raw": _bytes_feature([image.tostring()]),
+        "height": _int64_feature([image_height]),
+        "width": _int64_feature([image_width]),
+        # Ada: Annotation mappings go here - I just don't need any right now...
+        # "class_label": _int64_feature(class_label)
+    }
+
+
+    # Create an example protocol buffer
+    example = tf.train.Example(features=tf.train.Features(feature=features))
+
+    return(example)
+
+def build_imagenet_tf_example(example):
+
+    # TODO: inlcude synset or class annotations.
+    (image_path) = example
+
+    # Read in the files for this example
+    image = read_jpg(image_path)
+    image_height = image.shape[1]
+    image_width = image.shape[0]
+
 
     # Ada: You'll need to read from annotation_path to get, e.g., class labels.
 
@@ -142,6 +179,7 @@ def build_speedplus_tf_example(example):
     example = tf.train.Example(features=tf.train.Features(feature=features))
 
     return(example)
+
 
 
 def group_list(ungrouped_list, group_size, padding=None):
@@ -168,7 +206,6 @@ def get_immediate_subdirectories(a_dir):
 
 
 def build_speedplus_dataset(datapath):
-
 
     # We're going to make a list of filepaths as a template.
     examples = list()
@@ -362,15 +399,22 @@ def get_dir_content_paths(directory):
 
 def main(flags):
 
-    # If one desires a deterministic split, pass in a splits file.
-    if flags.splits_files_path:
-        split_dict = flags.splits_files_path
-        partition_fn = partition_examples_by_file
+    if flags.presplit:
 
-    # Otherwise, we'll just default to a 8/1/1 at random.
-    else:
-        split_dict = {"train": 0.8, "valid": 0.1, "test": 0.1}
+        split_dict = {"data": 1.0}
         partition_fn = partition_examples
+
+    else:
+
+        # If one desires a deterministic split, pass in a splits file.
+        if flags.splits_files_path:
+            split_dict = flags.splits_files_path
+            partition_fn = partition_examples_by_file
+
+        # Otherwise, we'll just default to a 8/1/1 at random.
+        else:
+            split_dict = {"train": 0.8, "valid": 0.1, "test": 0.1}
+            partition_fn = partition_examples
 
     # TODO: externalize this function interface.
     datapath_fn = build_speedplus_dataset
@@ -402,17 +446,27 @@ if __name__ == '__main__':
     #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords",
     #                     help='Path to the output directory.')
 
+    #
+    # parser.add_argument('--data_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one\\speedplus",
+    #                     help='Path to speedplus output data.')
+    #
+    # parser.add_argument('--output_dir', type=str,
+    #                     default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one_tfrecords",
+    #                     help='Path to the output directory.')
+    #
+
 
     parser.add_argument('--name', type=str,
-                        default="inria_holiday",
+                        default="speedplus_synthetic_custom_30k",
                         help='Name of the dataset to build.')
 
     parser.add_argument('--data_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one\\speedplus",
+                        default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_synthetic\\speedplus",
                         help='Path to speedplus output data.')
 
     parser.add_argument('--output_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one_tfrecords",
+                        default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_synthetic",
                         help='Path to the output directory.')
 
     parser.add_argument("--examples_per_tfrecord",
@@ -425,6 +479,10 @@ if __name__ == '__main__':
                         default=False,
                         help='If true, map rgb jpgs/pngs to NTSC greyscale.')
 
+    parser.add_argument("--presplit",
+                        action='store_true',
+                        default=False,
+                        help='If true, assume that subdirs define splits.')
 
     parser.add_argument("--splits_files_path", type=str,
                         default=None,

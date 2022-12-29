@@ -368,7 +368,7 @@ def main(flags):
 
     # Physical computations from flags.
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
-    subap_radius_meters = (((ap_radius_meters / ((1.0 + flags.edge_padding_factor) / 2)) * np.sin(np.pi / flags.num_subapertures)) - (flags.subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
+    subap_radius_meters = (((ap_radius_meters / ((1.0 + flags.edge_padding_factor))) * np.sin(np.pi / flags.num_subapertures)) - (flags.subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
     subap_area = np.pi * (subap_radius_meters ** 2)
     total_subap_area = subap_area * flags.num_subapertures
     mono_ap_area = np.pi * (ap_radius_meters ** 2)
@@ -398,6 +398,11 @@ def main(flags):
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
+
+    elif flags.dataset_name == "speedplus_synthetic":
+        parse_function = speedplus_parse_function
+        train_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "valid")
 
 
     elif flags.dataset_name == "inria_holiday":
@@ -437,6 +442,8 @@ def main(flags):
         tf.summary.experimental.set_step(step)
         writer = tf.summary.create_file_writer(save_dir)
 
+
+
         print("\n\n\n\n\n\n\n\n\n Building Dataset... \n\n\n\n\n\n\n\n\n")
         # Build our datasets.
         train_dataset = DatasetGenerator(train_data_dir,
@@ -465,6 +472,8 @@ def main(flags):
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
                                          cache_path="")
+
+
         print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
 
         # Get the image shapes stored during dataset construction.
@@ -544,7 +553,22 @@ def main(flags):
             object_distance_meters=object_distance_meters,
             zernike_init_type=flags.zernike_init_type,
             filter_wavelength_micron=flags.filter_wavelength_micron,
+            sensor_gaussian_mean=flags.sensor_gaussian_mean,
+            sensor_poisson_mean_arrival=flags.sensor_poisson_mean_arrival,
+            dm_stroke_microns=flags.dm_stroke_microns,
+            focal_extent_meters=flags.focal_extent_meters,
+            r0_mean=flags.r0_mean,
+            r0_std=flags.r0_std,
+            outer_scale_mean=flags.outer_scale_mean,
+            outer_scale_std=flags.outer_scale_std,
+            inner_scale_mean=flags.inner_scale_mean,
+            inner_scale_std=flags.inner_scale_std,
+            greenwood_time_constant_sec_mean=flags.greenwood_time_constant_sec_mean,
+            greenwood_time_constant_sec_std=flags.greenwood_time_constant_sec_std,
+            effective_focal_length_meters=flags.effective_focal_length_meters,
         )
+
+
 
         # Merge all the summaries from the graphs, flush and init the nodes.
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
@@ -687,7 +711,8 @@ if __name__ == '__main__':
 
     # One arcminute = 0.0166667. 67 arcminutes is 0.0186111.
     # 0.0001145 ~= 1m at 1 Mm (LEO)
-    parser.add_argument('--field_of_view_degrees', type=float,
+    parser.add_argument('--field_of_view_degrees',
+                        type=float,
                         default=0.0001145,
                         help='The FOV of the optical system in degrees.')
 
@@ -712,7 +737,84 @@ if __name__ == '__main__':
                         help='The wavelength of monochromatic light used \
                               in this simulation.')
 
+    parser.add_argument('--sensor_gaussian_mean',
+                        type=float,
+                        default=1e-5,
+                        help='The mean for the Gaussian sensor noise.')
 
+    parser.add_argument('--sensor_poisson_mean_arrival',
+                        type=float,
+                        default=4e-5,
+                        help='The Poisson mean arrival time for sensor noise.')
+
+    parser.add_argument('--dm_stroke_microns',
+                        type=float,
+                        default=8.0,
+                        help='The full stroke of the modeled DM in microns')
+
+    parser.add_argument('--focal_extent_meters',
+                        type=float,
+                        default=0.1,
+                        help='The extent of the square focal plane in meters.')
+
+    parser.add_argument('--r0_mean',
+                        type=float,
+                        default=0.020,
+                        help='The mean of the normal distribution of r0.')
+
+    parser.add_argument('--r0_std',
+                        type=float,
+                        default=0.0,
+                        help='The std of the normal distribution of r0.')
+
+    parser.add_argument('--outer_scale_mean',
+                        type=float,
+                        default=2000.0,
+                        help='The std of the normal distribution of outer \
+                              scale for the Von Karman atmosphere model. \
+                              see: https://arxiv.org/ftp/arxiv/papers/ \
+                              1112/1112.6033.pdf')
+
+    parser.add_argument('--outer_scale_std',
+                        type=float,
+                        default=0.0,
+                        help='The std of the normal distribution of outer \
+                              scale for the Von Karman atmosphere model. \
+                              see: https://arxiv.org/ftp/arxiv/papers/ \
+                              1112/1112.6033.pdf')
+
+    parser.add_argument('--inner_scale_mean',
+                        type=float,
+                        default=0.008,
+                        help='The mean of the normal distribution of inner \
+                              scale for the Von Karman atmosphere model. \
+                              see: https://arxiv.org/ftp/arxiv/papers/ \
+                              1112/1112.6033.pdf')
+
+    parser.add_argument('--inner_scale_std',
+                        type=float,
+                        default=0.0,
+                        help='The std of the normal distribution of inner \
+                              scale for the Von Karman atmosphere model. \
+                              see: https://arxiv.org/ftp/arxiv/papers/ \
+                              1112/1112.6033.pdf')
+
+    parser.add_argument('--greenwood_time_constant_sec_mean',
+                        type=float,
+                        default=1.0,
+                        help='The mean of the normal distribution of the \
+                              Greenwood time constant.')
+
+    parser.add_argument('--greenwood_time_constant_sec_std',
+                        type=float,
+                        default=0.0,
+                        help='The std of the normal distribution of the \
+                              Greenwood time constant.')
+
+    parser.add_argument('--effective_focal_length_meters',
+                        type=float,
+                        default=726.0,
+                        help='The effective focal length in meters.')
 
 
     # Parse known arguments.

@@ -4,17 +4,61 @@ import tensorflow as tf
 
 class RecoveryModel(object):
 
-    def __init__(self,):
+    def __init__(self,
+                 distributed_aperture_images_batch,
+                 filter_scale,
+                 num_exposures,
+                 image_x_scale,
+                 image_y_scale,
+                 batch_size,
+                 model_type="tseng2021neural"):
 
-        return
+        recovered_image_batch = None
 
-    def build(self,
+        if model_type == "tseng2021neural":
+
+            recovered_image_batch = self.build_tseng2021neural(
               distributed_aperture_images_batch,
               filter_scale,
               num_exposures,
               image_x_scale,
               image_y_scale,
-              batch_size):
+              batch_size
+            )
+
+        elif model_type == "weighted_average":
+
+            recovered_image_batch = self.build_tseng2021neural(
+                distributed_aperture_images_batch,
+                num_exposures,
+                image_x_scale,
+                image_y_scale,
+                batch_size
+            )
+
+
+        elif model_type == "zenrike_feature_network":
+
+            recovered_image_batch = self.build_tseng2021neural(
+                distributed_aperture_images_batch,
+                filter_scale,
+                num_exposures,
+                image_x_scale,
+                image_y_scale,
+                batch_size
+            )
+
+        self.recovered_image_batch = recovered_image_batch
+
+        return
+
+    def build_tseng2021neural(self,
+                              distributed_aperture_images_batch,
+                              filter_scale,
+                              num_exposures,
+                              image_x_scale,
+                              image_y_scale,
+                              batch_size):
 
         self.image_x_scale = image_x_scale
         self.image_y_scale = image_y_scale

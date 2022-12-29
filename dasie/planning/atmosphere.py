@@ -55,7 +55,7 @@ from matplotlib import  pyplot as plt
 #     return phs
 
 
-def make_static_phase_grid(r0,
+def make_von_karman_phase_grid(r0,
                            spatial_quantization,
                            pupil_plane_extent,
                            outer_scale,
@@ -63,7 +63,7 @@ def make_static_phase_grid(r0,
 
     """
     Credit to: https://aotools.readthedocs.io/en/v1.0.6/_modules/aotools/turbulence/phasescreen.html
-    Creates a random phase screen with Von Karmen statistics.
+    Creates a random phase screen with Von Karman statistics.
     (Schmidt 2010)
     The phase screen is returned as a 2d array, with each element representing
     the phase change in radians. This means that to obtain the physical phase
@@ -113,7 +113,7 @@ def make_phase_screen_radians(pupil_plane_extent,
                               img_sample):
     """
     Credit to: https://aotools.readthedocs.io/en/v1.0.6/_modules/aotools/turbulence/phasescreen.html
-    Creates a random phase screen with Von Karmen statistics.
+    Creates a random phase screen with Von Karman statistics.
     (Schmidt 2010)
     The phase screen is returned as a 2d array, with each element representing
     the phase change in radians. This means that to obtain the physical phase
