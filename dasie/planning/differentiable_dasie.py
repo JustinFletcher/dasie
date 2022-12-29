@@ -249,6 +249,10 @@ class DASIEModel(object):
         self.effective_focal_length_meters = set_kwargs_default(
             'effective_focal_length_meters', 726.0 , kwargs)
 
+        self.recovery_model_type = set_kwargs_default(
+            'recovery_model_type', "tseng2021neural", kwargs)
+
+
         # Store a reference field to kwargs to enable model saving & recovery.
         self.kwargs = kwargs
 
@@ -942,7 +946,8 @@ class DASIEModel(object):
                                        self.num_exposures,
                                        self.image_x_scale,
                                        self.image_y_scale,
-                                       self.batch_size)
+                                       self.batch_size,
+                                       model_type=self.recovery_model_type)
 
         return recovery_model.recovered_image_batch
 

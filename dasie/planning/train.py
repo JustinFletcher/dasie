@@ -395,28 +395,36 @@ def main(flags):
 
     # Map our dataset name to relative locations and parse functions.
     if flags.dataset_name == "speedplus":
+
+        print("Selected dataset is speedplus.")
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
 
     elif flags.dataset_name == "speedplus_synthetic":
+
+        print("Selected dataset is speedplus_synthetic.")
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "valid")
 
 
     elif flags.dataset_name == "inria_holiday":
+
+        print("Selected dataset is inria_holiday.")
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "valid")
 
     elif flags.dataset_name == "speedplus_one":
         parse_function = speedplus_parse_function
+        print("Selected dataset is speedplus_one.")
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_one_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_one_tfrecords", "valid")
 
     else:
         parse_function = speedplus_parse_function
+        print("Selected dataset is the default, onesat.")
         train_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "valid")
 
@@ -566,6 +574,7 @@ def main(flags):
             greenwood_time_constant_sec_mean=flags.greenwood_time_constant_sec_mean,
             greenwood_time_constant_sec_std=flags.greenwood_time_constant_sec_std,
             effective_focal_length_meters=flags.effective_focal_length_meters,
+            recovery_model_type=flags.recovery_model_type,
         )
 
 
@@ -720,6 +729,13 @@ if __name__ == '__main__':
                         type=int,
                         default=16,
                         help='Base filter size for recovery model.')
+
+    parser.add_argument('--recovery_model_type',
+                        type=str,
+                        default="tseng2021neural",
+                        help='The type of recovery model to train.')
+
+
 
     parser.add_argument("--zernike_debug", action='store_true',
                         default=False,
