@@ -411,6 +411,7 @@ def zernike_aperture_function_2d(X,
     tensor_masked_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
 
     # TODO: Reinstate after debug? Talk to Ryan: Why should I do this?
+
     # The piston tip and tilt are encoded as the phase-angle of pupil plane
     # print("-Generating phase angle field.")
     # Normalize the zernike field so that it may be returned as

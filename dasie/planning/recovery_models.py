@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-
+from zernike import *
 
 class RecoveryModel(object):
 
@@ -71,25 +71,18 @@ class RecoveryModel(object):
         weights = tf.Variable(tf.ones_like(list(range(num_exposures)),
                                            dtype=tf.float64))
 
-        print(weights.shape)
 
         # Multiply each element by the weight vector.
         weighted_image_batch = distributed_aperture_images_batch * weights
-
-        print(weighted_image_batch.shape)
 
         # Add up each element along the image stack dimension.
         weighted_sum_image_batch = tf.math.reduce_sum(
             weighted_image_batch,
             axis=[-1]
         )
-        print(weighted_sum_image_batch.shape)
 
         # Divide each element by the number of exposures.
         recovered_image_batch = weighted_sum_image_batch / num_exposures
-
-        print(recovered_image_batch.shape)
-        die
 
         return recovered_image_batch
 
@@ -703,4 +696,133 @@ class RecoveryModel(object):
             output_feature_map = tf.nn.leaky_relu(conv_output, alpha=0.02)
 
         return output_feature_map
+
+    def zernike_block(self,
+                      input_feature_map,
+                      input_downsample_factor,
+                      input_channels,
+                      output_channels=1,
+                      kernel_size=2,
+                      stride=1,
+                      activation="LRelu",
+                      name=None):
+
+        input_spectrum = tf.signal.fft2d(
+            tf.cast(
+                input_feature_map,
+                dtype=tf.complex128
+            )
+        )
+
+        # TODO: always read the zernikes from the forward model, becuase these
+        #       will be known at inference time. Learn masking thresholds and
+        #       biases to the coefficients! Then, you can learn several zernike
+        #       filters per exposure, each representing hypotheses about the
+        #       spatial frequency features most relevant to a particular
+        #       articulation choice. Finally, we can choose between two heads
+        #       One simply applies the thresholds, averages, and then weighted
+        #       averages across exposures, which regularizes strongly. The
+        #       other is a typical Unet like thing that maps the raw feature
+        #       maps from all exposures together.
+
+        # TODO: Externalize.
+        num_zernike_indices = 6
+        num_apertures = 15
+        spatial_quantization = 512
+        pupil_extent = 3.67 * 1.1
+        radius_meters = 3.67
+        subaperture_radius_meters = 1.0
+
+        u = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        v = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        pupil_grid_u, pupil_grid_v = np.meshgrid(u, v)
+
+        pupil_size = (spatial_quantization,
+                      spatial_quantization)
+
+        # Build the pupil plane quantization grid for this exposure.
+        optics_only_pupil_plane = tf.zeros(pupil_size,
+                                           dtype=tf.complex128)
+
+        for aperture_num in range(num_apertures):
+            print("Building aperture number %d." % aperture_num)
+
+            # Compute the subap centroid cartesian coordinates.
+            rotation = (aperture_num + 1) / num_apertures
+            edge_radius = radius_meters - subaperture_radius_meters
+            mu_u = edge_radius * np.cos((2 * np.pi) * rotation)
+            mu_v = edge_radius * np.sin((2 * np.pi) * rotation)
+
+            # Initialize the coefficients for this subaperture.
+            subap_zernike_coeffs = init_zernike_coefficients(
+                num_zernike_indices=num_zernike_indices,
+                zernike_init_type="constant",
+            )
+
+            # Build TF Variables around the coefficients.
+            subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(
+                subap_zernike_coeffs,
+            )
+
+            # Render this subaperture on the pupil plane grid.
+            optics_only_pupil_plane += zernike_aperture_function_2d(
+                pupil_grid_u,
+                pupil_grid_v,
+                mu_u,
+                mu_v,
+                radius_meters,
+                subaperture_radius_meters,
+                subap_zernike_coefficients_vars
+            )
+
+        # Compute the PSF of the pupiil
+        pupil_spectrum = tf.signal.fft2d(optics_only_pupil_plane)
+        shifted_pupil_spectrum = tf.signal.fftshift(pupil_spectrum)
+        psf = tf.abs(shifted_pupil_spectrum) ** 2
+
+        # Compute the OTF, which is the Fourier transform of the PSF.
+        with tf.name_scope("filter_otf"):
+
+            otf = tf.signal.fft2d(tf.cast(psf, tf.complex128))
+
+        # Compute the mtf, which is the real component of the OTF.
+        with tf.name_scope("filter_mtf"):
+
+            filter_mtf = tf.math.abs(otf)
+
+        feature_spectrum = input_spectrum * tf.cast(filter_mtf, dtype=tf.complex128)
+        output_feature_map = tf.abs(tf.signal.fft2d(feature_spectrum))
+
+
+        return output_feature_map
+
+
+    def _build_zernike_coefficient_variables(self,
+                                             zernike_coefficients,
+                                             trainable=True):
+
+        # Make TF Variables for each subaperture Zernike coeff.
+        zernike_coefficients_variables = list()
+
+        for (i, zernike_coefficient) in enumerate(zernike_coefficients):
+
+            # Construct the tf.Variable for this coefficient.
+            variable_name = "zernike_coefficient_" + str(i)
+
+            # Build a TF Variable around this tensor.
+            real_var = tf.Variable(zernike_coefficient,
+                                   dtype=tf.float64,
+                                   name=variable_name,
+                                   trainable=trainable)
+
+            # Construct a complex tensor from real Variable.
+            imag_constant = tf.constant(0.0, dtype=tf.float64)
+            variable = tf.complex(real_var, imag_constant)
+
+            # Append the final variable to the list.
+            zernike_coefficients_variables.append(variable)
+
+        return(zernike_coefficients_variables)
+
+
 

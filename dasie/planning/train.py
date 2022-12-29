@@ -26,9 +26,9 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 import tensorflow as tf
-# TODO: Implement TF probability.
-# import tensorflow_probability as tfp
+
 import zernike
+from plot_dasie_performance import *
 from recovery_models import RecoveryModel
 from differentiable_dasie import DASIEModel
 
@@ -105,8 +105,13 @@ def train(sess,
                 sess.run(valid_dataset_initializer)
                 print("Plotting...")
                 dasie_model.plot(logdir=logdir,
-                                 # show_plot=show_plot,
                                  step=i)
+
+                if i > 0:
+                    plot_dasie_performance(
+                        logdir=logdir,
+                        step=i,
+                    )
                 print("Plotting completed.")
             else:
 
@@ -421,6 +426,12 @@ def main(flags):
         print("Selected dataset is speedplus_one.")
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_one_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_one_tfrecords", "valid")
+
+    elif flags.dataset_name == "speedplus_overfit":
+        parse_function = speedplus_parse_function
+        print("Selected dataset is speedplus_overfit.")
+        train_data_dir = os.path.join(flags.dataset_root, "speedplus_overfit_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "speedplus_overfit_tfrecords", "valid")
 
     else:
         parse_function = speedplus_parse_function

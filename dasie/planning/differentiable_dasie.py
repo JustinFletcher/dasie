@@ -43,10 +43,8 @@ from recovery_models import RecoveryModel
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
 
-
 # TODO: Externalize.
 def ssim(x_batch, y_batch):
-
 
     x_batch = x_batch / tf.math.reduce_max(x_batch)
     y_batch = y_batch / tf.math.reduce_max(y_batch)
