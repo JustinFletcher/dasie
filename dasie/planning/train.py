@@ -415,7 +415,7 @@ def main(flags):
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "valid")
-        example_image_index = 1
+        example_image_index = 5
 
     elif flags.dataset_name == "inria_holiday":
 
