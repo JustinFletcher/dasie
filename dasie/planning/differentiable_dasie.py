@@ -641,6 +641,8 @@ class DASIEModel(object):
             self.plan[exposure_num] = dict()
             with tf.name_scope("exposure_" + str(exposure_num)):
 
+                print("Building exposure number %d." % exposure_num)
+
                 pupil_size = (spatial_quantization,
                                spatial_quantization)
 
