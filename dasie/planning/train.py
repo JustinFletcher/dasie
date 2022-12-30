@@ -370,7 +370,7 @@ def main(flags):
     # Set up some log directories.
     timestamp = datetime.datetime.today().strftime('%Y%m%d_%H%M%S')
     dir_name = timestamp + "_" + str(os.getpid())
-    save_dir = os.path.join(".", "logs", dir_name)
+    save_dir = os.path.join(flags.logdir, dir_name)
     os.makedirs(save_dir, exist_ok=True)
 
     # Physical computations from flags.
@@ -731,7 +731,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataset_root', type=str,
                         default="..\\data",
-                        help='Path to a directory hol ding all datasetss.')
+                        help='Path to a directory holding all datasets.')
 
     parser.add_argument('--dataset_name', type=str,
                         default="speedplus",

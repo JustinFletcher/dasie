@@ -1044,7 +1044,7 @@ class DASIEModel(object):
                                                              distributed_aperture_images)):
 
             # These are actually batches, so just take the first one.
-            distributed_aperture_image = distributed_aperture_image[0]
+            distributed_aperture_image = distributed_aperture_image[self.example_image_index]
 
             # Build pupil extent helper variables .
             left = self.pupil_dimension_u[0]
