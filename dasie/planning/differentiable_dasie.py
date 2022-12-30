@@ -250,6 +250,9 @@ class DASIEModel(object):
         self.recovery_model_type = set_kwargs_default(
             'recovery_model_type', "tseng2021neural", kwargs)
 
+        self.example_image_index = set_kwargs_default(
+            'example_image_index', 0, kwargs)
+
 
         # Store a reference field to kwargs to enable model saving & recovery.
         self.kwargs = kwargs
@@ -1015,11 +1018,11 @@ class DASIEModel(object):
                            feed_dict={self.handle: self.valid_iterator_handle})
 
         # These are actually batches, so just take the first element.
-        flipped_object_example = flipped_object_batch[0]
-        object_spectrum_example = object_spectrum_batch[0]
-        monolithic_aperture_image = monolithic_aperture_image[0]
-        optics_only_monolithic_aperture_image = optics_only_monolithic_aperture_image[0]
-        recovered_image = np.squeeze(recovered_image[0])
+        flipped_object_example = flipped_object_batch[self.example_image_index]
+        object_spectrum_example = object_spectrum_batch[self.example_image_index]
+        monolithic_aperture_image = monolithic_aperture_image[self.example_image_index]
+        optics_only_monolithic_aperture_image = optics_only_monolithic_aperture_image[self.example_image_index]
+        recovered_image = np.squeeze(recovered_image[self.example_image_index])
 
         # Iterate over each element of the ensemble from the DA system.
         for i, (optics_only_pupil_plane,

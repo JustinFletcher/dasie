@@ -407,6 +407,7 @@ def main(flags):
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_tfrecords", "valid")
+        example_image_index = 0
 
     elif flags.dataset_name == "speedplus_synthetic":
 
@@ -414,7 +415,7 @@ def main(flags):
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_synthetic_tfrecords", "valid")
-
+        example_image_index = 1
 
     elif flags.dataset_name == "inria_holiday":
 
@@ -422,24 +423,32 @@ def main(flags):
         parse_function = speedplus_parse_function
         train_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "inria_holiday_tfrecords", "valid")
+        example_image_index = 0
+
 
     elif flags.dataset_name == "speedplus_one":
         parse_function = speedplus_parse_function
         print("Selected dataset is speedplus_one.")
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_one_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_one_tfrecords", "valid")
+        example_image_index = 0
+
 
     elif flags.dataset_name == "speedplus_overfit":
         parse_function = speedplus_parse_function
         print("Selected dataset is speedplus_overfit.")
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_overfit_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_overfit_tfrecords", "valid")
+        example_image_index = 0
+
 
     else:
         parse_function = speedplus_parse_function
         print("Selected dataset is the default, onesat.")
         train_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "onesat_example_tfrecords", "valid")
+        example_image_index = 0
+
 
 
     # Set the crop size to the spatial quantization scale.
@@ -588,6 +597,7 @@ def main(flags):
             greenwood_time_constant_sec_std=flags.greenwood_time_constant_sec_std,
             effective_focal_length_meters=flags.effective_focal_length_meters,
             recovery_model_type=flags.recovery_model_type,
+            example_image_index=example_image_index,
         )
 
 
