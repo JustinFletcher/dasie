@@ -67,7 +67,28 @@ Or, simply call `python dasie\visuomotor\run_dasie_via_gym.py`.
 
 ## Open-Loop Planning
 
-In TF 2.3+, invoke the following command to run the existing training routine
+Environment recipe:
+
+```
+
+conda create -n daise_planning python=3.9
+conda activate daise_planning
+
+conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1.0
+# Anything above 2.10 is not supported on the GPU on Windows Native
+python -m pip install "tensorflow<2.11"
+python -m pip install "astropy"
+python -m pip install "matplotlib"
+python -m pip install "pandas"
+python -m pip install "decimal"
+python -m pip install "joblib"
+python -m pip install "hcipy"
+pip install -Iv "tensorflow_probability<0.15"
+python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+
+```
+
+Once your environment is built, invoke the following command to run the existing training routine
 with sequential Zernike modeling per subaperture.
 
 ```
