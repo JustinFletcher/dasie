@@ -455,7 +455,8 @@ class DASIEModel(object):
         with tf.name_scope("psf_model"):
             pupil_spectrum = tf.signal.fft2d(pupil_plane)
             shifted_pupil_spectrum = tf.signal.fftshift(pupil_spectrum)
-            # TODO: Use the focal length!
+            # TODO: Use the focal length.
+            # TODO: Swindle, look here!
             self.effective_focal_length_meters
             self.object_plane_extent_meters
             self.object_distance_meters
