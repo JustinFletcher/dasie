@@ -241,9 +241,6 @@ class DASIEModel(object):
         self.greenwood_time_constant_sec_std = set_kwargs_default(
             'greenwood_time_constant_sec_std', 0.0, kwargs)
 
-        self.greenwood_time_constant_sec_std = set_kwargs_default(
-            'greenwood_time_constant_sec_std', 0.0, kwargs)
-
         self.effective_focal_length_meters = set_kwargs_default(
             'effective_focal_length_meters', 726.0 , kwargs)
 
@@ -458,6 +455,10 @@ class DASIEModel(object):
         with tf.name_scope("psf_model"):
             pupil_spectrum = tf.signal.fft2d(pupil_plane)
             shifted_pupil_spectrum = tf.signal.fftshift(pupil_spectrum)
+            # TODO: Use the focal length!
+            self.effective_focal_length_meters
+            self.object_plane_extent_meters
+            self.object_distance_meters
             psf = tf.abs(shifted_pupil_spectrum) ** 2
 
 
@@ -674,7 +675,9 @@ class DASIEModel(object):
                 )
 
                 # TODO: relate exposure_interval_sec and greenwood_time_constant_sec to set atmosphere_sample_scale
-                atmosphere_sample_scale = 1.0
+                self.effective_dm_update_rate_hz
+                exposure_interval_sec
+                atmosphere_sample_scale = 0.01
 
                 # Build a static phase grid for reuse in this ensemble.
                 static_phase_grid = make_von_karman_phase_grid(

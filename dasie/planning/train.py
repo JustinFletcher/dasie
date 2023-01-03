@@ -793,7 +793,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--focal_extent_meters',
                         type=float,
-                        default=0.1,
+                        default=0.008,
                         help='The extent of the square focal plane in meters.')
 
     parser.add_argument('--r0_mean',
