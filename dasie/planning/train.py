@@ -380,7 +380,7 @@ def main(flags):
     total_subap_area = subap_area * flags.num_subapertures
     mono_ap_area = np.pi * (ap_radius_meters ** 2)
     mono_to_dist_aperture_ratio = mono_ap_area / total_subap_area
-    object_distance_meters = flags.object_plane_extent_meters / (np.tan((flags.field_of_view_degrees / 2)  * (np.pi / 180)))
+    object_distance_meters = flags.object_plane_extent_meters / (np.tan(flags.field_of_view_degrees * (np.pi / 180)))
     """
     TODO: [Ryan and Matthew] I could use help here.
     Right now, neither wavelength nor FOV have any impact on the image
@@ -674,7 +674,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--subaperture_spacing_meters',
                         type=float,
-                        default=0.1,
+                        default=0.07,
                         help='Meters of space between subapertures.')
 
     parser.add_argument('--num_zernike_indices',
@@ -689,7 +689,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--aperture_diameter_meters',
                         type=float,
-                        default=2.5,
+                        default=3.0,
                         help='Diameter of DA and mono apertures in meters.')
 
     parser.add_argument('--learning_rate',
@@ -745,8 +745,8 @@ if __name__ == '__main__':
     # 0.0001145 ~= 1m at 1 Mm (LEO)
     parser.add_argument('--field_of_view_degrees',
                         type=float,
-                        default=0.0001145,
-                        help='The FOV of the optical system in degrees.')
+                        default=0.001173,
+                        help='The horizontal/vertical FOV of the optical system in degrees (default=Kiawe).')
 
     parser.add_argument('--recovery_model_filter_scale',
                         type=int,
@@ -788,17 +788,17 @@ if __name__ == '__main__':
 
     parser.add_argument('--dm_stroke_microns',
                         type=float,
-                        default=8.0,
+                        default=4.0,
                         help='The full stroke of the modeled DM in microns')
 
     parser.add_argument('--focal_extent_meters',
                         type=float,
-                        default=0.008,
+                        default=0.004096,
                         help='The extent of the square focal plane in meters.')
 
     parser.add_argument('--r0_mean',
                         type=float,
-                        default=0.020,
+                        default=0.20,
                         help='The mean of the normal distribution of r0.')
 
     parser.add_argument('--r0_std',
@@ -852,8 +852,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--effective_focal_length_meters',
                         type=float,
-                        default=726.0,
-                        help='The effective focal length in meters.')
+                        default=200.0,
+                        help='The effective focal length in meters (default=Kiawe).')
 
 
     # Parse known arguments.

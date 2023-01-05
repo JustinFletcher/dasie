@@ -166,7 +166,7 @@ class DASIEModel(object):
             'edge_padding_factor', 0.1, kwargs)
 
         self.diameter_meters = set_kwargs_default(
-            'diameter_meters', 2.5, kwargs)
+            'diameter_meters', 3.0, kwargs)
 
         self.recovery_model_filter_scale = set_kwargs_default(
             'recovery_model_filter_scale', 16, kwargs)
@@ -209,14 +209,14 @@ class DASIEModel(object):
             'sensor_poisson_mean_arrival', 4e-5, kwargs)
 
         self.dm_stroke_microns = set_kwargs_default(
-            'dm_stroke_microns', 8.0, kwargs)
+            'dm_stroke_microns', 4.0, kwargs)
 
         # TODO: Not in use.
         self.focal_extent_meters = set_kwargs_default(
-            'focal_extent_meters', 0.1, kwargs)
+            'focal_extent_meters', 0.004096, kwargs)
 
         self.r0_mean = set_kwargs_default(
-            'r0_mean', 0.020, kwargs)
+            'r0_mean', 0.20, kwargs)
 
         self.r0_std = set_kwargs_default(
             'r0_std', 0.0, kwargs)
@@ -242,7 +242,7 @@ class DASIEModel(object):
             'greenwood_time_constant_sec_std', 0.0, kwargs)
 
         self.effective_focal_length_meters = set_kwargs_default(
-            'effective_focal_length_meters', 726.0 , kwargs)
+            'effective_focal_length_meters', 200.0 , kwargs)
 
         self.recovery_model_type = set_kwargs_default(
             'recovery_model_type', "tseng2021neural", kwargs)
