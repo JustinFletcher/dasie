@@ -374,19 +374,16 @@ def main(flags):
     os.makedirs(save_dir, exist_ok=True)
 
     # Physical computations from flags.
+    # TODO: Fix this.
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
-    subap_radius_meters = (((ap_radius_meters / ((1.0 + flags.edge_padding_factor))) * np.sin(np.pi / flags.num_subapertures)) - (flags.subaperture_spacing_meters / 2)) / (1 + np.sin(np.pi / flags.num_subapertures))
+    # subap_radius_meters = (2 * (((ap_radius_meters) * np.sin(np.pi / flags.num_subapertures)) - ((flags.subaperture_spacing_meters / 2))) / (1 + np.sin(np.pi / flags.num_subapertures))) / (1.0 + flags.edge_padding_factor)
+    subap_radius_meters = ((((ap_radius_meters) * np.sin(np.pi / flags.num_subapertures)) - ((flags.subaperture_spacing_meters / 2))) / (1 + np.sin(np.pi / flags.num_subapertures)))
     subap_area = np.pi * (subap_radius_meters ** 2)
     total_subap_area = subap_area * flags.num_subapertures
     mono_ap_area = np.pi * (ap_radius_meters ** 2)
     mono_to_dist_aperture_ratio = mono_ap_area / total_subap_area
     object_distance_meters = flags.object_plane_extent_meters / (np.tan((flags.field_of_view_degrees / 2)  * (np.pi / 180)))
-    """
-    TODO: [Ryan and Matthew] I could use help here.
-    Right now, neither wavelength nor FOV have any impact on the image
-    formation, except that I normalize lengths to wavelengths. This seems wrong
-    but I can't find any issues.
-    """
+
     base_results_dict = vars(flags)
     base_results_dict["mono_to_dist_aperture_ratio"] = mono_to_dist_aperture_ratio
     base_results_dict["ap_radius_meters"] = ap_radius_meters
@@ -439,6 +436,14 @@ def main(flags):
         print("Selected dataset is speedplus_overfit.")
         train_data_dir = os.path.join(flags.dataset_root, "speedplus_overfit_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "speedplus_overfit_tfrecords", "valid")
+        example_image_index = 0
+
+
+    elif flags.dataset_name == "usaf1951":
+        parse_function = speedplus_parse_function
+        print("Selected dataset is usaf1951.")
+        train_data_dir = os.path.join(flags.dataset_root, "usaf1951_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "usaf1951_tfrecords", "valid")
         example_image_index = 0
 
 
@@ -598,6 +603,8 @@ def main(flags):
             effective_focal_length_meters=flags.effective_focal_length_meters,
             recovery_model_type=flags.recovery_model_type,
             example_image_index=example_image_index,
+            plan_diversity_regularization=flags.plan_diversity_regularization,
+            plan_diversity_alpha=flags.plan_diversity_alpha,
         )
 
 
@@ -674,7 +681,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--subaperture_spacing_meters',
                         type=float,
-                        default=0.1,
+                        default=0.07,
                         help='Meters of space between subapertures.')
 
     parser.add_argument('--num_zernike_indices',
@@ -689,7 +696,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--aperture_diameter_meters',
                         type=float,
-                        default=2.5,
+                        default=3.0,
                         help='Diameter of DA and mono apertures in meters.')
 
     parser.add_argument('--learning_rate',
@@ -741,11 +748,20 @@ if __name__ == '__main__':
                         default=1.0,
                         help='The size of the object plane in meters.')
 
+
+    parser.add_argument("--plan_diversity_regularization", action='store_true',
+                        default=False,
+                        help='If true, apply a similarity penalty to loss.')
+
+    parser.add_argument('--plan_diversity_alpha', type=float,
+                        default=0.5,
+                        help='A balance parameter.')
+
     # One arcminute = 0.0166667. 67 arcminutes is 0.0186111.
     # 0.0001145 ~= 1m at 1 Mm (LEO)
     parser.add_argument('--field_of_view_degrees',
                         type=float,
-                        default=0.0001145,
+                        default=0.001173,
                         help='The FOV of the optical system in degrees.')
 
     parser.add_argument('--recovery_model_filter_scale',
@@ -788,17 +804,17 @@ if __name__ == '__main__':
 
     parser.add_argument('--dm_stroke_microns',
                         type=float,
-                        default=8.0,
+                        default=4.0,
                         help='The full stroke of the modeled DM in microns')
 
     parser.add_argument('--focal_extent_meters',
                         type=float,
-                        default=0.008,
+                        default=0.004096,
                         help='The extent of the square focal plane in meters.')
 
     parser.add_argument('--r0_mean',
                         type=float,
-                        default=0.020,
+                        default=0.20,
                         help='The mean of the normal distribution of r0.')
 
     parser.add_argument('--r0_std',
@@ -852,7 +868,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--effective_focal_length_meters',
                         type=float,
-                        default=726.0,
+                        default=200.0,
                         help='The effective focal length in meters.')
 
 

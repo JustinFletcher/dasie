@@ -413,7 +413,7 @@ def main(flags):
 
         # Otherwise, we'll just default to a 8/1/1 at random.
         else:
-            split_dict = {"train": 0.8, "valid": 0.1, "test": 0.1}
+            split_dict = {"train": 0.8, "valid": 0.2}
             partition_fn = partition_examples
 
     # TODO: externalize this function interface.
@@ -433,45 +433,22 @@ def main(flags):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    #
-    # parser.add_argument('--name', type=str,
-    #                     default="speedplus",
-    #                     help='Name of the dataset to build.')
-
-    # parser.add_argument('--data_dir', type=str,
-    #                     default="C:\\Users\\justin.fletcher\\research\\speedplus\\speedplus",
-    #                     help='Path to speedplus output data.')
-    #
-    # parser.add_argument('--output_dir', type=str,
-    #                     default="C:\\Users\\justin.fletcher\\research\\speedplus_tfrecords",
-    #                     help='Path to the output directory.')
-
-    #
-    # parser.add_argument('--data_dir', type=str,
-    #                     default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one\\speedplus",
-    #                     help='Path to speedplus output data.')
-    #
-    # parser.add_argument('--output_dir', type=str,
-    #                     default="C:\\Users\\justin.fletcher\\research\\data\\speedplus_one_tfrecords",
-    #                     help='Path to the output directory.')
-    #
-
 
     parser.add_argument('--name', type=str,
-                        default="usaf1951",
+                        default="inaturalist",
                         help='Name of the dataset to build.')
 
     parser.add_argument('--data_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\data\\usaf1951\\usaf1951",
+                        default="./data/inaturalist",
                         help='Path to speedplus output data.')
 
     parser.add_argument('--output_dir', type=str,
-                        default="C:\\Users\\justin.fletcher\\research\\data\\usaf1951_tfrecords",
+                        default="./data/inaturalist_tfrecords",
                         help='Path to the output directory.')
 
     parser.add_argument("--examples_per_tfrecord",
                         type=int,
-                        default=512,
+                        default=64,
                         help="Maximum number of examples to write to a file")
 
     parser.add_argument("--greyscale",

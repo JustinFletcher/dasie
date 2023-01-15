@@ -120,6 +120,13 @@ def set_kwargs_default(key, value, kwargs):
     kwargs[key] = kwargs.get(key, value)
     return (kwargs[key])
 
+# TODO: Externalize
+def crop_center(img, crop_x, crop_y):
+    y, x = img.shape
+    start_x = x // 2 - crop_x // 2
+    start_y = y // 2 - crop_y // 2
+    return img[start_y:start_y + crop_y, start_x:start_x + crop_x]
+
 class DASIEModel(object):
 
     def __init__(self,
@@ -166,7 +173,7 @@ class DASIEModel(object):
             'edge_padding_factor', 0.1, kwargs)
 
         self.diameter_meters = set_kwargs_default(
-            'diameter_meters', 2.5, kwargs)
+            'diameter_meters', 3.0, kwargs)
 
         self.recovery_model_filter_scale = set_kwargs_default(
             'recovery_model_filter_scale', 16, kwargs)
@@ -198,7 +205,6 @@ class DASIEModel(object):
         self.zernike_init_type = set_kwargs_default(
             'zernike_init_type', "np.random.uniform", kwargs)
 
-        # TODO: Not in use.
         self.filter_wavelength_micron = set_kwargs_default(
             'filter_wavelength_micron', 1.0, kwargs)
 
@@ -209,14 +215,13 @@ class DASIEModel(object):
             'sensor_poisson_mean_arrival', 4e-5, kwargs)
 
         self.dm_stroke_microns = set_kwargs_default(
-            'dm_stroke_microns', 8.0, kwargs)
+            'dm_stroke_microns', 4.0, kwargs)
 
-        # TODO: Not in use.
         self.focal_extent_meters = set_kwargs_default(
-            'focal_extent_meters', 0.1, kwargs)
+            'focal_extent_meters', 0.004096, kwargs)
 
         self.r0_mean = set_kwargs_default(
-            'r0_mean', 0.020, kwargs)
+            'r0_mean', 0.20, kwargs)
 
         self.r0_std = set_kwargs_default(
             'r0_std', 0.0, kwargs)
@@ -242,13 +247,19 @@ class DASIEModel(object):
             'greenwood_time_constant_sec_std', 0.0, kwargs)
 
         self.effective_focal_length_meters = set_kwargs_default(
-            'effective_focal_length_meters', 726.0 , kwargs)
+            'effective_focal_length_meters', 200.0 , kwargs)
 
         self.recovery_model_type = set_kwargs_default(
             'recovery_model_type', "tseng2021neural", kwargs)
 
         self.example_image_index = set_kwargs_default(
             'example_image_index', 0, kwargs)
+
+        self.plan_diversity_regularization = set_kwargs_default(
+            'plan_diversity_regularization', False, kwargs)
+
+        self.plan_diversity_alpha = set_kwargs_default(
+            'plan_diversity_alpha', 0.5, kwargs)
 
 
         # Store a reference field to kwargs to enable model saving & recovery.
@@ -338,6 +349,7 @@ class DASIEModel(object):
                     )
                 )
 
+
             if self.loss_name == "l2":
                 loss = tf.math.sqrt(
                     tf.math.reduce_sum(
@@ -350,6 +362,34 @@ class DASIEModel(object):
                     self.recovered_image,
                     self.flipped_object_batch
                 )
+
+            if self.plan_diversity_regularization:
+
+                # Build a list of tensors encoding each exp's zernike coefs.
+                exposure_zernike_vectors = list()
+                for (exposure_num, aperture_dict) in self.plan.items():
+                    exposure_zernike_vector = tf.squeeze(
+                        tf.stack(
+                            sum(list(aperture_dict.values()), []),
+                            axis=0
+                        )
+                    )
+                    exposure_zernike_vectors.append(exposure_zernike_vector)
+
+                # TODO: Replace with itertools
+                # Compute the pairwise cosine similarities, except where same.
+                cossim = 0.0
+                for u in exposure_zernike_vectors:
+                    for v in exposure_zernike_vectors:
+                        cossim += cosine_similarity(u, v)
+                # Normalize: Each cossim pair max is 1.0. Min is the trace sum.
+                diversity_loss = (cossim - len(exposure_zernike_vectors)) / ((len(exposure_zernike_vectors)**2) - len(exposure_zernike_vectors))
+
+                # Normalize MAE. Every pixel can contribute at most 2.0.
+                loss = loss / (2.0 * (self.spatial_quantization ** 2))
+
+                # Combine losses.
+                loss = ((1.0 - self.plan_diversity_alpha) * loss) + (self.plan_diversity_alpha * diversity_loss)
 
             self.loss = loss
 
@@ -449,18 +489,26 @@ class DASIEModel(object):
 
         return image
 
-    def _build_geometric_optics(self, pupil_plane):
+    def _build_geometric_optics(self,
+                                pupil_plane):
 
         # Compute the PSF from the pupil plane.
         with tf.name_scope("psf_model"):
             pupil_spectrum = tf.signal.fft2d(pupil_plane)
             shifted_pupil_spectrum = tf.signal.fftshift(pupil_spectrum)
-            # TODO: Use the focal length.
-            # TODO: Swindle, look here!
-            self.effective_focal_length_meters
-            self.object_plane_extent_meters
-            self.object_distance_meters
             psf = tf.abs(shifted_pupil_spectrum) ** 2
+
+            # Crop the PSF center to spatial_quantization
+            offset = int((self.pupil_spatial_quantization - self.spatial_quantization) / 2.0)
+            psf = tf.image.crop_to_bounding_box(
+                tf.expand_dims(psf, axis=[-1]),
+                offset_height=offset,
+                offset_width=offset,
+                target_height=self.spatial_quantization,
+                target_width=self.spatial_quantization
+            )
+            psf = tf.squeeze(psf, axis=[-1])
+
 
 
         # Compute the OTF, which is the Fourier transform of the PSF.
@@ -488,10 +536,12 @@ class DASIEModel(object):
             variable_name = "zernike_coefficient_" + str(i)
 
             # Build a TF Variable around this tensor.
-            real_var = tf.Variable(zernike_coefficient,
-                                   dtype=tf.float64,
-                                   name=variable_name,
-                                   trainable=trainable)
+            real_var = tf.Variable(
+                zernike_coefficient,
+                dtype=tf.float64,
+                name=variable_name,
+                trainable=trainable,
+                constraint=lambda t: tf.clip_by_value(t, 0.0, 1.0))
 
             # Construct a complex tensor from real Variable.
             imag_constant = tf.constant(0.0, dtype=tf.float64)
@@ -526,9 +576,28 @@ class DASIEModel(object):
                                               use_reparameterization=False)
         poisson_noise = sampled * poisson_mean_arrival
 
-        noisy_image = gaussian_noise + poisson_noise
+        noisy_image = gaussian_noise / 2 + poisson_noise / 2
 
         return noisy_image
+
+    def _compute_pupil_spatial_quantization(self,):
+
+
+        self.object_plane_extent_meters
+        self.object_distance_meters
+
+        working_pupil = self.diameter_meters * (1.0 + self.edge_padding_factor)
+        focal_extent_at_spatial_quantization_meters = (self.spatial_quantization * self.filter_wavelength_micron * 1e-6 * self.effective_focal_length_meters) / working_pupil
+        pupil_spatial_quantization = self.spatial_quantization * (focal_extent_at_spatial_quantization_meters / self.focal_extent_meters)
+
+        # Extent per pixel
+        working_pupil = self.diameter_meters * (1.0 + self.edge_padding_factor)
+        extent_per_pixel_meters = (self.filter_wavelength_micron * 1e-6 * self.effective_focal_length_meters) / working_pupil
+        target_extent_per_pixel_meters = self.focal_extent_meters / self.spatial_quantization
+        expansion_factor = extent_per_pixel_meters / target_extent_per_pixel_meters
+        pupil_spatial_quantization = self.spatial_quantization * expansion_factor
+
+        return int(pupil_spatial_quantization)
 
     def _build_dasie_model(self,
                            inputs=None,
@@ -551,8 +620,6 @@ class DASIEModel(object):
         else:
             dm_trainable = True
 
-
-
         # Build object plane image batch tensor objects.
         if inputs is not None:
             self.object_batch = inputs
@@ -562,8 +629,8 @@ class DASIEModel(object):
                      self.image_y_scale,
                      1)
             self.object_batch = tf.compat.v1.placeholder(tf.float64,
-                                                          shape=shape,
-                                                          name="object_batch")
+                                                         shape=shape,
+                                                         name="object_batch")
 
         with tf.name_scope("image_spectrum_model"):
 
@@ -577,24 +644,10 @@ class DASIEModel(object):
                 )
             )
 
-        # TODO: Modularize physics stuff.
-        # Start: physics stuff.
-        # Compute the pupil extent: 4.848 microradians / arcsec
-        # pupil_extend = [m] * [count] / ([microradians / arcsec] * [arcsec])
-        # pupil_extent = [count] [micrometers] / [microradian]
-        # pupil_extent = [micrometers] / [microradian]
-        # pupil_extent = [micrometers] / [microradian]
-        # pupil_extent = [meters] / [radian]
-        # TODO: Ask Ryan for help: What are these units?
-        pupil_extent = filter_wavelength_micron * spatial_quantization / (4.848 * field_of_view_arcsec)
         pupil_extent = (2 * radius_meters) * (1 + self.edge_padding_factor)
         self.pupil_extent = pupil_extent
         print("pupil_extent=" + str(pupil_extent))
-        # This converts radians to radians to meters, in filter wavelengths.
-        # self.phase_scale = 2 * np.pi / filter_wavelength_micron
         self.phase_scale_wavelengths = self.dm_stroke_microns / filter_wavelength_micron
-
-        focal_extent = self.focal_extent_meters
 
         # Compute the subaperture pixel extent.
         self.pupil_meters_per_pixel = radius_meters / spatial_quantization
@@ -602,22 +655,25 @@ class DASIEModel(object):
             subaperture_radius_meters // self.pupil_meters_per_pixel
         )
 
+        # TODO: These still aren't used....
+        self.object_plane_extent_meters
+        self.object_distance_meters
+
+        self.pupil_spatial_quantization = self._compute_pupil_spatial_quantization()
+
+        print(self.pupil_spatial_quantization)
 
         # Build the simulation mesh grid.
-        # TODO: Verify these physical coordinates; clarify pupil vs radius.
-        u = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
-        v = np.linspace(-pupil_extent/2, pupil_extent/2, spatial_quantization)
+        u = np.linspace(-pupil_extent/2, pupil_extent/2, self.pupil_spatial_quantization)
+        v = np.linspace(-pupil_extent/2, pupil_extent/2, self.pupil_spatial_quantization)
         self.pupil_dimension_u = u
         self.pupil_dimension_v = v
         pupil_grid_u, pupil_grid_v = np.meshgrid(u, v)
 
-        # TODO: this grid is never used right now. It probably should be.
-        x = np.linspace(-focal_extent/2, focal_extent/2, spatial_quantization)
-        y = np.linspace(-focal_extent/2, focal_extent/2, spatial_quantization)
+        x = np.linspace(-self.focal_extent_meters/2, self.focal_extent_meters/2, self.spatial_quantization)
+        y = np.linspace(-self.focal_extent_meters/2, self.focal_extent_meters/2, self.spatial_quantization)
         self.focal_dimension_x = x
-        self.focal_dimension_y = y
-        focal_grid_u, focal_grid_v = np.meshgrid(x, y)
-
+        self.focal_dimension_y = x
 
         # End: Physics stuff.
 
@@ -645,8 +701,8 @@ class DASIEModel(object):
 
                 print("Building exposure number %d." % exposure_num)
 
-                pupil_size = (spatial_quantization,
-                               spatial_quantization)
+                pupil_size = (self.pupil_spatial_quantization,
+                              self.pupil_spatial_quantization)
 
                 # Build the pupil plane quantization grid for this exposure.
                 optics_only_pupil_plane = tf.zeros(pupil_size,
@@ -667,7 +723,7 @@ class DASIEModel(object):
                     self.inner_scale_std
                 )
 
-                self.effective_dm_update_rate_hz = 1000
+                self.effective_dm_update_rate_hz = 200
                 exposure_interval_sec = 1 / self.effective_dm_update_rate_hz
 
                 greenwood_time_constant_sec = np.random.normal(
@@ -683,7 +739,7 @@ class DASIEModel(object):
                 # Build a static phase grid for reuse in this ensemble.
                 static_phase_grid = make_von_karman_phase_grid(
                     r0,
-                    spatial_quantization,
+                    self.pupil_spatial_quantization,
                     self.pupil_extent,
                     outer_scale,
                     inner_scale)
@@ -701,69 +757,100 @@ class DASIEModel(object):
                 # Build the model of the pupil plane, using the Variables.
                 with tf.name_scope("pupil_plane_model"):
 
-                    for aperture_num in range(num_apertures):
-                        self.plan[exposure_num][aperture_num] = dict()
+                    if num_apertures == 1:
 
-                        print("Building aperture number %d." % aperture_num)
+                        # Initialize the coefficients for this subaperture.
+                        subap_zernike_coeffs = init_zernike_coefficients(
+                            num_zernike_indices=num_zernike_indices,
+                            zernike_init_type=zernike_init_type,
+                            zernike_debug=zernike_debug,
+                        )
 
-                        # Compute the subap centroid cartesian coordinates.
-                        rotation = (aperture_num + 1) / self.num_apertures
-                        edge_radius = radius_meters - subaperture_radius_meters
-                        mu_u = edge_radius * np.cos((2 * np.pi) * rotation)
-                        mu_v = edge_radius * np.sin((2 * np.pi) * rotation)
+                        # Build TF Variables around the coefficients.
+                        subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(
+                            subap_zernike_coeffs,
+                            trainable=dm_trainable
+                        )
 
-                        # Build the variables for this subaperture.
-                        with tf.name_scope("subaperture_"+ str(aperture_num)):
+                        # Add Zernike Variables to the bookeeeping dict.
+                        self.plan[exposure_num][0] = subap_zernike_coefficients_vars
 
-                            # Initialize the coefficients for this subaperture.
-                            subap_zernike_coeffs = init_zernike_coefficients(
-                                num_zernike_indices=num_zernike_indices,
-                                zernike_init_type=zernike_init_type,
-                                zernike_debug=zernike_debug,
-                                debug_nonzero_coefficient=aperture_num
-                            )
+                        # Render this subaperture on the pupil plane grid.
+                        optics_only_pupil_plane += zernike_aperture_function_2d(
+                            pupil_grid_u,
+                            pupil_grid_v,
+                            0.0,
+                            0.0,
+                            radius_meters,
+                            radius_meters,
+                            subap_zernike_coefficients_vars
+                        )
 
-                            # Build TF Variables around the coefficients.
-                            subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(
-                                subap_zernike_coeffs,
-                                trainable=dm_trainable
-                            )
+                    else:
 
-                            # Add Zernike Variables to the bookeeeping dict.
-                            self.plan[exposure_num][aperture_num] = subap_zernike_coefficients_vars
+                        for aperture_num in range(num_apertures):
+                            self.plan[exposure_num][aperture_num] = dict()
 
-                            # Render this subaperture on the pupil plane grid.
-                            optics_only_pupil_plane += zernike_aperture_function_2d(
-                                pupil_grid_u,
-                                pupil_grid_v,
-                                mu_u,
-                                mu_v,
-                                radius_meters,
-                                subaperture_radius_meters,
-                                subap_zernike_coefficients_vars
-                            )
+                            print("Building aperture number %d." % aperture_num)
 
-                    # TODO: Ryan, is this appropriate?
-                    # Standardize the pupil plane, then physically scale it.
-                    zernike_min = tf.cast(
-                        tf.math.reduce_min(
-                            tf.math.real(
-                                optics_only_pupil_plane
-                            )
-                        ),
-                        dtype=tf.complex128
-                    )
-                    zernike_max = tf.cast(
-                        tf.math.reduce_max(
-                            tf.math.real(
-                                optics_only_pupil_plane
-                            )
-                        ),
-                        dtype=tf.complex128
-                    )
-                    zernike_range = (zernike_max - zernike_min)
-                    optics_only_pupil_plane = (optics_only_pupil_plane - zernike_min) / zernike_range
-                    optics_only_pupil_plane = optics_only_pupil_plane * self.phase_scale_wavelengths
+                            # Compute the subap centroid cartesian coordinates.
+                            rotation = (aperture_num + 1) / self.num_apertures
+                            edge_radius = radius_meters - subaperture_radius_meters
+                            mu_u = edge_radius * np.cos((2 * np.pi) * rotation)
+                            mu_v = edge_radius * np.sin((2 * np.pi) * rotation)
+
+                            # Build the variables for this subaperture.
+                            with tf.name_scope("subaperture_"+ str(aperture_num)):
+
+                                # Initialize the coefficients for this subaperture.
+                                subap_zernike_coeffs = init_zernike_coefficients(
+                                    num_zernike_indices=num_zernike_indices,
+                                    zernike_init_type=zernike_init_type,
+                                    zernike_debug=zernike_debug,
+                                    debug_nonzero_coefficient=aperture_num
+                                )
+
+                                # Build TF Variables around the coefficients.
+                                subap_zernike_coefficients_vars = self._build_zernike_coefficient_variables(
+                                    subap_zernike_coeffs,
+                                    trainable=dm_trainable
+                                )
+
+                                # Add Zernike Variables to the bookeeeping dict.
+                                self.plan[exposure_num][aperture_num] = subap_zernike_coefficients_vars
+
+                                # Render this subaperture on the pupil plane grid.
+                                optics_only_pupil_plane += zernike_aperture_function_2d(
+                                    pupil_grid_u,
+                                    pupil_grid_v,
+                                    mu_u,
+                                    mu_v,
+                                    radius_meters,
+                                    subaperture_radius_meters,
+                                    subap_zernike_coefficients_vars
+                                )
+
+                        # TODO: Ryan, is this appropriate?
+                        # Standardize the pupil plane, then physically scale it.
+                        # zernike_min = tf.cast(
+                        #     tf.math.reduce_min(
+                        #         tf.math.real(
+                        #             optics_only_pupil_plane
+                        #         )
+                        #     ),
+                        #     dtype=tf.complex128
+                        # )
+                        # zernike_max = tf.cast(
+                        #     tf.math.reduce_max(
+                        #         tf.math.real(
+                        #             optics_only_pupil_plane
+                        #         )
+                        #     ),
+                        #     dtype=tf.complex128
+                        # )
+                        # zernike_range = (zernike_max - zernike_min)
+                        # optics_only_pupil_plane = (optics_only_pupil_plane - zernike_min) / zernike_range
+                        # optics_only_pupil_plane = optics_only_pupil_plane * self.phase_scale_wavelengths
 
 
                     # This pupil plane is complete, now add it to the list.
@@ -773,7 +860,7 @@ class DASIEModel(object):
                     (optics_only_psf,
                      optics_only_otf,
                      optics_only_mtf) = self._build_geometric_optics(
-                        optics_only_pupil_plane
+                        optics_only_pupil_plane,
                     )
 
                     # Store the psf, otf, and mtf tensors for later use.
@@ -809,13 +896,14 @@ class DASIEModel(object):
                         # phase_screen_mircons = (filter_wavelength_micron / (2 * np.pi)) * phase_screen_radians
                         # self.atmosphere_phase_screens.append(phase_screen_mircons)
                         phase_screen_wavelengths = (filter_wavelength_micron / (2 * np.pi)) * phase_screen_radians
-                        self.atmosphere_phase_screens.append(phase_screen_wavelengths)
+                        # self.atmosphere_phase_screens.append(phase_screen_wavelengths)
+                        self.atmosphere_phase_screens.append(phase_screen_radians)
 
 
-                        # Apply the micron displacements to the pupil.
+                        # Apply the radian displacements to the pupil.
                         # TODO: Clean this mess.
-                        phase_screen_wavelenghts_masked = phase_screen_wavelengths * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
-                        da_post_atmosphere_pupil_plane = tf.cast(phase_screen_wavelenghts_masked, dtype=tf.complex128) + optics_only_pupil_plane
+                        phase_screen_radians_masked = phase_screen_radians * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
+                        da_post_atmosphere_pupil_plane = tf.cast(phase_screen_radians_masked, dtype=tf.complex128) + optics_only_pupil_plane
 
                         self.pupil_planes.append(
                             da_post_atmosphere_pupil_plane
@@ -840,22 +928,22 @@ class DASIEModel(object):
                         distributed_aperture_image_plane
                     )
 
-                with tf.name_scope("sensor_model"):
+                    with tf.name_scope("sensor_model"):
 
-                    # Apply Gaussian and Poisson process noise.
-                    distributed_aperture_image = self._apply_noise(
-                        distributed_aperture_image_plane,
-                        gaussian_mean=self.sensor_gaussian_mean,
-                        poisson_mean_arrival=self.sensor_poisson_mean_arrival
+                        # Apply Gaussian and Poisson process noise.
+                        distributed_aperture_image = self._apply_noise(
+                            distributed_aperture_image_plane,
+                            gaussian_mean=self.sensor_gaussian_mean,
+                            poisson_mean_arrival=self.sensor_poisson_mean_arrival
+                        )
+
+                    # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
+                    distributed_aperture_image = distributed_aperture_image / tf.reduce_max(distributed_aperture_image)
+
+                    # Finally, add the image from this pupil to the list.
+                    self.distributed_aperture_images.append(
+                        distributed_aperture_image
                     )
-
-                # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
-                distributed_aperture_image = distributed_aperture_image / tf.reduce_max(distributed_aperture_image)
-
-                # Finally, add the image from this pupil to the list.
-                self.distributed_aperture_images.append(
-                    distributed_aperture_image
-                )
 
         # Now, construct a monolithic aperture of the same radius.
         with tf.name_scope("monolithic_aperture"):
@@ -899,7 +987,7 @@ class DASIEModel(object):
             with tf.name_scope("atmosphere_model"):
 
                 # Produce a pupil mask and multiply it by the phase screen.
-                masekd_phase_screen_wavelenghts= tf.cast(
+                masked_phase_screen_wavelenghts= tf.cast(
                     tf.math.greater(
                         tf.math.abs(
                             self.optics_only_monolithic_pupil_plane
@@ -913,7 +1001,7 @@ class DASIEModel(object):
                     dtype=tf.float64
                 ) * phase_screen_wavelengths
                 self.mono_post_atmosphere_pupil_plane = tf.cast(
-                    masekd_phase_screen_wavelenghts,
+                    masked_phase_screen_wavelenghts,
                     dtype=tf.complex128
                 ) + self.optics_only_monolithic_pupil_plane
 
@@ -978,6 +1066,12 @@ class DASIEModel(object):
             plt.gcf().set_dpi(dpi)
             plt.savefig(fig_path)
             plt.close()
+
+        def crop_center(img, crop_x, crop_y):
+            y, x = img.shape
+            start_x = x // 2 - crop_x // 2
+            start_y = y // 2 - crop_y // 2
+            return img[start_y:start_y + crop_y, start_x:start_x + crop_x]
 
 
         # Do a single sess.run to get all the values from a single batch.
@@ -1056,76 +1150,162 @@ class DASIEModel(object):
             bottom = self.pupil_dimension_v[0]
             top = self.pupil_dimension_v[-1]
             pupil_extent = [left, right, bottom, top]
+
+            left = self.focal_dimension_x[0] * 1e6
+            right = self.focal_dimension_x[-1] * 1e6
+            bottom = self.focal_dimension_y[0] * 1e6
+            top = self.focal_dimension_y[-1] * 1e6
+            focal_extent = [left, right, bottom, top]
             # plt.imshow(np.angle(pupil_plane),
             #            cmap='twilight_shifted',
             #            extent=[left,right,bottom,top])
             # Overlay aperture mask
+
+            image_colormap = 'Greys'
+
+
+
+            # Pupils.
             plt.imshow(np.real(pupil_plane), cmap='inferno',
                        extent=pupil_extent)
+            plt.xlabel('Pupil Plane Distance [$m$]')
+            plt.ylabel('Pupil Plane Distance [$m$]')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="pupil_plane_" + str(i))
 
-            # Plot phase angle
-            # left = self.pupil_dimension_x[0]
-            # right = self.pupil_dimension_x[-1]
-            # bottom = self.pupil_dimension_y[0]
-            # top = self.pupil_dimension_y[-1]
-            # Overlay aperture mask
-            # ax1 = plt.subplot(1, 2, 1)
-            # ax1.set_title('np.imag')
-            # plt.imshow(np.imag(pupil_plane), cmap='Greys',
-            #            extent=[left, right, bottom, top])
-            # plt.colorbar()
-            #
-            # ax2 = plt.subplot(1, 2, 2)
-            # plt.imshow(np.real(pupil_plane), cmap='Greys',
-            #            extent=[left, right, bottom, top])
-            # ax2.set_title('np.real')
-            # plt.colorbar()
-            # save_and_close_current_plot(step_plot_dir,
-            #                             plot_name="raw_pupil_plane_" + str(i))
-
-            plt.imshow(np.log10(psf), cmap='inferno')
-            plt.colorbar()
-            save_and_close_current_plot(step_plot_dir,
-                                        plot_name="log_psf_" + str(i))
-
-            plt.imshow(np.log10(mtf), cmap='inferno')
-            plt.colorbar()
-            save_and_close_current_plot(step_plot_dir,
-                                        plot_name="log_mtf_" + str(i))
-
-            plt.imshow(atmosphere_phase_screen,
-                       cmap='inferno',
-                       extent=pupil_extent)
-            plt.colorbar()
-            save_and_close_current_plot(step_plot_dir,
-                                        plot_name="atmosphere_phase_screen_" + str(i))
 
             plt.imshow(np.real(optics_only_pupil_plane),
                        cmap='inferno',
                        extent=pupil_extent)
+            plt.xlabel('Pupil Plane Distance [$m$]')
+            plt.ylabel('Pupil Plane Distance [$m$]')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="optics_only_pupil_plane_" + str(i))
 
-            plt.imshow(np.log10(optics_only_psf), cmap='inferno')
+            # Start Chip Plot
+            crop_extent = int(self.pupil_spatial_quantization / (1 + self.edge_padding_factor))
+
+            pupil_plane_chip = crop_center(
+                pupil_plane,
+                crop_extent,
+                crop_extent
+            )
+            plt.imshow(np.real(pupil_plane_chip), cmap='inferno',
+                       extent=[e / (1.0 + self.edge_padding_factor) for e in pupil_extent])
+            plt.xlabel('Pupil Plane Distance [$m$]')
+            plt.ylabel('Pupil Plane Distance [$m$]')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="pupil_plane_chip_" + str(i))
+            # End Chip Plot
+
+            optics_only_pupil_plane_chip = crop_center(
+                optics_only_pupil_plane,
+                crop_extent,
+                crop_extent
+            )
+            plt.imshow(np.real(optics_only_pupil_plane_chip),
+                       cmap='inferno',
+                       extent=[e / (1.0 + self.edge_padding_factor) for e in pupil_extent])
+            plt.xlabel('Pupil Plane Distance [$m$]')
+            plt.ylabel('Pupil Plane Distance [$m$]')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="optics_only_pupil_plane_chip_" + str(i))
+
+            # PSFs.
+            plt.imshow(np.log10(psf / np.max(psf)),
+                       cmap='inferno',
+                       extent=focal_extent)
+            plt.xlabel('Focal Plane Distance [$\mu m$]')
+            plt.ylabel('Focal Plane Distance [$\mu m$]')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="log_psf_" + str(i))
+
+            # Start Chip Plot
+            crop_extent = 128
+
+            psf_chip = crop_center(
+                np.log10(psf / np.max(psf)),
+                crop_extent,
+                crop_extent
+            )
+            plt.imshow(psf_chip, cmap='inferno',
+                       extent=[e / (self.spatial_quantization / crop_extent) for e in pupil_extent])
+            plt.xlabel('Focal Plane Distance [$\mu m$]')
+            plt.ylabel('Focal Plane Distance [$\mu m$]')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="log_psf_chip_" + str(i))
+            # End Chip Plot
+
+            plt.imshow(np.log10(optics_only_psf / np.max(optics_only_psf)),
+                       cmap='inferno',
+                       extent=focal_extent)
+            plt.xlabel('Focal Plane Distance [$\mu m$]')
+            plt.ylabel('Focal Plane Distance [$\mu m$]')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="log_optics_only_psf_" + str(i))
 
-            plt.imshow(np.log10(optics_only_mtf), cmap='inferno')
+            # Start Chip Plot
+            crop_extent = 128
+
+            psf_chip = crop_center(
+                np.log10(optics_only_psf / np.max(optics_only_psf)),
+                crop_extent,
+                crop_extent
+            )
+            plt.imshow(psf_chip, cmap='inferno',
+                       extent=[e / (self.spatial_quantization / crop_extent) for e in pupil_extent])
+            plt.xlabel('Focal Plane Distance [$\mu m$]')
+            plt.ylabel('Focal Plane Distance [$\mu m$]')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="log_optics_only_psf_chip_" + str(i))
+            # End Chip Plot
+
+
+            # MTFs.
+            plt.imshow(np.log10(np.fft.fftshift(mtf)), cmap='inferno')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="log_mtf_" + str(i))
+
+
+            plt.imshow(np.log10(np.fft.fftshift(optics_only_mtf)), cmap='inferno')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="log_optics_only_mtf_" + str(i))
 
-            plt.imshow(distributed_aperture_image, cmap='inferno')
+            plt.imshow(atmosphere_phase_screen,
+                       cmap='inferno',
+                       extent=pupil_extent)
+            plt.xlabel('Pupil Plane Distance [$m$]')
+            plt.ylabel('Pupil Plane Distance [$m$]')
+            plt.colorbar()
+            save_and_close_current_plot(step_plot_dir,
+                                        plot_name="atmosphere_phase_screen_" + str(i))
+
+
+
+            plt.imshow(np.flipud(np.fliplr(distributed_aperture_image)),
+                       cmap=image_colormap,
+                       extent=focal_extent)
+            plt.xlabel('Focal Plane Distance [$\mu m$]')
+            plt.ylabel('Focal Plane Distance [$\mu m$]')
             plt.colorbar()
             save_and_close_current_plot(step_plot_dir,
                                         plot_name="da_image_" + str(i))
 
-        plt.imshow(recovered_image, cmap='inferno')
+        plt.imshow(np.flipud(np.fliplr(recovered_image)),
+                   cmap=image_colormap,
+                   extent=focal_extent)
+        plt.xlabel('Focal Plane Distance [$\mu m$]')
+        plt.ylabel('Focal Plane Distance [$\mu m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="recovered_image")
@@ -1140,22 +1320,68 @@ class DASIEModel(object):
             plot_name="mono_post_atmosphere_pupil_plane"
         )
 
-        plt.imshow(np.log10(monolithic_psf), cmap='inferno')
+        # Start Chip Plot
+        crop_extent = int(
+            self.pupil_spatial_quantization / (1 + self.edge_padding_factor))
+
+        mono_post_atmosphere_pupil_plane_chip = crop_center(
+            mono_post_atmosphere_pupil_plane,
+            crop_extent,
+            crop_extent
+        )
+        plt.imshow(np.real(mono_post_atmosphere_pupil_plane_chip), cmap='inferno',
+                   extent=[e / (1.0 + self.edge_padding_factor) for e in
+                           pupil_extent])
+        plt.xlabel('Pupil Plane Distance [$m$]')
+        plt.ylabel('Pupil Plane Distance [$m$]')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="mono_post_atmosphere_pupil_plane_chip")
+        # End Chip Plot
+
+        optics_only_monolithic_pupil_plane_chip = crop_center(
+            optics_only_monolithic_pupil_plane,
+            crop_extent,
+            crop_extent
+        )
+        plt.imshow(np.real(optics_only_monolithic_pupil_plane_chip),
+                   cmap='inferno',
+                   extent=[e / (1.0 + self.edge_padding_factor) for e in
+                           pupil_extent])
+        plt.xlabel('Pupil Plane Distance [$m$]')
+        plt.ylabel('Pupil Plane Distance [$m$]')
+        plt.colorbar()
+        save_and_close_current_plot(step_plot_dir,
+                                    plot_name="optics_only_pupil_plane_chip")
+
+        plt.imshow(np.log10(monolithic_psf / np.max(monolithic_psf)),
+                   cmap='inferno',
+                   extent=focal_extent)
+        plt.xlabel('Focal Plane Distance [$\mu m$]')
+        plt.ylabel('Focal Plane Distance [$\mu m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_monolithic_psf")
 
-        plt.imshow(np.log10(monolithic_mtf), cmap='inferno')
+        plt.imshow(np.log10(np.fft.fftshift(monolithic_mtf)), cmap='inferno')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_monolithic_mtf")
 
-        plt.imshow(monolithic_aperture_image, cmap='inferno')
+        plt.imshow(np.flipud(np.fliplr(monolithic_aperture_image)),
+                   cmap='inferno',
+                   extent=focal_extent)
+        plt.xlabel('Pupil Plane Distance [$m$]')
+        plt.ylabel('Pupil Plane Distance [$m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="monolithic_aperture_image")
 
-        plt.imshow(optics_only_monolithic_aperture_image, cmap='inferno')
+        plt.imshow(np.flipud(np.fliplr(optics_only_monolithic_aperture_image)),
+                   cmap=image_colormap,
+                   extent=focal_extent)
+        plt.xlabel('Focal Plane Distance [$\mu m$]')
+        plt.ylabel('Focal Plane Distance [$\mu m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="monolithic_aperture_image")
@@ -1164,46 +1390,60 @@ class DASIEModel(object):
                    cmap='inferno',
                    extent=pupil_extent)
         plt.colorbar()
-        plt.xlabel('u [m]')
-        plt.ylabel('v [m]')
+        plt.xlabel('Pupil Plane Distance [$m$]')
+        plt.ylabel('Pupil Plane Distance [$m$]')
         save_and_close_current_plot(
             step_plot_dir,
             plot_name="optics_only_monolithic_pupil_plane",
             dpi=1200
         )
 
-        plt.imshow(np.log10(optics_only_monolithic_psf),
-                   cmap='inferno')
+        plt.imshow(np.log10(optics_only_monolithic_psf / np.max(optics_only_monolithic_psf)),
+                   cmap='inferno',
+                   extent=focal_extent)
+        plt.xlabel('Focal Plane Distance [$\mu m$]')
+        plt.ylabel('Focal Plane Distance [$\mu m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_optics_only_monolithic_psf")
 
-        plt.imshow(np.log10(optics_only_monolithic_mtf), cmap='inferno')
+        plt.imshow(np.log10(np.fft.fftshift(optics_only_monolithic_mtf)), cmap='inferno')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_optics_only_monolithic_mtf")
 
+        object_extent = [-self.object_plane_extent_meters / 2,
+                         self.object_plane_extent_meters / 2,
+                         -self.object_plane_extent_meters / 2,
+                         self.object_plane_extent_meters / 2]
 
-        plt.imshow(flipped_object_example, cmap='inferno')
+        plt.imshow(np.flipud(np.fliplr(flipped_object_example)),
+                   cmap=image_colormap,
+                   extent=object_extent)
+        plt.xlabel('Object Plane Distance [$m$]')
+        plt.ylabel('Object Plane Distance [$m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="object")
 
-        plt.imshow(np.log10(np.abs(object_spectrum_example)), cmap='inferno')
+        plt.imshow(np.log10(np.fft.fftshift(np.abs(object_spectrum_example))), cmap='inferno')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="log_object_spectrum")
 
         # End of standard plots, now we do some calibration/sanity checks.
-        def crop_center(img, crop_x, crop_y):
-            y, x = img.shape
-            start_x = x // 2 - crop_x // 2
-            start_y = y // 2 - crop_y // 2
-            return img[start_y:start_y + crop_y, start_x:start_x + crop_x]
-
-        center_chip = crop_center(optics_only_monolithic_psf, 128, 128)
+        crop_extent = 128
+        center_chip = crop_center(
+            optics_only_monolithic_psf,
+            crop_extent,
+            crop_extent
+        )
         norm_center_chip = center_chip / np.max(center_chip)
-        plt.imshow(np.log10(norm_center_chip), cmap='inferno')
+        plt.imshow(np.log10(norm_center_chip),
+                   cmap='inferno',
+                       extent=[e / (self.spatial_quantization / crop_extent) for e in pupil_extent])
+        plt.xlabel('Focal Plane Distance [$\mu m$]')
+        plt.ylabel('Focal Plane Distance [$\mu m$]')
         plt.colorbar()
         save_and_close_current_plot(
             step_plot_dir,
@@ -1268,8 +1508,12 @@ class DASIEModel(object):
         # q is the number of pixels per diffraction width.
         # num_airy is half size (ie. radius) of the image in the number of diffraction widths
         # TODO: set q and num_airy from properties.
-        focal_grid = make_focal_grid(q=4,
-                                     num_airy=16,
+        q = ((1.22 * wavelength_meters / self.diameter_meters) / self.focal_extent_meters) * self.spatial_quantization
+        q = 4
+        num_airy = (self.focal_extent_meters / (1.22 * wavelength_meters / self.diameter_meters)) / 2
+        num_airy = 55
+        focal_grid = make_focal_grid(q=q,
+                                     num_airy=num_airy,
                                      pupil_diameter=pupil_diameter,
                                      focal_length=self.effective_focal_length_meters,
                                      reference_wavelength=wavelength_meters)
@@ -1324,8 +1568,7 @@ class DASIEModel(object):
         )
 
         plt.imshow(np.log10(optics_only_monolithic_psf / np.max(optics_only_monolithic_psf)),
-                   cmap='inferno',
-                   vmin=-5,)
+                   cmap='inferno',)
         plt.title('Log Normalized Intensity - DASIE')
         plt.xlabel('Focal plane distance [pixels]')
         plt.ylabel('Focal plane distance [pixels]')
@@ -1338,7 +1581,6 @@ class DASIEModel(object):
         ax1.set_title('Log Normalized Intensity - HCIpy')
         imshow_field(
             np.log10(focal_image.intensity / focal_image.intensity.max()),
-            vmin=-5,
             grid_units=1e-6,
             cmap = 'inferno'
         )
@@ -1350,9 +1592,9 @@ class DASIEModel(object):
         ax2.set_title('Log Normalized Intensity - DASIE')
         plt.imshow(np.log10(optics_only_monolithic_psf / np.max(optics_only_monolithic_psf)),
                    cmap='inferno',
-                   vmin=-5,)
-        plt.xlabel('Focal plane distance [pixels]')
-        plt.ylabel('Focal plane distance [pixels]')
+                   extent=focal_extent)
+        plt.xlabel('Focal Plane Distance [$\mu m$]')
+        plt.ylabel('Focal Plane Distance [$\mu m$]')
         plt.colorbar()
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="focal_psf_compare")
@@ -1365,7 +1607,8 @@ class DASIEModel(object):
         slicefoc = psf.shaped[:, psf_shape[0] // 2]
         slicefoc_normalised = slicefoc / psf.max()
         plt.plot(focal_grid.x.reshape(psf_shape)[0, :] * 1e6,
-                 slicefoc_normalised)
+                 slicefoc_normalised,)
+        ax1.set_ylim(bottom=1e-7)
         plt.xlabel('Focal plane distance [$\mu m$]')
         plt.ylabel('Normalised intensity [I]')
         plt.yscale('log')
@@ -1382,22 +1625,15 @@ class DASIEModel(object):
             self.spatial_quantization
         )
         norm_center_line = center_line / np.max(center_line)
-        plt.plot(norm_center_line)
+        plt.plot(norm_center_line,)
+        ax2.set_ylim(bottom=1e-7)
         plt.ylabel('Normalised intensity [I]')
         plt.xlabel('Focal plane distance [pixels]')
         plt.yscale('log')
-
         save_and_close_current_plot(step_plot_dir,
                                     plot_name="focal_psf_line_compare")
 
-        #
-        # ax3 = plt.subplot(1, 3, 3)
-        # plt.plot(norm_center_line - slicefoc_normalised)
-        # plt.ylabel('Residual Normalised Intensity  [I]')
-        # plt.xlabel('Focal plane distance [pixels]')
-        # plt.yscale('log')
 
-        # PSF profile residuals.
 
     def save(self, save_file_path):
         """
