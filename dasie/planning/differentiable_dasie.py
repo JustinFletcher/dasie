@@ -794,8 +794,8 @@ class DASIEModel(object):
                         for aperture_num in range(num_apertures):
                             self.plan[exposure_num][aperture_num] = dict()
 
-                            print("Building aperture number %d." % aperture_num, end="", flush=True)
                             print("Memory usage = " + str(self.process.memory_info().rss / 1000000000) + " GB. ")
+                            print("Building aperture number %d. Term:" % aperture_num, end="", flush=True)
 
                             # Compute the subap centroid cartesian coordinates.
                             rotation = (aperture_num + 1) / self.num_apertures
@@ -833,6 +833,8 @@ class DASIEModel(object):
                                     subaperture_radius_meters,
                                     subap_zernike_coefficients_vars
                                 )
+
+                        print(".")
 
                         # TODO: Ryan, is this appropriate?
                         # Standardize the pupil plane, then physically scale it.

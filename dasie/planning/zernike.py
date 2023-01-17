@@ -369,7 +369,6 @@ def zernike_aperture_function_2d(X,
 
     # print("-Starting Zernike aperture function.")
 
-    print("Building aperture number %d, term:" % aperture_num, end="", flush=True)
     tensor_zernike_2d_sample = None
     tensor_zernike_2d_sample_initialized  = False
 
