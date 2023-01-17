@@ -7,6 +7,7 @@ import math
 import glob
 import codecs
 import joblib
+import psutil
 import datetime
 import argparse
 import itertools
@@ -248,6 +249,7 @@ def train(sess,
                 # Execute one gradient update and get our tracked results.
                 print("Starting train step %d..." % train_steps)
 
+
                 step_start_time = time.time()
                 (step_train_loss,
                  step_train_monolithic_aperture_image_mse,
@@ -261,6 +263,8 @@ def train(sess,
                  step_train_da_psnr_mono_psnr_ratio,
                  _) = dasie_model.train()
 
+                print("Memory usage = " + str(
+                    self.process.memory_info().rss / 1000000000) + " GB. ")
 
                 step_end_time = time.time()
                 step_time = step_end_time - step_start_time
@@ -484,11 +488,11 @@ def main(flags):
         train_dataset = DatasetGenerator(train_data_dir,
                                          parse_function=parse_function,
                                          augment=False,
-                                         shuffle=False,
+                                         shuffle=True,
                                          crop_size=crop_size,
                                          batch_size=flags.batch_size,
-                                         num_threads=2,
-                                         buffer=32,
+                                         num_threads=flags.num_dataset_threads,
+                                         buffer=flags.dataset_buffer_len,
                                          encoding_function=None,
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
@@ -501,8 +505,8 @@ def main(flags):
                                          shuffle=False,
                                          crop_size=crop_size,
                                          batch_size=flags.batch_size,
-                                         num_threads=2,
-                                         buffer=32,
+                                         num_threads=flags.num_dataset_threads,
+                                         buffer=flags.dataset_buffer_len,
                                          encoding_function=None,
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
@@ -634,7 +638,6 @@ def main(flags):
 
 if __name__ == '__main__':
 
-    # TODO: I need to enable a test of negligable, random, and learned articulations to measure validation set reconstructions.
 
     parser = argparse.ArgumentParser(
         description='provide arguments for training.')
@@ -713,6 +716,16 @@ if __name__ == '__main__':
                         type=int,
                         default=4,
                         help='Number of perfect images per batch.')
+
+    parser.add_argument('--num_dataset_threads',
+                        type=int,
+                        default=2,
+                        help='Number dataset read threads.')
+
+    parser.add_argument('--dataset_buffer_len',
+                        type=int,
+                        default=32,
+                        help='Size of dataset read buffer in examples.')
 
     parser.add_argument('--num_exposures',
                         type=int,

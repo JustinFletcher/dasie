@@ -15,6 +15,7 @@ import joblib
 import datetime
 import argparse
 import itertools
+import psutil
 
 import numpy as np
 import pandas as pd
@@ -264,6 +265,8 @@ class DASIEModel(object):
 
         # Store a reference field to kwargs to enable model saving & recovery.
         self.kwargs = kwargs
+
+        self.process = psutil.Process(os.getpid())
 
         # For convenience, precompute some physical parameters.
         self.radius_meters = self.diameter_meters / 2
@@ -791,7 +794,8 @@ class DASIEModel(object):
                         for aperture_num in range(num_apertures):
                             self.plan[exposure_num][aperture_num] = dict()
 
-                            print("Building aperture number %d." % aperture_num)
+                            print("Building aperture number %d." % aperture_num, end="", flush=True)
+                            print("Memory usage = " + str(self.process.memory_info().rss / 1000000000) + " GB. ")
 
                             # Compute the subap centroid cartesian coordinates.
                             rotation = (aperture_num + 1) / self.num_apertures

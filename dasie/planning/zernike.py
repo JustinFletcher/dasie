@@ -367,7 +367,9 @@ def zernike_aperture_function_2d(X,
                                  subaperture_radius,
                                  zernike_coefficients):
 
-    print("-Starting Zernike aperture function.")
+    # print("-Starting Zernike aperture function.")
+
+    print("Building aperture number %d, term:" % aperture_num, end="", flush=True)
     tensor_zernike_2d_sample = None
     tensor_zernike_2d_sample_initialized  = False
 
@@ -383,7 +385,7 @@ def zernike_aperture_function_2d(X,
     # Iterate over each zernike term-coefficient pair, adding its contribution.
     for term_number, zernike_coefficient in enumerate(zernike_coefficients):
 
-        print("--Building Zernike Term " + str(term_number) + ".")
+        print(str(term_number) + ", ", end="", flush=True)
 
         # Select the function corresponding to this term number.
         zernike_term_function = select_zernike_function(term_number=term_number)
@@ -395,8 +397,6 @@ def zernike_aperture_function_2d(X,
             tensor_zernike_2d_sample = zernike_coefficient * tf.vectorized_map(zernike_term_function, T)
             tensor_zernike_2d_sample_initialized = True
 
-        print("--End of Zernike Term.")
-
     # Map the zernike domain from [-1, 1] to [0, 1], per term
     # Each term can contribute as much as -1, and has a range of size 2.
     # TODO: Ryan, talk with me about this. It changes the mapping from Zernike
@@ -405,7 +405,7 @@ def zernike_aperture_function_2d(X,
     tensor_zernike_2d_sample = (tensor_zernike_2d_sample + num_terms) / (2 * num_terms)
 
     # Apply a circle mask to set all non-aperture pixels to 0.0.
-    print("-Masking subaperture.")
+    # print("-Masking subaperture.")
     pupil_mask = circle_mask(X, Y, mu_u, mu_v, subaperture_radius)
     pupil_mask = tf.cast(tf.constant(pupil_mask), dtype=tf.complex128)
     tensor_masked_zernike_2d_sample = tensor_zernike_2d_sample * pupil_mask
@@ -424,5 +424,5 @@ def zernike_aperture_function_2d(X,
 
     tensor_zernike_2d_field = tensor_masked_zernike_2d_sample
 
-    print("-Ending aperture function.")
+    print(".")
     return tensor_zernike_2d_field
