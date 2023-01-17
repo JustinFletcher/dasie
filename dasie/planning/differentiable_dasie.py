@@ -795,7 +795,7 @@ class DASIEModel(object):
                             self.plan[exposure_num][aperture_num] = dict()
 
                             print("Memory usage = " + str(self.process.memory_info().rss / 1000000000) + " GB. ")
-                            print("Building aperture number %d. Term:" % aperture_num, end="", flush=True)
+                            print("Building aperture number %d. Term: " % aperture_num, end="", flush=True)
 
                             # Compute the subap centroid cartesian coordinates.
                             rotation = (aperture_num + 1) / self.num_apertures

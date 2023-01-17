@@ -263,8 +263,7 @@ def train(sess,
                  step_train_da_psnr_mono_psnr_ratio,
                  _) = dasie_model.train()
 
-                print("Memory usage = " + str(
-                    self.process.memory_info().rss / 1000000000) + " GB. ")
+                print("Memory usage = " + str(psutil.Process(os.getpid()).memory_info().rss / 1000000000) + " GB. ")
 
                 step_end_time = time.time()
                 step_time = step_end_time - step_start_time
