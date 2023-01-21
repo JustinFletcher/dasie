@@ -413,13 +413,13 @@ class DatasetGenerator(object):
         offset_width = tf.random.uniform(
             [],
             minval=0,
-            maxval=img_shape[0] - crop_width,
+            maxval=img_shape[1] - crop_width,
             dtype=tf.int32
         )
         offset_height = tf.random.uniform(
             [],
             minval=0,
-            maxval=img_shape[1] - crop_height,
+            maxval=img_shape[0] - crop_height,
             dtype=tf.int32
         )
 
@@ -427,10 +427,8 @@ class DatasetGenerator(object):
         # bounding boxes to the new coordinates
 
         image = tf.image.crop_to_bounding_box(image,
-                                              (img_shape[1] // 2) - (
-                                                          offset_height // 2),
-                                              (img_shape[0] // 2) - (
-                                                          offset_width // 2),
+                                              (img_shape[0] // 2) - (crop_height // 2),
+                                              (img_shape[1] // 2) - (crop_width // 2),
                                               crop_height,
                                               crop_width)
 
