@@ -246,7 +246,7 @@ class DatasetGenerator(object):
                           and
                           (crop_size < image_batch_shape[1])):
 
-
+            print(crop_size)
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads).prefetch(buffer)
 
