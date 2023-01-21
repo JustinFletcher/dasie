@@ -412,21 +412,6 @@ class DatasetGenerator(object):
         crop_width = self.spatial_quantization
         crop_height = self.spatial_quantization
 
-
-        # Now come up with crop offsets
-        offset_width = tf.random.uniform(
-            [],
-            minval=0,
-            maxval=img_shape[1] - crop_width,
-            dtype=tf.int32
-        )
-        offset_height = tf.random.uniform(
-            [],
-            minval=0,
-            maxval=img_shape[0] - crop_height,
-            dtype=tf.int32
-        )
-
         # The heavy lifting is done, time to make us a crop and transform our
         # bounding boxes to the new coordinates
 
