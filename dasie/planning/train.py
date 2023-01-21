@@ -363,6 +363,57 @@ def speedplus_parse_function(example_proto):
 
     return image
 
+def inaturalist_parse_function(example_proto):
+    """
+    This is the first step of the generator/augmentation chain. Reading the
+    raw file out of the TFRecord is fairly straight-forward, though does
+    require some simple fixes. For instance, the number of bounding boxes
+    needs to be padded to some upper bound so that the tensors are all of
+    the same shape and can thus be batched.
+
+    :param example_proto: Example from a TFRecord file
+    :return: The raw image and padded bounding boxes corresponding to
+    this TFRecord example.
+    """
+    # Define how to parse the example
+    features = {
+        "image_raw": tf.io.VarLenFeature(dtype=tf.string),
+        "width": tf.io.FixedLenFeature([], dtype=tf.int64),
+        "height": tf.io.FixedLenFeature([], dtype=tf.int64),
+        "id": tf.io.VarLenFeature(dtype=tf.string),
+        "name": tf.io.VarLenFeature(dtype=tf.string),
+        "common_name": tf.io.VarLenFeature(dtype=tf.string),
+        "supercategory": tf.io.VarLenFeature(dtype=tf.string),
+        "kingdom": tf.io.VarLenFeature(dtype=tf.string),
+        "phylum": tf.io.VarLenFeature(dtype=tf.string),
+        "class": tf.io.VarLenFeature(dtype=tf.string),
+        "order": tf.io.VarLenFeature(dtype=tf.string),
+        "family": tf.io.VarLenFeature(dtype=tf.string),
+        "genus": tf.io.VarLenFeature(dtype=tf.string),
+        "specific_epithet": tf.io.VarLenFeature(dtype=tf.string),
+        "image_dir_name": tf.io.VarLenFeature(dtype=tf.string),
+
+    }
+
+    # Parse the example
+    features_parsed = tf.io.parse_single_example(serialized=example_proto,
+                                                 features=features)
+    width = tf.cast(features_parsed["width"], tf.int32)
+    height = tf.cast(features_parsed["height"], tf.int32)
+
+    # filename = tf.cast(
+    #     tf.sparse.to_dense(features_parsed["filename"], default_value=""),
+    #     tf.string,
+    # )
+
+    image = tf.sparse.to_dense(features_parsed["image_raw"], default_value="")
+    image = tf.io.decode_raw(image, tf.uint8)
+
+    image = tf.reshape(image, [width, height, 1])
+    image = tf.cast(image, tf.float64)
+
+    return image
+
 
 def main(flags):
 
@@ -455,7 +506,7 @@ def main(flags):
 
 
     elif flags.dataset_name == "inaturalist":
-        parse_function = speedplus_parse_function
+        parse_function = inaturalist_parse_function
         print("Selected dataset is inaturalist.")
         train_data_dir = os.path.join(flags.dataset_root, "inaturalist_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "inaturalist_tfrecords", "valid")
