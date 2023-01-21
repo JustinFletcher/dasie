@@ -241,6 +241,7 @@ class DatasetGenerator(object):
                             num_parallel_calls=num_threads)
 
         image_batch_shape = get_input_shape(data)
+        print(image_batch_shape)
         if crop_size and ((crop_size < image_batch_shape[0])
                           and
                           (crop_size < image_batch_shape[1])):
