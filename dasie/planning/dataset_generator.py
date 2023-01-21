@@ -183,6 +183,14 @@ class DatasetGenerator(object):
         self.initializer = self.iterator.make_initializer(self.dataset)
         return self.initializer
 
+    def _example_larger_than_crop(self, image,):
+        min_size = tf.constant(self.spatial_quantization)
+        img_height = tf.shape(image)[0]
+        img_width = tf.shape(image)[1]
+        height_enough = tf.greater(img_height, min_size)
+        width_enough = tf.greater(img_width, min_size)
+        isallowed = tf.math.logical_and(height_enough, width_enough)
+        return isallowed
 
     def build_pipeline(self,
                        tfrecord_path,
@@ -223,6 +231,8 @@ class DatasetGenerator(object):
 
         # Parse the record into tensors
         data = data.map(self._parse_function, num_parallel_calls=num_threads)
+
+        data.filter(self._example_larger_than_crop)
 
         # If augmentation is to be applied
         if augment:
@@ -372,14 +382,8 @@ class DatasetGenerator(object):
 
     def _perform_center_crop(self, image, filename=None, min_crop_size=(256, 256)):
         """
-        Randomly crops the image. Crop positions are chosen randomly, as well as
-        the size (provided it is above the requested minimum size). If any bounding
-        boxes are only partially included in the crop, the crop is enlarged so that
-        the bounding box falls totally within the crop.
+        Center crops the image.
 
-        Note: this makes batching difficult, as image sizes will no longer be
-        consistent. To use this function in the augmentation chain, resizing will be
-        needed after cropping but before batching.
 
         :param image: input image tensor of Shape = Height X Width X #Channels
         :param bboxs: input bounding boxes of Shape = #Boxes X 4
