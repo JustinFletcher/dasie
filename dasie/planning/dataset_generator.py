@@ -232,7 +232,7 @@ class DatasetGenerator(object):
         # Parse the record into tensors
         data = data.map(self._parse_function, num_parallel_calls=num_threads)
 
-        data.filter(self._example_larger_than_crop)
+        data = data.filter(self._example_larger_than_crop)
 
         # If augmentation is to be applied
         if augment:
