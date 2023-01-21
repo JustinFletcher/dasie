@@ -261,6 +261,8 @@ class DASIEModel(object):
 
         self.plan_diversity_alpha = set_kwargs_default(
             'plan_diversity_alpha', 0.5, kwargs)
+        self.atmosphere = set_kwargs_default(
+            'atmosphere', True, kwargs)
 
 
         # Store a reference field to kwargs to enable model saving & recovery.
@@ -1056,7 +1058,8 @@ class DASIEModel(object):
                                        self.image_x_scale,
                                        self.image_y_scale,
                                        self.batch_size,
-                                       model_type=self.recovery_model_type)
+                                       model_type=self.recovery_model_type,
+                                       optics_only_mtfs=self.optics_only_mtfs)
 
         return recovery_model.recovered_image_batch
 

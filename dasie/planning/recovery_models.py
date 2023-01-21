@@ -11,7 +11,8 @@ class RecoveryModel(object):
                  image_x_scale,
                  image_y_scale,
                  batch_size,
-                 model_type="tseng2021neural"):
+                 model_type="tseng2021neural",
+                 optics_only_mtfs=None):
 
 
 
@@ -40,11 +41,14 @@ class RecoveryModel(object):
                     batch_size
                 )
 
-
             elif model_type == "zenrike_feature_network":
 
-                recovered_image_batch = self.build_tseng2021neural(
+                if not optics_only_mtfs:
+                    "zenrike_feature_network without optics_only_mtfs!"
+
+                recovered_image_batch = self.build_zernike_feature_stack(
                     distributed_aperture_images_batch,
+                    optics_only_mtfs,
                     filter_scale,
                     num_exposures,
                     image_x_scale,
@@ -56,8 +60,10 @@ class RecoveryModel(object):
 
         return
 
-    def build_weighted_average(self,
+
+    def build_zernike_feature_stack(self,
                                distributed_aperture_images_batch,
+                               optics_only_mtfs,
                                num_exposures,
                                image_x_scale,
                                image_y_scale,
@@ -65,6 +71,35 @@ class RecoveryModel(object):
                                ):
 
         print(distributed_aperture_images_batch.shape)
+        distributed_aperture_images_batch / optics_only_mtfs
+
+        # Generate a single scalar variable for each exposure.
+        weights = tf.Variable(tf.ones_like(list(range(num_exposures)),
+                                           dtype=tf.float64))
+
+
+        # Multiply each element by the weight vector.
+        weighted_image_batch = distributed_aperture_images_batch * weights
+
+        # Add up each element along the image stack dimension.
+        weighted_sum_image_batch = tf.math.reduce_sum(
+            weighted_image_batch,
+            axis=[-1]
+        )
+
+        # Divide each element by the number of exposures.
+        recovered_image_batch = weighted_sum_image_batch / num_exposures
+
+        return recovered_image_batch
+
+
+    def build_weighted_average(self,
+                               distributed_aperture_images_batch,
+                               num_exposures,
+                               image_x_scale,
+                               image_y_scale,
+                               batch_size
+                               ):
 
 
         # Generate a single scalar variable for each exposure.

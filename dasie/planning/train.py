@@ -376,6 +376,10 @@ def main(flags):
     save_dir = os.path.join(flags.logdir, dir_name)
     os.makedirs(save_dir, exist_ok=True)
 
+    if not flags.atmosphere:
+        flags.r0_std = 0.0
+        flags.r0_mean = 0.0
+
     # Physical computations from flags.
     # TODO: Fix this.
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
@@ -616,6 +620,7 @@ def main(flags):
             example_image_index=example_image_index,
             plan_diversity_regularization=flags.plan_diversity_regularization,
             plan_diversity_alpha=flags.plan_diversity_alpha,
+            atmosphere=flags.atmosphere
         )
 
 
@@ -836,6 +841,11 @@ if __name__ == '__main__':
                         type=float,
                         default=0.20,
                         help='The mean of the normal distribution of r0.')
+
+    parser.add_argument('--atmosphere',
+                        action='store_true',
+                        default=False,
+                        help='If false, sets r0 mean and std to 0.0.')
 
     parser.add_argument('--r0_std',
                         type=float,

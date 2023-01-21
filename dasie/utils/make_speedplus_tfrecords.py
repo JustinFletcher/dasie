@@ -320,6 +320,56 @@ def partition_examples_by_file(examples, split_file_dir):
     return partitions
 
 
+def partition_examples_by_json_coco_file(examples, split_file_dir):
+    # Create a dict to hold examples.
+    partitions = dict()
+
+    # Need to read in the splits files
+    dir_contents = list()
+    for split_file in os.listdir(split_file_dir):
+        if split_file.endswith(".txt"):
+            dir_contents.append(split_file)
+
+    for split_file_name in dir_contents:
+
+        # Get the name of this split (remove the extension)
+        split_name = split_file_name.split(".")[0]
+
+        # Pull the file contents into memory
+        split_file_path = os.path.join(split_file_dir, split_file_name)
+        fp = open(split_file_path, "r")
+        file_contents = fp.readlines()
+        fp.close()
+
+        # Remove the end line character
+        file_contents = [line[:-1] for line in file_contents]
+
+        # Gotta convert the weird way these are written in the split files
+        # to something that looks like an actual path
+        # (they are written as "collect dir"_"file name" for some reason)
+        split_paths = list()
+        for line in file_contents:
+            new_path = os.path.join(line.split("_")[0],
+                                    "_".join(line.split("_")[1:]))
+            split_paths.append(new_path)
+
+        # Now check and see which examples belong in this split
+        split_examples = []
+        for example in examples:
+            full_dir, file_name = os.path.split(example[0])
+            full_dir, _ = os.path.split(full_dir)
+            _, collect_dir = os.path.split(full_dir)
+            example_path = os.path.join(collect_dir, file_name)
+            if example_path in split_paths:
+                split_examples.append(example)
+
+        # Save this split away in our return dictionary
+        print("Saving partition " + str(split_name) +
+              " with " + str(len(split_examples)) + " examples.")
+        partitions[split_name] = split_examples
+    return partitions
+
+
 def create_tfrecords(data_dir,
                      output_dir,
                      tfrecords_name="tfrecords",
