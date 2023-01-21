@@ -142,7 +142,7 @@ def train(sess,
         # Validate by looping an calling validate batches, until...
         try:
             while True:
-                # Execute one gradient update step.
+                # Execute one validation step.
                 (step_valid_loss,
                  step_valid_monolithic_aperture_image_mse,
                  step_valid_distributed_aperture_image_mse,
@@ -447,6 +447,14 @@ def main(flags):
         print("Selected dataset is usaf1951.")
         train_data_dir = os.path.join(flags.dataset_root, "usaf1951_tfrecords", "train")
         valid_data_dir = os.path.join(flags.dataset_root, "usaf1951_tfrecords", "valid")
+        example_image_index = 0
+
+
+    elif flags.dataset_name == "inaturalist":
+        parse_function = speedplus_parse_function
+        print("Selected dataset is inaturalist.")
+        train_data_dir = os.path.join(flags.dataset_root, "inaturalist_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "inaturalist_tfrecords", "valid")
         example_image_index = 0
 
 
