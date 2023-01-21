@@ -376,16 +376,16 @@ def main(flags):
     example_builder_fn = build_inaturalist_tf_example
 
     # First build train.
-    # annotation_json_path = os.path.join(flags.annotation_dir,
-    #                                     "train_mini.json")
-    #
-    # create_tfrecords(data_dir=os.path.join(flags.data_dir),
-    #                  output_dir=os.path.join(flags.output_dir, "train"),
-    #                  annotation_json_path=annotation_json_path,
-    #                  tfrecords_name=flags.name + "_train_mini",
-    #                  examples_per_tfrecord=flags.examples_per_tfrecord,
-    #                  datapath_to_examples_fn=datapath_fn,
-    #                  tf_example_builder_fn=example_builder_fn,)
+    annotation_json_path = os.path.join(flags.annotation_dir,
+                                        "train_mini.json")
+
+    create_tfrecords(data_dir=os.path.join(flags.data_dir),
+                     output_dir=os.path.join(flags.output_dir, "train"),
+                     annotation_json_path=annotation_json_path,
+                     tfrecords_name=flags.name + "_train_mini",
+                     examples_per_tfrecord=flags.examples_per_tfrecord,
+                     datapath_to_examples_fn=datapath_fn,
+                     tf_example_builder_fn=example_builder_fn,)
 
     # Then build val.
 
