@@ -207,7 +207,7 @@ class DatasetGenerator(object):
                        cache_path="",
                        num_examples=None,
                        input_shape=None,
-                       max_elements=max_elements,):
+                       max_elements=None,):
         """
         Reads in data from a TFRecord file, applies augmentation chain (if
         desired), shuffles and batches the data.
