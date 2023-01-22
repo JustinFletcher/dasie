@@ -336,8 +336,8 @@ class DatasetGenerator(object):
         data.prefetch(buffer_size=buffer)
 
         print("getting shape again")
-        image_batch_shape = get_input_shape(data)
-        self.image_shape = (image_batch_shape[1], image_batch_shape[2])
+        # image_batch_shape = get_input_shape(data)
+        self.image_shape = (self.input_shape[1], self.input_shape[2])
 
         print("done")
         # Return a reference to this data pipeline
