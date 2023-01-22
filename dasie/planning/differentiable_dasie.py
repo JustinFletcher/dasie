@@ -569,7 +569,6 @@ class DASIEModel(object):
 
         # Strip any imaginary image component.
         image = tf.math.abs(image)
-        image = tf.math.abs(image)
 
         # Apply the reparameterization trick from kingma2014autovariational.
         gaussian_dist = tfp.distributions.Normal(loc=tf.zeros_like(image),
@@ -577,6 +576,7 @@ class DASIEModel(object):
 
         gaussian_sample = tfp.distributions.Sample(gaussian_dist).sample()
         gaussian_noise = image + (gaussian_mean ** 2) * gaussian_sample
+        gaussian_noise = tf.math.abs(gaussian_noise)
 
         # Apply the score-gradient trick from williams1992simple.
         rate = image / poisson_mean_arrival

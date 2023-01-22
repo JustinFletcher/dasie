@@ -403,7 +403,7 @@ class DatasetGenerator(object):
         # a = (1.0 - 0.0) / (image_max - image_min)
         # b = 1.0 - (a * image_max)
         # image = (image / (image_max - image_min)) + (1.0 - (image_max/ (image_max - image_min)))
-        image = (image - tf.reduce_min(image)) / (tf.reduce_max(image) - tf.reduce_min(image))
+        image = (image - tf.reduce_min(image)) / (tf.reduce_max(image) - tf.reduce_min(image) + 0.0000001)
         image = image + 0.0000001
         image = image / tf.reduce_max(image)
         return image
