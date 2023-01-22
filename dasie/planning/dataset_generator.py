@@ -258,10 +258,10 @@ class DatasetGenerator(object):
 
             print(crop_size)
             data = data.map(self._perform_center_crop,
-                            num_parallel_calls=num_threads).prefetch(buffer)
+                            num_parallel_calls=num_threads)
 
         data = data.map(self._normalize,
-                        num_parallel_calls=num_threads).prefetch(buffer)
+                        num_parallel_calls=num_threads)
 
         # Force images to the same size
         # data = data.map(_resize_data,
@@ -300,7 +300,9 @@ class DatasetGenerator(object):
         # data = data.repeat()
 
         # Batch the data
-        data = data.batch(batch_size, drop_remainder=True)
+        data = data.batch(batch_size,
+                          num_parallel_calls=num_threads,
+                          drop_remainder=True)
 
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
