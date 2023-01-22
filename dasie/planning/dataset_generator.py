@@ -234,12 +234,9 @@ class DatasetGenerator(object):
 
         # Parse the record into tensors
         data = data.map(self._parse_function, num_parallel_calls=num_threads)
-        data = data.map(self._normalize, num_parallel_calls=num_threads)
 
         data = data.filter(self._example_larger_than_crop)
 
-        image_batch_shape = get_input_shape(data)
-        self.image_shape = (image_batch_shape[1], image_batch_shape[2])
 
         if cache_dataset_memory:
             data = data.cache()
@@ -267,13 +264,18 @@ class DatasetGenerator(object):
             data = data.map(self._rotate_random,
                             num_parallel_calls=num_threads)
 
+        image_batch_shape = get_input_shape(data)
+        print(image_batch_shape)
         if crop_size and ((crop_size < image_batch_shape[0])
                           and
                           (crop_size < image_batch_shape[1])):
 
+            print(crop_size)
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads)
 
+        data = data.map(self._normalize,
+                        num_parallel_calls=num_threads)
 
         # Force images to the same size
         # data = data.map(_resize_data,
@@ -314,6 +316,10 @@ class DatasetGenerator(object):
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
 
+
+
+        image_batch_shape = get_input_shape(data)
+        self.image_shape = (image_batch_shape[1], image_batch_shape[2])
 
         # Return a reference to this data pipeline
         return data
