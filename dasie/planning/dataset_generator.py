@@ -240,7 +240,6 @@ class DatasetGenerator(object):
         print("parsing")
         data = data.map(self._parse_function, num_parallel_calls=num_threads)
 
-
         print("filtering")
         data = data.filter(self._example_larger_than_crop)
 
@@ -252,8 +251,8 @@ class DatasetGenerator(object):
 
         # Shuffle/repeat the data forever (i.e. as many epochs as we want)
 
-        print("suffling")
         if shuffle:
+            print("suffling")
             data = data.shuffle(buffer)
         # data = data.repeat()
         # If augmentation is to be applied

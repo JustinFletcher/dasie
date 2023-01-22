@@ -577,6 +577,8 @@ def main(flags):
                                          cache_path="",
                                          max_elements=flags.max_dataset_elements)
 
+        train_dataset = valid_dataset
+
 
         print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
 
