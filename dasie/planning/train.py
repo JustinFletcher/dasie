@@ -789,7 +789,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataset_buffer_len',
                         type=int,
-                        default=32,
+                        default=4,
                         help='Size of dataset read buffer in examples.')
 
     parser.add_argument('--num_exposures',
