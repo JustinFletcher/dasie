@@ -505,6 +505,11 @@ class DASIEModel(object):
 
             # Crop the PSF center to spatial_quantization
             offset = int((self.pupil_spatial_quantization - self.spatial_quantization) / 2.0)
+            #
+            # ValueError: offset_width
+            # must
+            # be >= 0.
+
             psf = tf.image.crop_to_bounding_box(
                 tf.expand_dims(psf, axis=[-1]),
                 offset_height=offset,
@@ -1170,7 +1175,7 @@ class DASIEModel(object):
             #            extent=[left,right,bottom,top])
             # Overlay aperture mask
 
-            image_colormap = 'Greys'
+            image_colormap = 'gray'
 
 
 
