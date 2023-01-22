@@ -234,6 +234,7 @@ class DatasetGenerator(object):
 
         # Parse the record into tensors
         data = data.map(self._parse_function, num_parallel_calls=num_threads)
+        data = data.map(self._normalize, num_parallel_calls=num_threads)
 
         data = data.filter(self._example_larger_than_crop)
 
@@ -273,8 +274,6 @@ class DatasetGenerator(object):
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads)
 
-        data = data.map(self._normalize,
-                        num_parallel_calls=num_threads)
 
         # Force images to the same size
         # data = data.map(_resize_data,
