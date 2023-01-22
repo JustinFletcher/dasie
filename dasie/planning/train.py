@@ -558,7 +558,7 @@ def main(flags):
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
                                          cache_path="",
-                                         max_elements=max_dataset_elements)
+                                         max_elements=flags.max_dataset_elements)
 
         # We create a tf.data.Dataset object wrapping the valid dataset here.
         valid_dataset = DatasetGenerator(valid_data_dir,
@@ -573,7 +573,7 @@ def main(flags):
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
                                          cache_path="",
-                                         max_elements=max_dataset_elements)
+                                         max_elements=flags.max_dataset_elements)
 
 
         print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
