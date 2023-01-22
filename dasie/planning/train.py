@@ -548,7 +548,7 @@ def main(flags):
         print("\n\n\n\n\n\n\n\n\n Building Dataset... \n\n\n\n\n\n\n\n\n")
         # Build our datasets.,
         #             cache_dataset_memory=flags.cache_dataset_memory
-        train_dataset = DatasetGenerator(train_data_dir,
+        train_dataset = DatasetGenerator(valid_data_dir,
                                          parse_function=parse_function,
                                          augment=False,
                                          shuffle=True,
@@ -577,7 +577,7 @@ def main(flags):
                                          cache_path="",
                                          max_elements=flags.max_dataset_elements)
 
-        train_dataset = valid_dataset
+
 
 
         print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
