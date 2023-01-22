@@ -237,6 +237,15 @@ class DatasetGenerator(object):
 
         data = data.filter(self._example_larger_than_crop)
 
+        image_batch_shape = get_input_shape(data)
+        self.image_shape = (image_batch_shape[1], image_batch_shape[2])
+
+        if cache_dataset_memory:
+            data = data.cache()
+        elif cache_dataset_file:
+            data = data.cache(cache_path)
+
+
         # Shuffle/repeat the data forever (i.e. as many epochs as we want)
         if shuffle:
             data = data.shuffle(buffer)
@@ -257,13 +266,10 @@ class DatasetGenerator(object):
             data = data.map(self._rotate_random,
                             num_parallel_calls=num_threads)
 
-        image_batch_shape = get_input_shape(data)
-        print(image_batch_shape)
         if crop_size and ((crop_size < image_batch_shape[0])
                           and
                           (crop_size < image_batch_shape[1])):
 
-            print(crop_size)
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads)
 
@@ -309,15 +315,6 @@ class DatasetGenerator(object):
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
 
-
-        if cache_dataset_memory:
-            data = data.cache()
-        elif cache_dataset_file:
-            data = data.cache(cache_path)
-
-
-        image_batch_shape = get_input_shape(data)
-        self.image_shape = (image_batch_shape[1], image_batch_shape[2])
 
         # Return a reference to this data pipeline
         return data
