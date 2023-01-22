@@ -545,7 +545,8 @@ def main(flags):
         writer = tf.summary.create_file_writer(save_dir)
 
         print("\n\n\n\n\n\n\n\n\n Building Dataset... \n\n\n\n\n\n\n\n\n")
-        # Build our datasets.
+        # Build our datasets.,
+        #             cache_dataset_memory=flags.cache_dataset_memory
         train_dataset = DatasetGenerator(train_data_dir,
                                          parse_function=parse_function,
                                          augment=False,
@@ -555,7 +556,7 @@ def main(flags):
                                          num_threads=flags.num_dataset_threads,
                                          buffer=flags.dataset_buffer_len,
                                          encoding_function=None,
-                                         cache_dataset_memory=False,
+                                         cache_dataset_memory=flags.cache_dataset_memory,
                                          cache_dataset_file=False,
                                          cache_path="",
                                          max_elements=flags.max_dataset_elements)
@@ -570,7 +571,7 @@ def main(flags):
                                          num_threads=flags.num_dataset_threads,
                                          buffer=flags.dataset_buffer_len,
                                          encoding_function=None,
-                                         cache_dataset_memory=False,
+                                         cache_dataset_memory=flags.cache_dataset_memory,
                                          cache_dataset_file=False,
                                          cache_path="",
                                          max_elements=flags.max_dataset_elements)
@@ -807,6 +808,10 @@ if __name__ == '__main__':
     parser.add_argument("--crop", action='store_true',
                         default=False,
                         help='If true, crop images to spatial_quantization.')
+
+    parser.add_argument("--cache_dataset_memory", action='store_true',
+                        default=False,
+                        help='If true, cache the dataset in memory.')
 
     parser.add_argument("--hadamard_image_formation", action='store_true',
                         default=False,

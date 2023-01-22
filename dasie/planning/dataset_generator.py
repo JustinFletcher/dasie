@@ -292,11 +292,6 @@ class DatasetGenerator(object):
                 num_parallel_calls=num_threads
             )
 
-        if cache_dataset_memory:
-            data = data.cache()
-        elif cache_dataset_file:
-            data = data.cache(cache_path)
-
         # Shuffle/repeat the data forever (i.e. as many epochs as we want)
         if shuffle:
             data = data.shuffle(buffer)
@@ -313,6 +308,13 @@ class DatasetGenerator(object):
 
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
+
+
+        if cache_dataset_memory:
+            data = data.cache()
+        elif cache_dataset_file:
+            data = data.cache(cache_path)
+
 
         image_batch_shape = get_input_shape(data)
         self.image_shape = (image_batch_shape[1], image_batch_shape[2])
