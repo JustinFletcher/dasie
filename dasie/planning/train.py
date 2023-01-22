@@ -167,6 +167,7 @@ def train(sess,
                 valid_monolithic_aperture_image_psnr += step_valid_monolithic_aperture_image_psnr
                 valid_da_psnr_mono_psnr_ratio += step_valid_da_psnr_mono_psnr_ratio
                 valid_steps += 1.0
+                print("Validation step %d MSE_{m/d}=%f" % (int(valid_steps), (1 / step_valid_da_mse_mono_mse_ratio)))
 
         # ...there are no more validate batches.
         except tf.errors.OutOfRangeError:
