@@ -125,86 +125,86 @@ def train(sess,
 
         # Initialize the validation dataset iterator to prepare for validation.
         print("Epoch %d Validation Beginning..." % i)
-        # sess.run(valid_dataset_initializer)
-        #
-        # # Initialize the validation display metrics.
-        # valid_loss = 0.0
-        # valid_monolithic_aperture_image_mse = 0.0
-        # valid_distributed_aperture_image_mse = 0.0
-        # valid_da_mse_mono_mse_ratio = 0.0
-        # valid_monolithic_aperture_image_ssim = 0.0
-        # valid_distributed_aperture_image_ssim = 0.0
-        # valid_da_ssim_mono_ssim_ratio = 0.0
-        # valid_monolithic_aperture_image_psnr = 0.0
-        # valid_distributed_aperture_image_psnr = 0.0
-        # valid_da_psnr_mono_psnr_ratio = 0.0
-        #
-        # valid_steps = 0.0
-        #
-        # # Validate by looping an calling validate batches, until...
-        # try:
-        #     while True:
-        #         # Execute one validation step.
-        #         (step_valid_loss,
-        #          step_valid_monolithic_aperture_image_mse,
-        #          step_valid_distributed_aperture_image_mse,
-        #          step_valid_da_mse_mono_mse_ratio,
-        #          step_valid_monolithic_aperture_image_ssim,
-        #          step_valid_distributed_aperture_image_ssim,
-        #          step_valid_da_ssim_mono_ssim_ratio,
-        #          step_valid_monolithic_aperture_image_psnr,
-        #          step_valid_distributed_aperture_image_psnr,
-        #          step_valid_da_psnr_mono_psnr_ratio) = dasie_model.validate()
-        #
-        #         # Increment all of our metrics.
-        #         # TODO: Eventually refactor to summaries.
-        #         valid_loss += step_valid_loss
-        #         valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
-        #         valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
-        #         valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
-        #         valid_distributed_aperture_image_ssim += step_valid_distributed_aperture_image_ssim
-        #         valid_monolithic_aperture_image_ssim += step_valid_monolithic_aperture_image_ssim
-        #         valid_da_ssim_mono_ssim_ratio += step_valid_da_ssim_mono_ssim_ratio
-        #         valid_distributed_aperture_image_psnr += step_valid_distributed_aperture_image_psnr
-        #         valid_monolithic_aperture_image_psnr += step_valid_monolithic_aperture_image_psnr
-        #         valid_da_psnr_mono_psnr_ratio += step_valid_da_psnr_mono_psnr_ratio
-        #         valid_steps += 1.0
-        #         print("Validation step %d MSE_{m/d}=%f" % (int(valid_steps), (1 / step_valid_da_mse_mono_mse_ratio)))
-        #
-        # # ...there are no more validate batches.
-        # except tf.errors.OutOfRangeError:
-        #
-        #     # Compute the epoch results.
-        #     mean_valid_loss = valid_loss / valid_steps
-        #     mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
-        #     mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
-        #     mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
-        #     mean_valid_distributed_aperture_image_ssim = valid_distributed_aperture_image_ssim / valid_steps
-        #     mean_valid_monolithic_aperture_image_ssim = valid_monolithic_aperture_image_ssim / valid_steps
-        #     mean_valid_da_ssim_mono_ssim_ratio = valid_da_ssim_mono_ssim_ratio / valid_steps
-        #     mean_valid_distributed_aperture_image_psnr = valid_distributed_aperture_image_psnr / valid_steps
-        #     mean_valid_monolithic_aperture_image_psnr = valid_monolithic_aperture_image_psnr / valid_steps
-        #     mean_valid_da_psnr_mono_psnr_ratio = valid_da_psnr_mono_psnr_ratio / valid_steps
-        #
-        #     # Store the epoch results.
-        #     results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
-        #     results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
-        #     results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
-        #     results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
-        #     results_dict["results"]["valid_dist_ssim_list"].append(mean_valid_distributed_aperture_image_ssim)
-        #     results_dict["results"]["valid_mono_ssim_list"].append(mean_valid_monolithic_aperture_image_ssim)
-        #     results_dict["results"]["valid_ssim_ratio_list"].append(mean_valid_da_ssim_mono_ssim_ratio)
-        #     results_dict["results"]["valid_dist_psnr_list"].append(mean_valid_distributed_aperture_image_psnr)
-        #     results_dict["results"]["valid_mono_psnr_list"].append(mean_valid_monolithic_aperture_image_psnr)
-        #     results_dict["results"]["valid_psnr_ratio_list"].append(mean_valid_da_psnr_mono_psnr_ratio)
-        #
-        #     print("Validation Loss: %f" % mean_valid_loss)
-        #     print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
-        #     print("Validation DA SSIM: %f" % mean_valid_distributed_aperture_image_ssim)
-        #     print("Validation DA PSNR: %f" % mean_valid_distributed_aperture_image_psnr)
-        #     pass
-        #
-        # print("Epoch %d Validation Complete." % i)
+        sess.run(valid_dataset_initializer)
+
+        # Initialize the validation display metrics.
+        valid_loss = 0.0
+        valid_monolithic_aperture_image_mse = 0.0
+        valid_distributed_aperture_image_mse = 0.0
+        valid_da_mse_mono_mse_ratio = 0.0
+        valid_monolithic_aperture_image_ssim = 0.0
+        valid_distributed_aperture_image_ssim = 0.0
+        valid_da_ssim_mono_ssim_ratio = 0.0
+        valid_monolithic_aperture_image_psnr = 0.0
+        valid_distributed_aperture_image_psnr = 0.0
+        valid_da_psnr_mono_psnr_ratio = 0.0
+
+        valid_steps = 0.0
+
+        # Validate by looping an calling validate batches, until...
+        try:
+            while True:
+                # Execute one validation step.
+                (step_valid_loss,
+                 step_valid_monolithic_aperture_image_mse,
+                 step_valid_distributed_aperture_image_mse,
+                 step_valid_da_mse_mono_mse_ratio,
+                 step_valid_monolithic_aperture_image_ssim,
+                 step_valid_distributed_aperture_image_ssim,
+                 step_valid_da_ssim_mono_ssim_ratio,
+                 step_valid_monolithic_aperture_image_psnr,
+                 step_valid_distributed_aperture_image_psnr,
+                 step_valid_da_psnr_mono_psnr_ratio) = dasie_model.validate()
+
+                # Increment all of our metrics.
+                # TODO: Eventually refactor to summaries.
+                valid_loss += step_valid_loss
+                valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
+                valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
+                valid_da_mse_mono_mse_ratio += step_valid_da_mse_mono_mse_ratio
+                valid_distributed_aperture_image_ssim += step_valid_distributed_aperture_image_ssim
+                valid_monolithic_aperture_image_ssim += step_valid_monolithic_aperture_image_ssim
+                valid_da_ssim_mono_ssim_ratio += step_valid_da_ssim_mono_ssim_ratio
+                valid_distributed_aperture_image_psnr += step_valid_distributed_aperture_image_psnr
+                valid_monolithic_aperture_image_psnr += step_valid_monolithic_aperture_image_psnr
+                valid_da_psnr_mono_psnr_ratio += step_valid_da_psnr_mono_psnr_ratio
+                valid_steps += 1.0
+                print("Validation step %d MSE_{m/d}=%f" % (int(valid_steps), (1 / step_valid_da_mse_mono_mse_ratio)))
+
+        # ...there are no more validate batches.
+        except tf.errors.OutOfRangeError:
+
+            # Compute the epoch results.
+            mean_valid_loss = valid_loss / valid_steps
+            mean_valid_distributed_aperture_image_mse = valid_distributed_aperture_image_mse / valid_steps
+            mean_valid_monolithic_aperture_image_mse = valid_monolithic_aperture_image_mse / valid_steps
+            mean_valid_da_mse_mono_mse_ratio = valid_da_mse_mono_mse_ratio / valid_steps
+            mean_valid_distributed_aperture_image_ssim = valid_distributed_aperture_image_ssim / valid_steps
+            mean_valid_monolithic_aperture_image_ssim = valid_monolithic_aperture_image_ssim / valid_steps
+            mean_valid_da_ssim_mono_ssim_ratio = valid_da_ssim_mono_ssim_ratio / valid_steps
+            mean_valid_distributed_aperture_image_psnr = valid_distributed_aperture_image_psnr / valid_steps
+            mean_valid_monolithic_aperture_image_psnr = valid_monolithic_aperture_image_psnr / valid_steps
+            mean_valid_da_psnr_mono_psnr_ratio = valid_da_psnr_mono_psnr_ratio / valid_steps
+
+            # Store the epoch results.
+            results_dict["results"]["valid_loss_list"].append(mean_valid_loss)
+            results_dict["results"]["valid_dist_mse_list"].append(mean_valid_distributed_aperture_image_mse)
+            results_dict["results"]["valid_mono_mse_list"].append(mean_valid_monolithic_aperture_image_mse)
+            results_dict["results"]["valid_mse_ratio_list"].append(mean_valid_da_mse_mono_mse_ratio)
+            results_dict["results"]["valid_dist_ssim_list"].append(mean_valid_distributed_aperture_image_ssim)
+            results_dict["results"]["valid_mono_ssim_list"].append(mean_valid_monolithic_aperture_image_ssim)
+            results_dict["results"]["valid_ssim_ratio_list"].append(mean_valid_da_ssim_mono_ssim_ratio)
+            results_dict["results"]["valid_dist_psnr_list"].append(mean_valid_distributed_aperture_image_psnr)
+            results_dict["results"]["valid_mono_psnr_list"].append(mean_valid_monolithic_aperture_image_psnr)
+            results_dict["results"]["valid_psnr_ratio_list"].append(mean_valid_da_psnr_mono_psnr_ratio)
+
+            print("Validation Loss: %f" % mean_valid_loss)
+            print("Validation DA MSE: %f" % mean_valid_distributed_aperture_image_mse)
+            print("Validation DA SSIM: %f" % mean_valid_distributed_aperture_image_ssim)
+            print("Validation DA PSNR: %f" % mean_valid_distributed_aperture_image_psnr)
+            pass
+
+        print("Epoch %d Validation Complete." % i)
 
         print("Epoch %d Results Saving." % i)
         # Write the results dict for this epoch.
