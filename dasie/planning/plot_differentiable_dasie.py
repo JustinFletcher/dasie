@@ -1234,6 +1234,237 @@ def main(flags):
         # plt.show()
         # plt.close()
 
+    if flags.plot_type == "inat_generalization_atmosphere":
+
+        plt.style.use('.\\dasie\\utils\\plottools\\mutedplots-master\\stylelib\\muted.mplstyle')
+        plt.style.use('.\\dasie\\utils\\plottools\\mutedplots-master\\stylelib\\small.mplstyle')
+        num_x_ticks = 4
+        num_y_ticks = 7
+        ymax = 1.8
+        xmax = 132
+        plt.rcParams["font.family"] = "Times New Roman"
+        experiment_result_dict = dict()
+        # iterate over each experiment instance in the logdir.
+        for root, subdirectories, files in os.walk(flags.logdir):
+            train_losses = list()
+            valid_losses = list()
+            atmos_metrics = list()
+            no_atmos_metrics = list()
+
+            for subdirectory in subdirectories:
+                # print(subdirectory)
+                results_dict = get_latest_results_dict(os.path.join(root, subdirectory))
+
+                # TODO: make this more flexible.
+                if results_dict:
+                    train_loss = np.array(results_dict["results"]["train_loss_list"])
+                    train_dist_mse = np.array(results_dict["results"]["train_dist_mse_list"])
+                    train_mono_mse = np.array(results_dict["results"]["train_mono_mse_list"])
+                    train_mse_ratio = np.array(results_dict["results"]["train_mse_ratio_list"])
+                    train_ssim_ratio = np.array(results_dict["results"]["train_ssim_ratio_list"])
+                    train_psnr_ratio = np.array(results_dict["results"]["train_psnr_ratio_list"])
+                    valid_loss = np.array(results_dict["results"]["valid_loss_list"])
+                    valid_dist_mse = np.array(results_dict["results"]["valid_dist_mse_list"])
+                    valid_mono_mse = np.array(results_dict["results"]["valid_mono_mse_list"])
+                    valid_mse_ratio = np.array(results_dict["results"]["valid_mse_ratio_list"])
+                    valid_ssim_ratio = np.array(results_dict["results"]["valid_ssim_ratio_list"])
+                    valid_psnr_ratio = np.array(results_dict["results"]["valid_psnr_ratio_list"])
+                    train_epoch_time = np.array(results_dict["results"]["train_epoch_time_list"])
+
+                    train_mono_da_mse_ratio = 1. / train_mse_ratio
+                    valid_mono_da_mse_ratio = 1. / valid_mse_ratio
+                    train_plot_metric = train_mono_da_mse_ratio
+                    plot_metric = valid_mono_da_mse_ratio
+
+                    if results_dict["atmosphere"]:
+                        atmos_metrics.append(plot_metric)
+
+                    else:
+                        no_atmos_metrics.append(plot_metric)
+
+
+            for (atmos_metric,  no_atmos_metric) in zip(atmos_metrics, no_atmos_metrics):
+
+                # (train_mse, train_ssim, train_psnr) =  train_metric
+                # (valid_mse, valid_ssim, valid_psnr) =  valid_metric
+
+                ax = plt.subplot(131)
+                plt.plot(train_mse,
+                         label="Training",
+                         color='g',
+                         alpha=0.5)
+                # plt.plot(np.convolve(train_mono_da_mse_ratio, np.ones(16) / 16, mode="valid"),
+                #          label="Train MSE Metric",
+                #          color='g')
+                plt.plot(valid_mse,
+                         label="Validation",
+                         color='b',
+                         alpha=0.5)
+                plt.xlabel(r'Training Epoch', fontsize=6, labelpad=0)
+
+                one_line = np.ones_like(train_mse)
+                plt.plot(one_line,
+                         color="black",
+                         label="Parity",
+                         linewidth=1.0,
+                         linestyle="dashed",
+                         alpha=0.5)
+                plt.title(r'$\mathbf{MSE}_{\mathbf{m} / \mathbf{d}}$', fontsize=6, pad=0)
+                # plt.xlabel("Training Epoch")
+                plt.ylim(0.0, ymax)
+                plt.xlim(0.0, xmax)
+                ax.get_xaxis().set_major_locator(ticker.MultipleLocator(int(len(train_mse) / num_x_ticks)))
+                ax.get_yaxis().set_major_formatter('{x:.1f}')
+                ax.get_yaxis().set_major_locator(ticker.MultipleLocator(ymax / num_y_ticks))
+                ax.tick_params(axis='both', which='major', labelsize=6, pad=2.0)
+                plt.grid(axis='both')
+
+                # ax = axs.flat[3]
+                # ax.plot([x1, x2], [y1, y2], ".")
+                # el = mpatches.Ellipse((x1, y1), 0.3, 0.4, angle=30, alpha=0.2)
+                # ax.add_artist(el)
+                ax.annotate("Recovery Parity",
+                            xy=(28, 1.0), xycoords='data',
+                            xytext=(8, 0.41), textcoords='data',
+                            fontsize=6,
+                            arrowprops=dict(arrowstyle="fancy",
+                                            color="0.5",
+                                            # patchB=el,
+                                            connectionstyle="arc3,rad=0.6",
+                                            ),
+                            )
+                # ax.text(20, 0.5, "Recovery Parity", transform=ax.transAxes, ha="left",
+                #         va="top")
+                # ax.annotate('local max', xy=(32, 1.0), xytext=(32, 1.0))
+
+                ax = plt.subplot(132)
+                plt.plot(train_ssim,
+                         label="Training",
+                         color='g',
+                         alpha=0.5)
+                # plt.plot(np.convolve(train_mono_da_mse_ratio, np.ones(16) / 16, mode="valid"),
+                #          label="Train MSE Metric",
+                #          color='g')
+                plt.plot(valid_ssim,
+                         label="Validation",
+                         color='b',
+                         alpha=0.5)
+
+                one_line = np.ones_like(train_mse)
+                plt.plot(one_line,
+                         color="black",
+                         label="Parity",
+                         linewidth=1.0,
+                         linestyle="dashed",
+                         alpha=0.5)
+                plt.title(r'$\mathbf{SSIM}_{\mathbf{d} / \mathbf{m}}$', fontsize=6, pad=0)
+                plt.xlabel(r'Training Epoch', fontsize=6, labelpad=0)
+                plt.grid(axis='both')
+                ax.get_yaxis().set_ticklabels([])
+                ax.get_xaxis().set_major_locator(ticker.MultipleLocator(int(len(train_mse) / num_x_ticks)))
+                ax.get_yaxis().set_major_locator(ticker.MultipleLocator(ymax / num_y_ticks))
+                ax.tick_params(axis='both', which='major', labelsize=6, pad=2.0)
+                plt.ylim(0, ymax)
+                plt.xlim(0.0, xmax)
+
+                ax = plt.subplot(133)
+                plt.plot(train_psnr,
+                         label="Training",
+                         color='g',
+                         alpha=0.5)
+                # plt.plot(np.convolve(train_mono_da_mse_ratio, np.ones(16) / 16, mode="valid"),
+                #          label="Train MSE Metric",
+                #          color='g')
+                plt.plot(valid_psnr,
+                         label="Validation",
+                         color='b',
+                         alpha=0.5)
+
+                one_line = np.ones_like(train_mse)
+                plt.plot(one_line,
+                         color="black",
+                         label="Parity",
+                         linewidth=1.0,
+                         linestyle="dashed",
+                         alpha=0.5)
+                plt.title(r'$\mathbf{PSNR}_{\mathbf{d} / \mathbf{m}}$', fontsize=6, pad=0)
+                plt.xlabel(r'Training Epoch', fontsize=6, labelpad=0)
+                ax.get_yaxis().set_ticklabels([])
+                ax.get_xaxis().set_major_locator(ticker.MultipleLocator(int(len(train_mse) / num_x_ticks)))
+                ax.get_yaxis().set_major_locator(ticker.MultipleLocator(ymax / num_y_ticks))
+                ax.tick_params(axis='both', which='major', labelsize=6, pad=2.0)
+                # plt.xlabel("Training Epoch")
+                plt.grid(axis='both')
+                plt.ylim(0.0, ymax)
+                plt.xlim(0.0, xmax)
+                #
+                # plt.legend()
+                # ax = plt.subplot(144)
+                # plt.plot(train_loss,
+                #          label="Training",
+                #          color='g',
+                #          alpha=0.5)
+                # # plt.plot(np.convolve(train_loss, np.ones(16) / 16, mode="valid"),
+                # #          label="Train Loss",
+                # #          color='g')
+                # plt.plot(valid_loss,
+                #          label="Validation",
+                #          color='b',
+                #          alpha=0.5)
+                #
+                # plt.xlabel("Training Epoch")
+                # ax.yaxis.set_label_position("right")
+                # ax.yaxis.tick_right()
+                # plt.title(r'$\mathcal{L}$')
+                # # plt.plot(np.convolve(valid_loss, np.ones(16) / 16, mode="valid"),
+                # #          label="Valid Loss",
+                # #          color='r')
+                # # plt.plot(valid_mono_da_mse_ratio)
+
+        # plt.ylabel("$\mathbf{MSE}_{\mathbf{DA}} / \mathbf{MSE}_\mathbf{MONO}$")
+        plt.subplots_adjust(bottom=0.15)
+        plt.subplots_adjust(right=0.975)
+        plt.subplots_adjust(left=0.075)
+        plt.subplots_adjust(top=0.925)
+
+        # plt.xlim(0, 2048)
+        # plt.xlabel("Training Epoch")
+        plt.legend(loc='lower center', prop={'size': 5}, shadow=True, handlelength=2.0, labelspacing=0.1)
+        fig = matplotlib.pyplot.gcf()
+        fig.set_size_inches(2.5, 1.54508)
+        # fig.set_size_inches(2.5, 4.04508)
+        plt.show()
+        # fig.savefig('.png', dpi=100)
+
+        plt.close()
+
+        # # Next, plot wrt the variable of interest.
+        # for experiment_value, experiment_array_list in experiment_result_dict.items():
+        #
+        #     experiment_value_maxima = list()
+        #     for experiment_array in experiment_array_list:
+        #         experiment_value_maxima.append(np.max(experiment_array))
+        #         print(experiment_value_maxima)
+        #
+        #     experiment_value_mean = np.mean(experiment_value_maxima)
+        #     experiment_value_var = np.var(experiment_value_maxima)
+        #     print(experiment_value)
+        #     plt.plot(experiment_value,
+        #              experiment_value_mean,
+        #              'rp')
+        #     plt.errorbar(experiment_value,
+        #                  experiment_value_mean,
+        #                  yerr=experiment_value_var)
+        #
+        #
+        # plt.title("Maximum Validation MSE Ration")
+        # # plt.xlim(0, 2048)
+        # plt.xlabel("Optical Baseline (m)")
+        # plt.ylabel("MSE Ratio")
+        # plt.show()
+        # plt.close()
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(

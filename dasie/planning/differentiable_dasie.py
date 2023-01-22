@@ -578,15 +578,26 @@ class DASIEModel(object):
         gaussian_noise = image + (gaussian_mean ** 2) * gaussian_sample
 
         # Apply the score-gradient trick from williams1992simple.
-        rate = image / poisson_mean_arrival
-        p = tfp.distributions.Poisson(rate=rate, validate_args=True)
-        sampled = tfp.monte_carlo.expectation(f=lambda z: z,
-                                              samples=p.sample(1),
-                                              log_prob=p.log_prob,
-                                              use_reparameterization=False)
-        poisson_noise = sampled * poisson_mean_arrival
+        # rate = image / poisson_mean_arrival
+        # p = tfp.distributions.Poisson(rate=rate, validate_args=True)
+        # sampled = tfp.monte_carlo.expectation(f=lambda z: z,
+        #                                       samples=p.sample(1),
+        #                                       log_prob=p.log_prob,
+        #                                       use_reparameterization=False)
+        # poisson_noise = sampled * poisson_mean_arrival
+        #
+        # noisy_image = gaussian_noise / 2 + poisson_noise / 2
 
-        noisy_image = gaussian_noise / 2 + poisson_noise / 2
+        #
+        # rate = image / poisson_mean_arrival
+        # p = tfp.distributions.Poisson(rate=rate, validate_args=True)
+        # sampled = tfp.monte_carlo.expectation(f=lambda z: z,
+        #                                       samples=p.sample(1),
+        #                                       log_prob=p.log_prob,
+        #                                       use_reparameterization=False)
+        # poisson_noise = sampled * poisson_mean_arrival
+
+        noisy_image = gaussian_noise
 
         return noisy_image
 
