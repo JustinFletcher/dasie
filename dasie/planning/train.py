@@ -430,7 +430,7 @@ def main(flags):
 
     if not flags.atmosphere:
         flags.r0_std = 0.0
-        flags.r0_mean = 0.0
+        flags.r0_mean = 1000000.0
 
     # Physical computations from flags.
     # TODO: Fix this.
@@ -544,8 +544,6 @@ def main(flags):
         tf.summary.experimental.set_step(step)
         writer = tf.summary.create_file_writer(save_dir)
 
-
-
         print("\n\n\n\n\n\n\n\n\n Building Dataset... \n\n\n\n\n\n\n\n\n")
         # Build our datasets.
         train_dataset = DatasetGenerator(train_data_dir,
@@ -559,7 +557,8 @@ def main(flags):
                                          encoding_function=None,
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
-                                         cache_path="")
+                                         cache_path="",
+                                         max_elements=max_dataset_elements)
 
         # We create a tf.data.Dataset object wrapping the valid dataset here.
         valid_dataset = DatasetGenerator(valid_data_dir,
@@ -573,7 +572,8 @@ def main(flags):
                                          encoding_function=None,
                                          cache_dataset_memory=False,
                                          cache_dataset_file=False,
-                                         cache_path="")
+                                         cache_path="",
+                                         max_elements=max_dataset_elements)
 
 
         print("\n\n\n\n\n\n\n\n\n Dataset Built... \n\n\n\n\n\n\n\n\n")
@@ -845,6 +845,11 @@ if __name__ == '__main__':
                         type=int,
                         default=16,
                         help='Base filter size for recovery model.')
+
+    parser.add_argument('--max_dataset_elements',
+                        type=int,
+                        default=None,
+                        help='If provided, limit the number of elements.')
 
     parser.add_argument('--recovery_model_type',
                         type=str,

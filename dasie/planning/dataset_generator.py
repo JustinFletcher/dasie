@@ -96,7 +96,8 @@ class DatasetGenerator(object):
                  encoding_function=None,
                  cache_dataset_memory=False,
                  cache_dataset_file=False,
-                 cache_path=""):
+                 cache_path="",
+                 max_elements=None):
         """
         Constructor for the data generator class. Takes as inputs many
         configuration choices, and returns a generator with those options set.
@@ -157,7 +158,8 @@ class DatasetGenerator(object):
             cache_dataset_file=cache_dataset_file,
             cache_path=cache_path,
             num_examples=num_examples,
-            input_shape=input_shape
+            input_shape=input_shape,
+            max_elements=max_elements,
         )
 
     def __len__(self):
@@ -204,7 +206,8 @@ class DatasetGenerator(object):
                        cache_dataset_file=False,
                        cache_path="",
                        num_examples=None,
-                       input_shape=None):
+                       input_shape=None,
+                       max_elements=max_elements,):
         """
         Reads in data from a TFRecord file, applies augmentation chain (if
         desired), shuffles and batches the data.
@@ -303,6 +306,10 @@ class DatasetGenerator(object):
         data = data.batch(batch_size,
                           num_parallel_calls=num_threads,
                           drop_remainder=True)
+
+        if max_elements:
+
+            data = data.take(max_elements)
 
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
