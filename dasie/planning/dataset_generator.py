@@ -263,7 +263,7 @@ class DatasetGenerator(object):
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads)
 
-        data = data.map(self._normalize,
+        data = data.map(self._standardize,
                         num_parallel_calls=num_threads)
 
         # Force images to the same size
@@ -375,17 +375,18 @@ class DatasetGenerator(object):
         # # And divide by the largest value to normalize the range to [0, 1] exactly.
         # image = image / tf.reduce_max(image)
 
-        image_min = tf.reduce_min(image)
-        image_max = tf.reduce_max(image)
-
-        a = (1.0 - 0.0) / (image_max - image_min)
-        b = 1.0 - (a * image_max)
-        image = (a * image) + b
+        # image_min = tf.reduce_min(image)
+        # image_max = tf.reduce_max(image)
+        #
+        # a = (1.0 - 0.0) / (image_max - image_min)
+        # b = 1.0 - (a * image_max)
+        # image = (image / (image_max - image_min)) + (1.0 - (image_max/ (image_max - image_min)))
+        image = (image - tf.reduce_min(image)) / (tf.reduce_max(image) - tf.reduce_mean(image))
         return image
 
     def _standardize(self, image):
 
-        image = (image - tf.reduce_mean(image)) / tf.reduce_std(image)
+        image = (image - tf.reduce_min(image)) / (tf.reduce_max(image) - tf.reduce_mean(image))
 
         return image
 
