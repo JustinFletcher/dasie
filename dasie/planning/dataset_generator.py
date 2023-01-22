@@ -294,11 +294,11 @@ class DatasetGenerator(object):
         # Grab the basic non-repeating (non-cached!) data so we can do an
         # initial pass to get the set size
 
-        print("getting num examples")
-        if num_examples is None:
-            self.num_examples = get_num_examples(data)
-        else:
-            self.num_examples = num_examples
+        # print("getting num examples")
+        # if num_examples is None:
+        #     self.num_examples = get_num_examples(data)
+        # else:
+        #     self.num_examples = num_examples
 
         print("getting shape")
         if input_shape is None:
