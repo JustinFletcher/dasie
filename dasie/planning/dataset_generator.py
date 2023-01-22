@@ -237,6 +237,10 @@ class DatasetGenerator(object):
 
         data = data.filter(self._example_larger_than_crop)
 
+        # Shuffle/repeat the data forever (i.e. as many epochs as we want)
+        if shuffle:
+            data = data.shuffle(buffer)
+        # data = data.repeat()
         # If augmentation is to be applied
         if augment:
             # The only pixel-wise mutation possible on single channel imagery
@@ -263,7 +267,7 @@ class DatasetGenerator(object):
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads)
 
-        data = data.map(self._standardize,
+        data = data.map(self._normalize,
                         num_parallel_calls=num_threads)
 
         # Force images to the same size
@@ -292,10 +296,6 @@ class DatasetGenerator(object):
                 num_parallel_calls=num_threads
             )
 
-        # Shuffle/repeat the data forever (i.e. as many epochs as we want)
-        if shuffle:
-            data = data.shuffle(buffer)
-        # data = data.repeat()
 
         # Batch the data
         data = data.batch(batch_size,
