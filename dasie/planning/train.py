@@ -84,7 +84,9 @@ def train(sess,
     results_dict["results"]["valid_psnr_ratio_list"] = list()
     results_dict["results"]["train_epoch_time_list"] = list()
 
+    print("Initializing session...")
     sess.run(tf.compat.v1.global_variables_initializer())
+    print("Session initialized.")
 
     # Enter the main training loop.
     for i in range(num_steps):
@@ -418,7 +420,6 @@ def inaturalist_parse_function(example_proto):
 
 def main(flags):
 
-    # beta = 32.0
     # Set the GPUs we want the script to use/see
     os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
 

@@ -187,6 +187,8 @@ def build_inaturalist_dataset(datapath, annotation_json_path):
         print("loading json")
         annotation_dict = json.load(f)
 
+    # TODO: if both sizes are greater than 256, append example, otherwise dont.
+
     # Unmelt annotations linking images to category ids.
     print("inverting annotations")
     annotations  = annotation_dict["annotations"]

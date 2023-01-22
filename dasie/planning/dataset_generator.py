@@ -126,6 +126,7 @@ class DatasetGenerator(object):
         self._parse_function = parse_function
         self.spatial_quantization = crop_size
 
+        print("building list of tfrecords")
         # Collect paths to the input tfrecords file(s)
         if type(tfrecords) != list:
             tfrecords_list = get_tfrecords_list(tfrecords)
@@ -133,6 +134,7 @@ class DatasetGenerator(object):
             tfrecords_list = tfrecords
 
         # If this is a run configuration, see if the input size/shape are there
+        print("check for run configurations")
         num_examples = None
         input_shape = None
         if fnmatch.fnmatch(tfrecords, "*.json"):
@@ -146,6 +148,7 @@ class DatasetGenerator(object):
             if "input_shape" in tfrecord_dirs_dict.keys():
                 input_shape = tfrecord_dirs_dict["input_shape"]
 
+        print("starting pipeline")
         self.dataset = self.build_pipeline(
             tfrecords_list,
             augment=augment,
@@ -230,13 +233,16 @@ class DatasetGenerator(object):
         """
 
         # Create the TFRecord dataset
+        print("building initial dataset")
         data = tf.data.TFRecordDataset(tfrecord_path)
 
         # Parse the record into tensors
+        print("parsing")
         data = data.map(self._parse_function, num_parallel_calls=num_threads)
 
-        data = data.filter(self._example_larger_than_crop)
 
+        print("filtering")
+        data = data.filter(self._example_larger_than_crop)
 
         if cache_dataset_memory:
             data = data.cache()
@@ -245,6 +251,8 @@ class DatasetGenerator(object):
 
 
         # Shuffle/repeat the data forever (i.e. as many epochs as we want)
+
+        print("suffling")
         if shuffle:
             data = data.shuffle(buffer)
         # data = data.repeat()
@@ -264,6 +272,7 @@ class DatasetGenerator(object):
             data = data.map(self._rotate_random,
                             num_parallel_calls=num_threads)
 
+        print("cropping")
         image_batch_shape = get_input_shape(data)
         print(image_batch_shape)
         if crop_size and ((crop_size < image_batch_shape[0])
@@ -274,6 +283,7 @@ class DatasetGenerator(object):
             data = data.map(self._perform_center_crop,
                             num_parallel_calls=num_threads)
 
+        print("normalizing")
         data = data.map(self._normalize,
                         num_parallel_calls=num_threads)
 
@@ -283,17 +293,22 @@ class DatasetGenerator(object):
 
         # Grab the basic non-repeating (non-cached!) data so we can do an
         # initial pass to get the set size
+
+        print("getting num examples")
         if num_examples is None:
             self.num_examples = get_num_examples(data)
         else:
             self.num_examples = num_examples
 
+        print("getting shape")
         if input_shape is None:
             self.input_shape = get_input_shape(data)
         else:
             self.input_shape = input_shape
 
         # If the destination network requires a special encoding, do that here
+
+        print("maybe encoding")
         if self.encode_for_network is not None:
             data = data.map(
                 lambda *args: self.encode_for_network(
@@ -305,22 +320,26 @@ class DatasetGenerator(object):
 
 
         # Batch the data
+        print("batching")
         data = data.batch(batch_size,
                           num_parallel_calls=num_threads,
                           drop_remainder=True)
 
+
+        print("taking")
         if max_elements:
 
             data = data.take(max_elements)
 
+        print("prefetching")
         # Prefetch with multiple threads
         data.prefetch(buffer_size=buffer)
 
-
-
+        print("getting shape again")
         image_batch_shape = get_input_shape(data)
         self.image_shape = (image_batch_shape[1], image_batch_shape[2])
 
+        print("done")
         # Return a reference to this data pipeline
         return data
 
