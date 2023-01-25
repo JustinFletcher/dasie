@@ -220,6 +220,9 @@ def main(flags):
                                             "inference",
                                             flags.dataset_name)
 
+        else:
+            output_file_path = flags.output_file_path
+
         os.makedirs(output_file_path, exist_ok=True)
         num_dirs = len(next(os.walk(output_file_path))[1])
         print(num_dirs)
