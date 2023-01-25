@@ -1689,6 +1689,7 @@ class DASIEModel(object):
 
         restore_dict = json.load(open(restore_file_path, 'r'))
         for v in tf.compat.v1.trainable_variables():
+            print("Restoring: %s" % v.name)
 
             v.load(restore_dict["variables"][v.name], self.sess)
 
