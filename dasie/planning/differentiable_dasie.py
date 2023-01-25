@@ -1691,7 +1691,7 @@ class DASIEModel(object):
         for v in tf.compat.v1.trainable_variables():
             print("Restoring: %s" % v.name)
 
-            v.load(restore_dict["variables"][v.name], self.sess)
+            v.assign(restore_dict["variables"][v.name], self.sess)
 
         return None
 
