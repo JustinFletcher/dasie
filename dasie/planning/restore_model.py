@@ -333,7 +333,7 @@ def main(flags):
                                    encoding_function=None,
                                    cache_dataset_file=False,
                                    cache_path="",)
-        valid_dataset_1 = DatasetGenerator(valid_data_dir_2,
+        valid_dataset_2 = DatasetGenerator(valid_data_dir_2,
                                    parse_function=parse_function,
                                    augment=False,
                                    shuffle=False,
@@ -351,7 +351,7 @@ def main(flags):
         # Instantiate a new model with the same kwargs.
         dasie_model = DASIEModel(sess,
                                  valid_dataset_1,
-                                 valid_dataset_1,
+                                 valid_dataset_2,
                                  **restore_dict["kwargs"])
 
         # Restore the weights.
