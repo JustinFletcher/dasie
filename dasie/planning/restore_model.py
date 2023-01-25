@@ -310,7 +310,9 @@ def main(flags):
             print("Selected dataset is inaturalist.")
             train_data_dir = os.path.join(flags.dataset_root,
                                           "inaturalist_micro_tfrecords", "train")
-            valid_data_dir = os.path.join(flags.dataset_root,
+            valid_data_dir_1 = os.path.join(flags.dataset_root,
+                                          "inaturalist_micro_tfrecords", "valid")
+            valid_data_dir_2 = os.path.join(flags.dataset_root,
                                           "inaturalist_micro_tfrecords", "valid")
 
 
@@ -322,7 +324,7 @@ def main(flags):
             valid_data_dir = os.path.join(flags.dataset_root,
                                           "onesat_example_tfrecords", "valid")
 
-        dataset = DatasetGenerator(valid_data_dir,
+        valid_dataset_1 = DatasetGenerator(valid_data_dir_1,
                                    parse_function=parse_function,
                                    augment=False,
                                    shuffle=False,
@@ -331,15 +333,25 @@ def main(flags):
                                    encoding_function=None,
                                    cache_dataset_file=False,
                                    cache_path="",)
-        dataset_iterator = dataset.get_iterator()
-        dataset_initializer = dataset.get_initializer()
+        valid_dataset_1 = DatasetGenerator(valid_data_dir_2,
+                                   parse_function=parse_function,
+                                   augment=False,
+                                   shuffle=False,
+                                   crop_size=restore_dict["kwargs"]["spatial_quantization"],
+                                   batch_size=flags.batch_size,
+                                   encoding_function=None,
+                                   cache_dataset_file=False,
+                                   cache_path="",)
 
-        sess.run(dataset_initializer)
-
+        # dataset_iterator = dataset.get_iterator()
+        # dataset_initializer = dataset.get_initializer()
+        #
+        # sess.run(dataset_initializer)
+        # print("Dataset initialized.")
         # Instantiate a new model with the same kwargs.
         dasie_model = DASIEModel(sess,
-                                 dataset,
-                                 dataset,
+                                 valid_dataset_1,
+                                 valid_dataset_1,
                                  **restore_dict["kwargs"])
 
         # Restore the weights.

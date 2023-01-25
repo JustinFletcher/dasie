@@ -20,7 +20,7 @@ import psutil
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-# TODO: Implement TF probability.
+
 import tensorflow_probability as tfp
 
 from decimal import Decimal
@@ -32,7 +32,6 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 from hcipy import *
 
-# TODO: Refactor this import.
 import atmosphere
 from atmosphere import *
 import zernike
@@ -44,7 +43,6 @@ from recovery_models import RecoveryModel
 # First, prevent TensorFlow from foisting filthy eager execution upon us.
 tf.compat.v1.disable_eager_execution()
 
-# TODO: Externalize.
 def ssim(x_batch, y_batch):
 
     x_batch = x_batch / tf.math.reduce_max(x_batch)
@@ -62,7 +60,6 @@ def ssim(x_batch, y_batch):
     return tf.math.reduce_mean(ssim_batch)
 
 
-# TODO: Externalize.
 def psnr(x_batch, y_batch):
 
     x_batch = x_batch / tf.math.reduce_max(x_batch)
@@ -71,7 +68,6 @@ def psnr(x_batch, y_batch):
     return tf.math.reduce_mean(psnr_batch)
 
 
-# TODO: Externalize.
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
@@ -82,7 +78,6 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
-# TODO: Externalize
 def is_jsonable(x):
     try:
         json.dumps(x)
@@ -90,7 +85,6 @@ def is_jsonable(x):
     except (TypeError, OverflowError):
         return False
 
-# TODO: Externalize
 def cosine_similarity(u, v):
     """
     :param u: Any np.array matching u in shape (and semantics probably)
@@ -111,17 +105,14 @@ def cosine_similarity(u, v):
 
     return cos_sim
 
-# TODO: Externalize
 def circle_mask(X, Y, x_center, y_center, radius):
     r = np.sqrt((X - x_center) ** 2 + (Y - y_center) ** 2)
     return r < radius
 
-# TODO: Externalize
 def set_kwargs_default(key, value, kwargs):
     kwargs[key] = kwargs.get(key, value)
     return (kwargs[key])
 
-# TODO: Externalize
 def crop_center(img, crop_x, crop_y):
     y, x = img.shape
     start_x = x // 2 - crop_x // 2
@@ -239,11 +230,11 @@ class DASIEModel(object):
         self.inner_scale_std = set_kwargs_default(
             'inner_scale_std', 0.0, kwargs)
 
-        # TODO: Not in use.
+        # Not in use.
         self.greenwood_time_constant_sec_mean = set_kwargs_default(
             'greenwood_time_constant_sec_mean', 1.0, kwargs)
 
-        # TODO: Not in use.
+        # Not in use.
         self.greenwood_time_constant_sec_std = set_kwargs_default(
             'greenwood_time_constant_sec_std', 0.0, kwargs)
 
@@ -304,7 +295,6 @@ class DASIEModel(object):
 
         with tf.name_scope("dasie_model"):
 
-            # TODO: remove superfluous property arguments.
             self._build_dasie_model(
                 inputs=self.dataset_batch,
                 spatial_quantization=self.spatial_quantization,
@@ -381,7 +371,6 @@ class DASIEModel(object):
                     )
                     exposure_zernike_vectors.append(exposure_zernike_vector)
 
-                # TODO: Replace with itertools
                 # Compute the pairwise cosine similarities, except where same.
                 cossim = 0.0
                 for u in exposure_zernike_vectors:
@@ -432,7 +421,6 @@ class DASIEModel(object):
             if self.writer:
                 with self.writer.as_default():
 
-                    # TODO: refactor all these endpoints to name *_batch.
                     tf.summary.scalar("in_graph_loss", self.loss)
                     tf.summary.scalar("monolithic_aperture_image_mse",
                                       self.monolithic_aperture_image_mse)
@@ -624,7 +612,6 @@ class DASIEModel(object):
                            hadamard_image_formation=True,
                            zernike_init_type="np.random.uniform"):
 
-        # TODO: Externalize.
         lock_dm_values = False
         if lock_dm_values:
             dm_trainable = False
@@ -665,10 +652,6 @@ class DASIEModel(object):
         self.subaperture_size_pixels = int(
             subaperture_radius_meters // self.pupil_meters_per_pixel
         )
-
-        # TODO: These still aren't used....
-        self.object_plane_extent_meters
-        self.object_distance_meters
 
         self.pupil_spatial_quantization = self._compute_pupil_spatial_quantization()
 
@@ -742,9 +725,6 @@ class DASIEModel(object):
                     self.greenwood_time_constant_sec_std
                 )
 
-                # TODO: relate exposure_interval_sec and greenwood_time_constant_sec to set atmosphere_sample_scale
-                self.effective_dm_update_rate_hz
-                exposure_interval_sec
                 atmosphere_sample_scale = 0.01
 
                 # Build a static phase grid for reuse in this ensemble.
@@ -844,28 +824,6 @@ class DASIEModel(object):
 
                         print(".")
 
-                        # TODO: Ryan, is this appropriate?
-                        # Standardize the pupil plane, then physically scale it.
-                        # zernike_min = tf.cast(
-                        #     tf.math.reduce_min(
-                        #         tf.math.real(
-                        #             optics_only_pupil_plane
-                        #         )
-                        #     ),
-                        #     dtype=tf.complex128
-                        # )
-                        # zernike_max = tf.cast(
-                        #     tf.math.reduce_max(
-                        #         tf.math.real(
-                        #             optics_only_pupil_plane
-                        #         )
-                        #     ),
-                        #     dtype=tf.complex128
-                        # )
-                        # zernike_range = (zernike_max - zernike_min)
-                        # optics_only_pupil_plane = (optics_only_pupil_plane - zernike_min) / zernike_range
-                        # optics_only_pupil_plane = optics_only_pupil_plane * self.phase_scale_wavelengths
-
 
                     # This pupil plane is complete, now add it to the list.
                     self.optics_only_pupil_planes.append(optics_only_pupil_plane)
@@ -906,16 +864,11 @@ class DASIEModel(object):
                             img_sample
                         )
 
-                        # Convert the phase screen to wavelength-base-microns.
-                        # phase_screen_mircons = (filter_wavelength_micron / (2 * np.pi)) * phase_screen_radians
-                        # self.atmosphere_phase_screens.append(phase_screen_mircons)
                         phase_screen_wavelengths = (filter_wavelength_micron / (2 * np.pi)) * phase_screen_radians
-                        # self.atmosphere_phase_screens.append(phase_screen_wavelengths)
                         self.atmosphere_phase_screens.append(phase_screen_radians)
 
 
                         # Apply the radian displacements to the pupil.
-                        # TODO: Clean this mess.
                         phase_screen_radians_masked = phase_screen_radians * tf.cast(tf.math.greater(tf.math.abs(optics_only_pupil_plane), tf.zeros_like(tf.math.abs(optics_only_pupil_plane))), dtype=tf.float64)
                         da_post_atmosphere_pupil_plane = tf.cast(phase_screen_radians_masked, dtype=tf.complex128) + optics_only_pupil_plane
 
@@ -951,7 +904,6 @@ class DASIEModel(object):
                             poisson_mean_arrival=self.sensor_poisson_mean_arrival
                         )
 
-                    # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
                     distributed_aperture_image = distributed_aperture_image / tf.reduce_max(distributed_aperture_image)
 
                     # Finally, add the image from this pupil to the list.
@@ -996,7 +948,6 @@ class DASIEModel(object):
                 )
 
 
-            # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
             self.optics_only_monolithic_aperture_image = self.optics_only_monolithic_aperture_image  / tf.reduce_max(self.optics_only_monolithic_aperture_image)
             with tf.name_scope("atmosphere_model"):
 
@@ -1039,7 +990,6 @@ class DASIEModel(object):
                     poisson_mean_arrival=self.sensor_poisson_mean_arrival
                 )
 
-            # TODO: Hack because norm intensity is sometimes 2, breaking stuff.
             self.monolithic_aperture_image = self.monolithic_aperture_image  / tf.reduce_max(self.monolithic_aperture_image)
 
 
@@ -1519,11 +1469,7 @@ class DASIEModel(object):
 
         wavefront = Wavefront(aperture_circ, wavelength_meters)
 
-        # wavefront = Wavefront(telescope_pupil, wavelength)
         # q is the number of pixels per diffraction width.
-        # num_airy is half size (ie. radius) of the image in the number of diffraction widths
-        # TODO: set q and num_airy from properties.
-        q = ((1.22 * wavelength_meters / self.diameter_meters) / self.focal_extent_meters) * self.spatial_quantization
         q = 4
         num_airy = (self.focal_extent_meters / (1.22 * wavelength_meters / self.diameter_meters)) / 2
         num_airy = 55

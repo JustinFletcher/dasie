@@ -17,7 +17,6 @@ import numpy as np
 
 from decimal import Decimal
 
-# TODO: Refactor this import.
 from dataset_generator import DatasetGenerator
 
 from matplotlib import pyplot as plt
@@ -157,7 +156,6 @@ def train(sess,
                  step_valid_da_psnr_mono_psnr_ratio) = dasie_model.validate()
 
                 # Increment all of our metrics.
-                # TODO: Eventually refactor to summaries.
                 valid_loss += step_valid_loss
                 valid_distributed_aperture_image_mse += step_valid_distributed_aperture_image_mse
                 valid_monolithic_aperture_image_mse += step_valid_monolithic_aperture_image_mse
@@ -218,7 +216,6 @@ def train(sess,
         dasie_model.save(save_file_path)
         print("Epoch %d Model Saved." % i)
 
-        # TODO: Refactor to report at the step scale for training.
         # Execute the summary writer ops to write their values.
         sess.run(valid_dataset_initializer)
         feed_dict = {dasie_model.handle: dasie_model.valid_iterator_handle}
@@ -272,7 +269,6 @@ def train(sess,
                 step_time = step_end_time - step_start_time
 
                 # Increment all of our metrics.
-                # TODO: Eventually refactor to summaries.
                 train_loss += step_train_loss
                 train_distributed_aperture_image_mse += step_train_distributed_aperture_image_mse
                 train_monolithic_aperture_image_mse += step_train_monolithic_aperture_image_mse
@@ -434,9 +430,7 @@ def main(flags):
         flags.r0_mean = 1000000.0
 
     # Physical computations from flags.
-    # TODO: Fix this.
     ap_radius_meters = (flags.aperture_diameter_meters / 2)
-    # subap_radius_meters = (2 * (((ap_radius_meters) * np.sin(np.pi / flags.num_subapertures)) - ((flags.subaperture_spacing_meters / 2))) / (1 + np.sin(np.pi / flags.num_subapertures))) / (1.0 + flags.edge_padding_factor)
     subap_radius_meters = ((((ap_radius_meters) * np.sin(np.pi / flags.num_subapertures)) - ((flags.subaperture_spacing_meters / 2))) / (1 + np.sin(np.pi / flags.num_subapertures)))
     subap_area = np.pi * (subap_radius_meters ** 2)
     total_subap_area = subap_area * flags.num_subapertures
@@ -455,7 +449,6 @@ def main(flags):
     print("object_distance_meters = " + str(object_distance_meters))
     print("flags.object_plane_extent_meters = " + str(flags.object_plane_extent_meters))
     print("flags.field_of_view_degrees = " + str(flags.field_of_view_degrees))
-    # TODO: Append all other derived optical information here!
 
     # Map our dataset name to relative locations and parse functions.
     if flags.dataset_name == "speedplus":
