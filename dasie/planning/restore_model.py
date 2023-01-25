@@ -434,11 +434,6 @@ if __name__ == '__main__':
                         default="inaturalist_micro",
                         help='Name of the dataset.')
 
-
-    parser.add_argument('--gpu_list', type=str,
-                        default="0",
-                        help='GPUs to use with this model.')
-
     parser.add_argument('--output_file_path',
                         type=str,
                         default=None,
