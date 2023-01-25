@@ -206,6 +206,10 @@ def write_png(image, filepath):
 
 def main(flags):
 
+
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = flags.gpu_list
+
     # Begin by creating a new session.
     with tf.compat.v1.Session() as sess:
 
@@ -327,10 +331,10 @@ def main(flags):
                                    encoding_function=None,
                                    cache_dataset_file=False,
                                    cache_path="",)
-
+        dataset_iterator = dataset.get_iterator()
         dataset_initializer = dataset.get_initializer()
 
-        sess.run(valid_dataset_initializer)
+        sess.run(dataset_initializer)
 
         # Instantiate a new model with the same kwargs.
         dasie_model = DASIEModel(sess,
@@ -429,6 +433,11 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_name', type=str,
                         default="inaturalist_micro",
                         help='Name of the dataset.')
+
+
+    parser.add_argument('--gpu_list', type=str,
+                        default="0",
+                        help='GPUs to use with this model.')
 
     parser.add_argument('--output_file_path',
                         type=str,

@@ -180,7 +180,6 @@ class DatasetGenerator(object):
         # return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
         self.iterator = tf.compat.v1.data.make_initializable_iterator(self.dataset)
         return self.iterator
-        # TODO: Pick up here working towards a validation loop.
 
     def get_initializer(self):
         # return tf.compat.v1.data.make_one_shot_iterator(self.dataset)
