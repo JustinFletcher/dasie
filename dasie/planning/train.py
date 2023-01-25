@@ -515,6 +515,14 @@ def main(flags):
         example_image_index = 0
 
 
+    elif flags.dataset_name == "inaturalist_micro":
+        parse_function = inaturalist_parse_function
+        print("Selected dataset is inaturalist_micro.")
+        train_data_dir = os.path.join(flags.dataset_root, "inaturalist_micro_tfrecords", "train")
+        valid_data_dir = os.path.join(flags.dataset_root, "inaturalist_micro_tfrecords", "valid")
+        example_image_index = 0
+
+
     else:
         parse_function = speedplus_parse_function
         print("Selected dataset is the default, onesat.")

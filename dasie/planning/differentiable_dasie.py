@@ -1734,3 +1734,20 @@ class DASIEModel(object):
 
         return self.sess.run([self.recovered_image],
                              feed_dict=feed_dict)
+
+    def simulate_and_recover(self, image):
+
+        feed_dict = dict()
+        for (var, image) in zip(self.object_batch, image):
+            feed_dict[var] = np.expand_dims(image, axis=0)
+
+        return self.sess.run([self.recovered_image],
+                             feed_dict=feed_dict)
+
+    def infer(self):
+
+        return self.sess.run(
+            [self.flipped_object_batch,
+             self.recovered_image,
+             self.monolithic_aperture_image],
+            feed_dict={self.handle: self.valid_iterator_handle})

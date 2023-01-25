@@ -1011,6 +1011,7 @@ def main(flags):
                          label="Parity",
                          linewidth=1.0,
                          linestyle="dashed",
+                         dash_capstyle="round",
                          alpha=0.5)
                 plt.title(r'$\mathbf{SSIM}_{\mathbf{d} / \mathbf{m}}$', fontsize=6, pad=0)
                 plt.xlabel(r'Training Epoch', fontsize=6, labelpad=0)
@@ -1234,7 +1235,7 @@ def main(flags):
         # plt.show()
         # plt.close()
 
-    if flags.plot_type == "inat_generalization_atmosphere":
+    if flags.plot_type == "inat_metrics_vs_epoch_model_gen":
 
         plt.style.use('.\\dasie\\utils\\plottools\\mutedplots-master\\stylelib\\muted.mplstyle')
         plt.style.use('.\\dasie\\utils\\plottools\\mutedplots-master\\stylelib\\small.mplstyle')
@@ -1248,8 +1249,8 @@ def main(flags):
         for root, subdirectories, files in os.walk(flags.logdir):
             train_losses = list()
             valid_losses = list()
-            atmos_metrics = list()
-            no_atmos_metrics = list()
+            train_metrics = list()
+            valid_metrics = list()
 
             for subdirectory in subdirectories:
                 # print(subdirectory)
@@ -1274,19 +1275,30 @@ def main(flags):
                     train_mono_da_mse_ratio = 1. / train_mse_ratio
                     valid_mono_da_mse_ratio = 1. / valid_mse_ratio
                     train_plot_metric = train_mono_da_mse_ratio
-                    plot_metric = valid_mono_da_mse_ratio
+                    valid_plot_metric = valid_mono_da_mse_ratio
 
-                    if results_dict["atmosphere"]:
-                        atmos_metrics.append(plot_metric)
+                    train_losses.append(train_loss)
+                    valid_losses.append(valid_loss)
+                    train_metrics.append([train_mono_da_mse_ratio,
+                                          train_ssim_ratio,
+                                          train_psnr_ratio])
+                    valid_metrics.append([valid_mono_da_mse_ratio,
+                                          valid_ssim_ratio,
+                                          valid_psnr_ratio])
 
-                    else:
-                        no_atmos_metrics.append(plot_metric)
 
 
-            for (atmos_metric,  no_atmos_metric) in zip(atmos_metrics, no_atmos_metrics):
 
-                # (train_mse, train_ssim, train_psnr) =  train_metric
-                # (valid_mse, valid_ssim, valid_psnr) =  valid_metric
+            for (train_loss,
+                 valid_loss,
+                 train_metric,
+                 valid_metric) in zip(train_losses,
+                                                 valid_losses,
+                                                 train_metrics,
+                                                 valid_metrics,):
+
+                (train_mse, train_ssim, train_psnr) =  train_metric
+                (valid_mse, valid_ssim, valid_psnr) =  valid_metric
 
                 ax = plt.subplot(131)
                 plt.plot(train_mse,
@@ -1464,6 +1476,223 @@ def main(flags):
         # plt.show()
         # plt.close()
 
+    if flags.plot_type == "inat_generalization_atmosphere":
+
+        plt.style.use('.\\dasie\\utils\\plottools\\mutedplots-master\\stylelib\\small.mplstyle')
+        plt.style.use('.\\dasie\\utils\\plottools\\mutedplots-master\\stylelib\\muted.mplstyle')
+        num_x_ticks = 1
+        num_y_ticks = 1
+        ymax = 6.0
+        xmax = 32
+        plt.rcParams["font.family"] = "Times New Roman"
+
+        plot_dict = dict()
+        plot_dict[r'Atmosphere $(r_0=0.2~m)$'] = dict()
+        plot_dict[r'No Atmosphere'] = dict()
+
+        # iterate over each experiment instance in the logdir.
+        for root, subdirectories, files in os.walk(flags.logdir):
+
+            for subdirectory in subdirectories:
+
+                results_dict = get_latest_results_dict(os.path.join(root, subdirectory))
+
+                if results_dict:
+
+                    train_loss = np.array(results_dict["results"]["train_loss_list"])
+                    train_dist_mse = np.array(results_dict["results"]["train_dist_mse_list"])
+                    train_mono_mse = np.array(results_dict["results"]["train_mono_mse_list"])
+                    train_mse_ratio = np.array(results_dict["results"]["train_mse_ratio_list"])
+                    train_ssim_ratio = np.array(results_dict["results"]["train_ssim_ratio_list"])
+                    train_psnr_ratio = np.array(results_dict["results"]["train_psnr_ratio_list"])
+                    valid_loss = np.array(results_dict["results"]["valid_loss_list"])
+                    valid_dist_mse = np.array(results_dict["results"]["valid_dist_mse_list"])
+                    valid_mono_mse = np.array(results_dict["results"]["valid_mono_mse_list"])
+                    valid_mse_ratio = np.array(results_dict["results"]["valid_mse_ratio_list"])
+                    valid_ssim_ratio = np.array(results_dict["results"]["valid_ssim_ratio_list"])
+                    valid_psnr_ratio = np.array(results_dict["results"]["valid_psnr_ratio_list"])
+                    train_epoch_time = np.array(results_dict["results"]["train_epoch_time_list"])
+
+                    train_mono_da_mse_ratio = 1. / train_mse_ratio
+                    valid_mono_da_mse_ratio = 1. / valid_mse_ratio
+
+                    train_plot_metric = train_mono_da_mse_ratio
+                    valid_plot_metric = valid_mono_da_mse_ratio
+
+                    filter_scale = results_dict["recovery_model_filter_scale"]
+
+                    if results_dict["atmosphere"]:
+
+                        plot_dict[r'Atmosphere $(r_0=0.2~m)$'][filter_scale] = {"train": train_plot_metric,
+                                                                              "valid": valid_plot_metric}
+                    else:
+                        plot_dict[r'No Atmosphere'][filter_scale] = {"train": train_plot_metric,
+                                                                     "valid": valid_plot_metric}
+
+        for i, (plot_name,  plot_metric_dict) in enumerate(plot_dict.items()):
+
+            plt.subplot(1, 2, i + 1)
+
+            # for (filter_scale, train_val_dict) in plot_metric_dict.items():
+            #
+            #     color = "b"
+
+            if i == 0:
+
+
+                plt.ylabel(r'$\mathbf{MSE}_{\mathbf{m} / \mathbf{d}}$', labelpad=0.0)
+
+            else:
+
+                plt.gca().get_yaxis().set_ticklabels([])
+
+            #
+            od = collections.OrderedDict(sorted(plot_metric_dict.items()))
+            for n, color, (filter_scale, train_val_dict) in mutedcolors.eczip(od.items(),
+                                                              cmap='ok',
+                                                              start=1,
+                                                              step=1):
+
+                if filter_scale == 4:
+                    model_label = "S"
+
+                if filter_scale == 8:
+
+                    model_label = "M"
+
+                if filter_scale == 16:
+
+                    model_label = "L"
+
+                train_metric = train_val_dict["train"]
+                valid_metric = train_val_dict["valid"]
+
+                plt.plot(train_metric,
+                         label=str(model_label) + " (Training)",
+                         color=color,
+                         linestyle="dotted",
+                         alpha=0.8,
+                         dash_capstyle="round")
+
+                # plt.plot(np.convolve(train_mono_da_mse_ratio, np.ones(16) / 16, mode="valid"),
+                #          label="Train MSE Metric",
+                #          color='g')
+                plt.plot(valid_metric,
+                         label=str(model_label) + " (Validation)",
+                         color=color,
+                         linestyle="solid",
+                         alpha=0.8,
+                         solid_capstyle="round")
+
+                plt.xlabel(r'Training Epoch', fontsize=6, labelpad=0)
+
+                plt.title(plot_name, fontsize=6, pad=0)
+                # plt.title(r'$\mathbf{MSE}_{\mathbf{m} / \mathbf{d}}$', fontsize=6, pad=0)
+                plt.ylim(0.0, ymax)
+                plt.xlim(0.0, xmax)
+                ax = plt.gca()
+
+                ax.get_xaxis().set_major_locator(ticker.MultipleLocator(int(len(train_metric) / num_x_ticks)))
+                # ax.get_yaxis().set_major_formatter('{x:.1f}')
+                # ax.get_yaxis().set_major_locator(ticker.MultipleLocator(ymax / num_y_ticks))
+                plt.tick_params(axis='both', which='major', labelsize=6, pad=2.0)
+
+            plt.grid(axis='both')
+            one_line = np.ones_like(list(range(xmax + 1)))
+            plt.plot(one_line,
+                     color="black",
+                     label="Parity",
+                     linewidth=1.0,
+                     linestyle="dashed",
+                     alpha=0.5)
+
+                # ax.grid(axis='both')
+        # plt.ylabel("$\mathbf{MSE}_{\mathbf{DA}} / \mathbf{MSE}_\mathbf{MONO}$")
+        plt.subplots_adjust(bottom=0.15)
+        plt.subplots_adjust(right=0.975)
+        plt.subplots_adjust(left=0.1)
+        plt.subplots_adjust(top=0.925)
+        fig = matplotlib.pyplot.gcf()
+        allaxes = fig.get_axes()
+        legend = allaxes[1].legend(
+            loc='upper right',
+            prop={'size': 5},
+            shadow=True,
+            handlelength=1.2,
+            ncol=4,
+            labelspacing=0.0,
+            title="Model Size (Partition)",
+            bbox_to_anchor=(0.975, 1.0),
+            columnspacing=0.5,
+            bbox_transform=ax.transAxes)
+
+        plt.setp(legend.get_title(), fontsize=5)
+        fig.set_size_inches(2.5, 1.54508)
+        # fig.set_size_inches(2.5, 4.04508)
+        plt.show()
+
+        # fig.savefig('.png', dpi=100)
+
+        plt.close()
+
+
+    if flags.plot_type == "inat_table":
+
+        plot_dict = dict()
+        plot_dict[r'Atmosphere $(r_0=0.2~m)$'] = dict()
+        plot_dict[r'No Atmosphere'] = dict()
+
+        # iterate over each experiment instance in the logdir.
+        for root, subdirectories, files in os.walk(flags.logdir):
+
+            print(subdirectories)
+
+            for subdirectory in subdirectories:
+
+                results_dict = get_latest_results_dict(os.path.join(root, subdirectory))
+
+                if results_dict:
+
+                    train_loss = np.array(results_dict["results"]["train_loss_list"])
+                    train_dist_mse = np.array(results_dict["results"]["train_dist_mse_list"])
+                    train_mono_mse = np.array(results_dict["results"]["train_mono_mse_list"])
+                    train_mse_ratio = np.array(results_dict["results"]["train_mse_ratio_list"])
+                    train_ssim_ratio = np.array(results_dict["results"]["train_ssim_ratio_list"])
+                    train_psnr_ratio = np.array(results_dict["results"]["train_psnr_ratio_list"])
+                    valid_loss = np.array(results_dict["results"]["valid_loss_list"])
+                    valid_dist_mse = np.array(results_dict["results"]["valid_dist_mse_list"])
+                    valid_mono_mse = np.array(results_dict["results"]["valid_mono_mse_list"])
+                    valid_mse_ratio = np.array(results_dict["results"]["valid_mse_ratio_list"])
+                    valid_ssim_ratio = np.array(results_dict["results"]["valid_ssim_ratio_list"])
+                    valid_psnr_ratio = np.array(results_dict["results"]["valid_psnr_ratio_list"])
+                    train_epoch_time = np.array(results_dict["results"]["train_epoch_time_list"])
+
+                    train_mono_da_mse_ratio = 1. / train_mse_ratio
+                    valid_mono_da_mse_ratio = 1. / valid_mse_ratio
+
+                    train_plot_metric = train_mono_da_mse_ratio
+                    valid_plot_metric = valid_mono_da_mse_ratio
+
+                    filter_scale = results_dict["recovery_model_filter_scale"]
+
+                    if results_dict["atmosphere"]:
+
+                        plot_dict[r'Atmosphere $(r_0=0.2~m)$'][filter_scale]= {"mse": valid_mono_da_mse_ratio,
+                                                                               "ssim": valid_ssim_ratio,
+                                                                               "psnr": valid_psnr_ratio,}
+                    else:
+                        plot_dict[r'No Atmosphere'][filter_scale] = {"mse": valid_mono_da_mse_ratio,
+                                                                     "ssim": valid_ssim_ratio,
+                                                                     "psnr": valid_psnr_ratio,}
+
+        for i, (plot_name,  plot_metric_dict) in enumerate(plot_dict.items()):
+
+            for (filter_scale, metric_dict) in sorted(plot_metric_dict.items()):
+                mse = np.max(metric_dict["mse"])
+                ssim = np.max(metric_dict["ssim"])
+                psnr = np.max(metric_dict["psnr"])
+
+                print("%s & %d & %.2f & %.2f & %.2f \\\\" % (plot_name, filter_scale, mse, ssim, psnr))
 
 if __name__ == '__main__':
 

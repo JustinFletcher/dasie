@@ -55,6 +55,7 @@ def new_cmaps():
         'redblue2': ['#d7191c', '#fdae61', '#abdda4', '#2b83ba'],
         # green, blue,  purple, red, orange
         'grormute': ['#4DAF4A', '#377EB8', '#984EA3', '#E41A1C', '#FF7F00'],
+        'ok': ['#4DAF4A', '#377EB8', '#E41A1C',],
 
         # green, blue,  purple, red, orange, yellow, green
         'grorgr': ['#4DAF4A', '#377EB8', '#984EA3', '#E41A1C', '#FF7F00', '#FFFF33', '#4DAF4A'],

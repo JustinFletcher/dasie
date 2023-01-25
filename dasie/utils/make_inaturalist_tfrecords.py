@@ -412,15 +412,15 @@ if __name__ == '__main__':
                         help='Name of the dataset to build.')
 
     parser.add_argument('--data_dir', type=str,
-                        default="../data/inaturalist/",
+                        default="~/data/inaturalist/",
                         help='Path to speedplus output data.')
 
     parser.add_argument('--annotation_dir', type=str,
-                        default="../data/inaturalist/",
+                        default="~/data/inaturalist/",
                         help='Path to speedplus output data.')
 
     parser.add_argument('--output_dir', type=str,
-                        default="../data/inaturalist_tfrecords/",
+                        default="~/data/inaturalist/inaturalist_tfrecords/",
                         help='Path to the output directory.')
 
     parser.add_argument("--examples_per_tfrecord",
