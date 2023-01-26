@@ -1640,7 +1640,7 @@ class DASIEModel(object):
             a = tf.compat.v1.assign(v, restore_dict["variables"][v.name])
             restore_ops.append(a)
 
-        sess.run(restore_ops)
+        self.sess.run(restore_ops)
 
         # for v in tf.compat.v1.trainable_variables():
         #     print("Restoring: %s" % v.name)
