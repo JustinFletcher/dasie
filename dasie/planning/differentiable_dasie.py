@@ -1693,21 +1693,21 @@ class DASIEModel(object):
 
     def infer(self):
 
-        # return self.sess.run(
-        #     [self.flipped_object_batch,
-        #      self.recovered_image,
-        #      self.monolithic_aperture_image],
-        #     feed_dict={self.handle: self.valid_iterator_handle})
         return self.sess.run(
-            [self.loss,
-             self.monolithic_aperture_image_mse,
-             self.distributed_aperture_image_mse,
-             self.da_mse_mono_mse_ratio,
-             self.monolithic_aperture_image_ssim,
-             self.distributed_aperture_image_ssim,
-             self.da_ssim_mono_ssim_ratio,
-             self.monolithic_aperture_image_psnr,
-             self.distributed_aperture_image_psnr,
-             self.da_psnr_mono_psnr_ratio,
-            ],
+            [self.flipped_object_batch,
+             self.recovered_image,
+             self.monolithic_aperture_image],
             feed_dict={self.handle: self.valid_iterator_handle})
+        # return self.sess.run(
+        #     [self.loss,
+        #      self.monolithic_aperture_image_mse,
+        #      self.distributed_aperture_image_mse,
+        #      self.da_mse_mono_mse_ratio,
+        #      self.monolithic_aperture_image_ssim,
+        #      self.distributed_aperture_image_ssim,
+        #      self.da_ssim_mono_ssim_ratio,
+        #      self.monolithic_aperture_image_psnr,
+        #      self.distributed_aperture_image_psnr,
+        #      self.da_psnr_mono_psnr_ratio,
+        #     ],
+        #     feed_dict={self.handle: self.valid_iterator_handle})
