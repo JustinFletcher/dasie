@@ -379,14 +379,14 @@ def main(flags):
         valid_dataset_2_initializer = valid_dataset_2.get_initializer()
         sess.run(tf.compat.v1.global_variables_initializer())
 
-
         sess.run(valid_dataset_1_initializer)
         sess.run(valid_dataset_2_initializer)
-        [flipped_object_example_batch,
-         recovered_image_batch,
-         monolithic_aperture_image_batch] =  dasie_model.infer()
-
         for b in range(flags.num_batches):
+
+            (flipped_object_example_batch,
+             recovered_image_batch,
+             monolithic_aperture_image_batch) = dasie_model.infer()
+
             for n, (flipped_object_example,
                     recovered_image,
                     monolithic_aperture_image) in enumerate(zip(flipped_object_example_batch,
@@ -394,6 +394,13 @@ def main(flags):
                                                                 monolithic_aperture_image_batch)):
 
                 # recovered_image = np.squeeze(recovered_image)
+
+                print("flipped_object_example \n\n\n\n\n\n\n")
+                print(flipped_object_example)
+                print(recovered_image)
+                print("recovered_image \n\n\n\n\n\n\n")
+                print(monolithic_aperture_image)
+                print("monolithic_aperture_image \n\n\n\n\n\n\n")
 
                 plt.imshow(np.flipud(np.fliplr(flipped_object_example)),
                            cmap=flags.cmap,
