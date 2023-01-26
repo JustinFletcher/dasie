@@ -467,10 +467,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--dasie_model_save_file',
                         type=str,
-                        default=os.path.join(".",
-                                             "dasie",
-                                             "resources",
-                                             "model_save_0.json"),
+                        # default=os.path.join(".",
+                        #                      "dasie",
+                        #                      "resources",
+                        #                      "model_save_0.json"),
                         help='The save file for the model to load.')
 
     parser.add_argument('--dataset_name', type=str,
