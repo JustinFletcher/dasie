@@ -375,8 +375,8 @@ def main(flags):
                          -dasie_model.object_plane_extent_meters / 2,
                          dasie_model.object_plane_extent_meters / 2]
 
-        valid_dataset_1 = train_dataset.get_initializer()
-        valid_dataset_2 = valid_dataset.get_initializer()
+        valid_dataset_1_initializer = train_dataset.get_initializer()
+        valid_dataset_2_initializer = valid_dataset.get_initializer()
         sess.run(tf.compat.v1.global_variables_initializer())
 
 
