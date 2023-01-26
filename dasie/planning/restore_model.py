@@ -381,66 +381,61 @@ def main(flags):
 
         sess.run(valid_dataset_1_initializer)
         sess.run(valid_dataset_2_initializer)
-        for b in range(flags.num_batches):
+        for i in range(flags.num_images):
 
             (flipped_object_example_batch,
-             recovered_image_batch,
+             recovered_image,
              monolithic_aperture_image_batch) = dasie_model.infer()
+            flipped_object_example = np.squeeze(flipped_object_example_batch)
+            monolithic_aperture_image_example = np.squeeze(monolithic_aperture_image_batch)
+            # print("recovered_image_batch \n\n\n\n\n\n\n")
+            # print(recovered_image_batch)
+            #
+            # print("monolithic_aperture_image_batch \n\n\n\n\n\n\n")
+            # print(monolithic_aperture_image_batch)
 
-            print("recovered_image_batch \n\n\n\n\n\n\n")
-            print(recovered_image_batch)
-
-            print("monolithic_aperture_image_batch \n\n\n\n\n\n\n")
-            print(monolithic_aperture_image_batch)
-
-            for n, (flipped_object_example,
-                    _,
-                    monolithic_aperture_image_example) in enumerate(zip(flipped_object_example_batch,
-                                                                        recovered_image_batch,
-                                                                        monolithic_aperture_image_batch)):
+            # for n, (flipped_object_example,
+            #         # _,
+            #         monolithic_aperture_image_example) in enumerate(zip(flipped_object_example_batch,
+            #                                                             # recovered_image_batch,
+            #                                                             monolithic_aperture_image_batch)):
 
                 # recovered_image = np.squeeze(recovered_image)
+                #
+                # print("flipped_object_example \n\n\n\n\n\n\n")
+                # print(flipped_object_example)
+                # # print("recovered_image \n\n\n\n\n\n\n")
+                # # print(recovered_image_example)
+                # print("monolithic_aperture_image \n\n\n\n\n\n\n")
+                # print(monolithic_aperture_image_example)
+            fig = plt.figure(frameon=False)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            ax.imshow(np.flipud(np.fliplr(flipped_object_example)),
+                       cmap=flags.cmap,
+                       extent=object_extent)
+            save_and_close_current_plot(
+                flags.output_file_path,
+                plot_name="object_" + str(i),
+                dpi=flags.dpi)
 
-                print("flipped_object_example \n\n\n\n\n\n\n")
-                print(flipped_object_example)
-                # print("recovered_image \n\n\n\n\n\n\n")
-                # print(recovered_image_example)
-                print("monolithic_aperture_image \n\n\n\n\n\n\n")
-                print(monolithic_aperture_image_example)
+            ax.imshow(np.flipud(np.fliplr(monolithic_aperture_image_example)),
+                       cmap=flags.cmap,
+                       extent=focal_extent)
+            save_and_close_current_plot(
+                flags.output_file_path,
+                plot_name="monolithic_aperture_image_" + str(i),
+                dpi=flags.dpi)
 
-                plt.imshow(np.flipud(np.fliplr(flipped_object_example)),
-                           cmap=flags.cmap,
-                           extent=object_extent)
-                plt.xlabel('Object Plane Distance [$m$]')
-                plt.ylabel('Object Plane Distance [$m$]')
-                plt.colorbar()
-                save_and_close_current_plot(
-                    flags.output_file_path,
-                    plot_name="object_" + str(b) + "_" + str(n),
-                    dpi=flags.dpi)
-
-                plt.imshow(np.flipud(np.fliplr(monolithic_aperture_image_example)),
-                           cmap=flags.cmap,
-                           extent=focal_extent)
-                plt.xlabel('Pupil Plane Distance [$m$]')
-                plt.ylabel('Pupil Plane Distance [$m$]')
-                plt.colorbar()
-                save_and_close_current_plot(
-                    flags.output_file_path,
-                    plot_name="monolithic_aperture_image_" + str(b) + "_" + str(n),
-                    dpi=flags.dpi)
-
-                plt.imshow(np.flipud(np.fliplr(recovered_image_batch)),
-                           cmap=flags.cmap,
-                           extent=focal_extent)
-                plt.xlabel('Focal Plane Distance [$\mu m$]')
-                plt.ylabel('Focal Plane Distance [$\mu m$]')
-                plt.colorbar()
-                save_and_close_current_plot(
-                    flags.output_file_path,
-                    plot_name="recovered_image_" + str(b) + "_" + str(n),
-                    dpi=flags.dpi
-                )
+            ax.imshow(np.flipud(np.fliplr(recovered_image_batch)),
+                       cmap=flags.cmap,
+                       extent=focal_extent)
+            save_and_close_current_plot(
+                flags.output_file_path,
+                plot_name="recovered_image_" + str(i),
+                dpi=flags.dpi
+            )
 
     return
 
@@ -478,14 +473,9 @@ if __name__ == '__main__':
                         default=600,
                         help='Path to a directory holding all datasets.')
 
-    parser.add_argument('--batch_size',
+    parser.add_argument('--num_images',
                         type=int,
-                        default=1,
-                        help='Size of the mini-batch for inference.')
-
-    parser.add_argument('--num_batches',
-                        type=int,
-                        default=4,
+                        default=32,
                         help='Number of batches to run inference against.')
 
     parser.add_argument('--cmap',
