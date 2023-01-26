@@ -393,7 +393,7 @@ def main(flags):
                                                                 recovered_image_batch,
                                                                 monolithic_aperture_image_batch)):
 
-                recovered_image = np.squeeze(recovered_image)
+                # recovered_image = np.squeeze(recovered_image)
 
                 plt.imshow(np.flipud(np.fliplr(flipped_object_example)),
                            cmap=flags.cmap,
