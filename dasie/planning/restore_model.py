@@ -428,7 +428,7 @@ def main(flags):
                 plot_name="monolithic_aperture_image_" + str(i),
                 dpi=flags.dpi)
 
-            ax.imshow(np.flipud(np.fliplr(recovered_image_batch)),
+            ax.imshow(np.flipud(np.fliplr(recovered_image)),
                        cmap=flags.cmap,
                        extent=focal_extent)
             save_and_close_current_plot(
