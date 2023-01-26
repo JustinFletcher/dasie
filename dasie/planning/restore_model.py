@@ -387,20 +387,23 @@ def main(flags):
              recovered_image_batch,
              monolithic_aperture_image_batch) = dasie_model.infer()
 
+            print("recovered_image_batch \n\n\n\n\n\n\n")
+            print(recovered_image_batch)
+
             for n, (flipped_object_example,
-                    recovered_image,
-                    monolithic_aperture_image) in enumerate(zip(flipped_object_example_batch,
-                                                                recovered_image_batch,
-                                                                monolithic_aperture_image_batch)):
+                    recovered_image_example,
+                    monolithic_aperture_image_example) in enumerate(zip(flipped_object_example_batch,
+                                                                        recovered_image_batch,
+                                                                        monolithic_aperture_image_batch)):
 
                 # recovered_image = np.squeeze(recovered_image)
 
                 print("flipped_object_example \n\n\n\n\n\n\n")
                 print(flipped_object_example)
-                print(recovered_image)
                 print("recovered_image \n\n\n\n\n\n\n")
-                print(monolithic_aperture_image)
+                print(recovered_image_example)
                 print("monolithic_aperture_image \n\n\n\n\n\n\n")
+                print(monolithic_aperture_image_example)
 
                 plt.imshow(np.flipud(np.fliplr(flipped_object_example)),
                            cmap=flags.cmap,
@@ -413,7 +416,7 @@ def main(flags):
                     plot_name="object_" + str(b) + "_" + str(n),
                     dpi=flags.dpi)
 
-                plt.imshow(np.flipud(np.fliplr(monolithic_aperture_image)),
+                plt.imshow(np.flipud(np.fliplr(monolithic_aperture_image_example)),
                            cmap=flags.cmap,
                            extent=focal_extent)
                 plt.xlabel('Pupil Plane Distance [$m$]')
@@ -424,7 +427,7 @@ def main(flags):
                     plot_name="monolithic_aperture_image_" + str(b) + "_" + str(n),
                     dpi=flags.dpi)
 
-                plt.imshow(np.flipud(np.fliplr(recovered_image)),
+                plt.imshow(np.flipud(np.fliplr(recovered_image_example)),
                            cmap=flags.cmap,
                            extent=focal_extent)
                 plt.xlabel('Focal Plane Distance [$\mu m$]')
