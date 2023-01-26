@@ -390,6 +390,9 @@ def main(flags):
             print("recovered_image_batch \n\n\n\n\n\n\n")
             print(recovered_image_batch)
 
+            print("monolithic_aperture_image_batch \n\n\n\n\n\n\n")
+            print(monolithic_aperture_image_batch)
+
             for n, (flipped_object_example,
                     recovered_image_example,
                     monolithic_aperture_image_example) in enumerate(zip(flipped_object_example_batch,
