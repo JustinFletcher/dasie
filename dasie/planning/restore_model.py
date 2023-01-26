@@ -403,8 +403,8 @@ def main(flags):
 
                 print("flipped_object_example \n\n\n\n\n\n\n")
                 print(flipped_object_example)
-                print("recovered_image \n\n\n\n\n\n\n")
-                print(recovered_image_example)
+                # print("recovered_image \n\n\n\n\n\n\n")
+                # print(recovered_image_example)
                 print("monolithic_aperture_image \n\n\n\n\n\n\n")
                 print(monolithic_aperture_image_example)
 
