@@ -404,7 +404,7 @@ def main(flags):
                 save_and_close_current_plot(
                     flags.output_file_path,
                     plot_name="object_" + str(b) + "_" + str(n),
-                    dpi=dpi)
+                    dpi=flags.dpi)
 
                 plt.imshow(np.flipud(np.fliplr(monolithic_aperture_image)),
                            cmap=flags.cmap,
@@ -415,7 +415,7 @@ def main(flags):
                 save_and_close_current_plot(
                     flags.output_file_path,
                     plot_name="monolithic_aperture_image_" + str(b) + "_" + str(n),
-                    dpi=dpi)
+                    dpi=flags.dpi)
 
                 plt.imshow(np.flipud(np.fliplr(recovered_image)),
                            cmap=flags.cmap,
@@ -426,7 +426,7 @@ def main(flags):
                 save_and_close_current_plot(
                     flags.output_file_path,
                     plot_name="recovered_image_" + str(b) + "_" + str(n),
-                    dpi=dpi
+                    dpi=flags.dpi
                 )
 
     return
@@ -472,12 +472,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--num_batches',
                         type=int,
-                        default=1,
+                        default=4,
                         help='Number of batches to run inference against.')
 
     parser.add_argument('--cmap',
                         type=str,
-                        default="grays",
+                        default="gray",
                         help='Path to a directory holding all datasets.')
 
     # Parse known arguments.
