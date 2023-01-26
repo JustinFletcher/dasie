@@ -228,10 +228,10 @@ def main(flags):
             output_file_path = flags.output_file_path
 
         os.makedirs(output_file_path, exist_ok=True)
-        num_dirs = len(next(os.walk(output_file_path))[1])
-        print(num_dirs)
-        output_file_path = os.path.join(output_file_path, str(num_dirs))
-        os.makedirs(output_file_path, exist_ok=True)
+        # num_dirs = len(next(os.walk(output_file_path))[1])
+        # print(num_dirs)
+        # output_file_path = os.path.join(output_file_path, str(num_dirs))
+        # os.makedirs(output_file_path, exist_ok=True)
 
         # shutil.copyfile(flags.dasie_model_save_file, output_file_path)
 
