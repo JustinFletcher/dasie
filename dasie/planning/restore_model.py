@@ -394,7 +394,7 @@ def main(flags):
             print(monolithic_aperture_image_batch)
 
             for n, (flipped_object_example,
-                    recovered_image_example,
+                    _,
                     monolithic_aperture_image_example) in enumerate(zip(flipped_object_example_batch,
                                                                         recovered_image_batch,
                                                                         monolithic_aperture_image_batch)):
@@ -430,7 +430,7 @@ def main(flags):
                     plot_name="monolithic_aperture_image_" + str(b) + "_" + str(n),
                     dpi=flags.dpi)
 
-                plt.imshow(np.flipud(np.fliplr(recovered_image_example)),
+                plt.imshow(np.flipud(np.fliplr(recovered_image_batch)),
                            cmap=flags.cmap,
                            extent=focal_extent)
                 plt.xlabel('Focal Plane Distance [$\mu m$]')
