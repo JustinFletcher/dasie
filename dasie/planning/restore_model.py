@@ -355,8 +355,8 @@ def main(flags):
                                  **restore_dict["kwargs"])
 
         # Restore the weights.
-        # dasie_model.restore(flags.dasie_model_save_file)
-        # print("Model Restored.")
+        dasie_model.restore(flags.dasie_model_save_file)
+        print("Model Restored.")
 
         left = dasie_model.pupil_dimension_u[0]
         right = dasie_model.pupil_dimension_u[-1]
