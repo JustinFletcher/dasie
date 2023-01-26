@@ -354,6 +354,7 @@ def main(flags):
                                  valid_dataset=valid_dataset_2,
                                  **restore_dict["kwargs"])
 
+        sess.run(tf.compat.v1.global_variables_initializer())
         # Restore the weights.
         dasie_model.restore(flags.dasie_model_save_file)
         print("Model Restored.")
@@ -377,7 +378,6 @@ def main(flags):
 
         valid_dataset_1_initializer = valid_dataset_1.get_initializer()
         valid_dataset_2_initializer = valid_dataset_2.get_initializer()
-        sess.run(tf.compat.v1.global_variables_initializer())
 
         sess.run(valid_dataset_1_initializer)
         sess.run(valid_dataset_2_initializer)
