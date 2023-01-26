@@ -329,7 +329,7 @@ def main(flags):
                                    augment=False,
                                    shuffle=False,
                                    crop_size=restore_dict["kwargs"]["spatial_quantization"],
-                                   batch_size=flags.batch_size,
+                                   batch_size=restore_dict["kwargs"]["batch_size"],
                                    encoding_function=None,
                                    cache_dataset_file=False,
                                    cache_path="",)
@@ -338,7 +338,7 @@ def main(flags):
                                    augment=False,
                                    shuffle=False,
                                    crop_size=restore_dict["kwargs"]["spatial_quantization"],
-                                   batch_size=flags.batch_size,
+                                   batch_size=restore_dict["kwargs"]["batch_size"],
                                    encoding_function=None,
                                    cache_dataset_file=False,
                                    cache_path="",)

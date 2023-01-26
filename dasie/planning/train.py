@@ -587,48 +587,6 @@ def main(flags):
         image_x_scale = train_dataset.image_shape[0]
         image_y_scale = train_dataset.image_shape[1]
 
-        # Manual debug here, to diagnose data problems.
-        plot_data = False
-        if plot_data:
-
-            for i in range(16):
-
-                # Generate the iterator for the train dataset.
-                train_iterator = train_dataset.get_iterator()
-                train_dataset_batch = train_iterator.get_next()
-                train_dataset_initializer = train_dataset.get_initializer()
-                sess.run(train_dataset_initializer)
-
-                # Generate the iterator for the validation dataset.
-                valid_iterator = valid_dataset.get_iterator()
-                valid_dataset_batch = valid_iterator.get_next()
-                valid_dataset_initializer = valid_dataset.get_initializer()
-                sess.run(valid_dataset_initializer)
-
-                for j in range(2):
-
-                    np_train_dataset_batch = sess.run(train_dataset_batch)
-                    np_valid_dataset_batch = sess.run(valid_dataset_batch)
-
-                    plt.subplot(241)
-                    plt.imshow(np_train_dataset_batch[0])
-                    plt.subplot(242)
-                    plt.imshow(np_train_dataset_batch[1])
-                    plt.subplot(243)
-                    plt.imshow(np_train_dataset_batch[2])
-                    plt.subplot(244)
-                    plt.imshow(np_train_dataset_batch[3])
-
-                    plt.subplot(245)
-                    plt.imshow(np_valid_dataset_batch[0])
-                    plt.subplot(246)
-                    plt.imshow(np_valid_dataset_batch[1])
-                    plt.subplot(247)
-                    plt.imshow(np_valid_dataset_batch[2])
-                    plt.subplot(248)
-                    plt.imshow(np_valid_dataset_batch[3])
-                    plt.show()
-
         # Build a DA model.
         dasie_model = DASIEModel(
             sess,
@@ -679,8 +637,6 @@ def main(flags):
             plan_diversity_alpha=flags.plan_diversity_alpha,
             atmosphere=flags.atmosphere
         )
-
-
 
         # Merge all the summaries from the graphs, flush and init the nodes.
         all_summary_ops = tf.compat.v1.summary.all_v2_summary_ops()
