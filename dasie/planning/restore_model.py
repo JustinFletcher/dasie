@@ -350,8 +350,8 @@ def main(flags):
         # print("Dataset initialized.")
         # Instantiate a new model with the same kwargs.
         dasie_model = DASIEModel(sess,
-                                 valid_dataset_1,
-                                 valid_dataset_2,
+                                 train_dataset=valid_dataset_1,
+                                 valid_dataset=valid_dataset_2,
                                  **restore_dict["kwargs"])
 
         # Restore the weights.
