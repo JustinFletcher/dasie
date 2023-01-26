@@ -408,29 +408,46 @@ def main(flags):
                 # # print(recovered_image_example)
                 # print("monolithic_aperture_image \n\n\n\n\n\n\n")
                 # print(monolithic_aperture_image_example)
+            w = 2.0
+            h = 2.0
             fig = plt.figure(frameon=False)
+            fig.set_size_inches(w,h)
             ax = plt.Axes(fig, [0., 0., 1., 1.])
             ax.set_axis_off()
             fig.add_axes(ax)
             ax.imshow(np.flipud(np.fliplr(flipped_object_example)),
-                       cmap=flags.cmap,
-                       extent=object_extent)
+                      cmap=flags.cmap,
+                      extent=object_extent,
+                      aspect='auto')
             save_and_close_current_plot(
                 flags.output_file_path,
                 plot_name="object_" + str(i),
                 dpi=flags.dpi)
 
+
+            fig = plt.figure(frameon=False)
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
             ax.imshow(np.flipud(np.fliplr(monolithic_aperture_image_example)),
-                       cmap=flags.cmap,
-                       extent=focal_extent)
+                      cmap=flags.cmap,
+                      extent=focal_extent,
+                      aspect='auto')
             save_and_close_current_plot(
                 flags.output_file_path,
                 plot_name="monolithic_aperture_image_" + str(i),
                 dpi=flags.dpi)
 
+
+            fig = plt.figure(frameon=False)
+            fig.set_size_inches(w, h)
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
             ax.imshow(np.flipud(np.fliplr(recovered_image)),
-                       cmap=flags.cmap,
-                       extent=focal_extent)
+                      cmap=flags.cmap,
+                      extent=focal_extent, aspect='auto')
             save_and_close_current_plot(
                 flags.output_file_path,
                 plot_name="recovered_image_" + str(i),
