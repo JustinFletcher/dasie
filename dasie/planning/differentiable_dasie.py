@@ -1633,20 +1633,20 @@ class DASIEModel(object):
         :return: None
         """
 
-        # restore_dict = json.load(open(restore_file_path, 'r'))
-        # restore_ops = list()
-        # for v in tf.compat.v1.trainable_variables():
-        #     print("Restoring: %s" % v.name)
-        #     a = tf.compat.v1.assign(v, restore_dict["variables"][v.name])
-        #     restore_ops.append(a)
-        #
-        # self.sess.run(restore_ops)
-
         restore_dict = json.load(open(restore_file_path, 'r'))
+        restore_ops = list()
         for v in tf.compat.v1.trainable_variables():
             print("Restoring: %s" % v.name)
+            a = tf.compat.v1.assign(v, restore_dict["variables"][v.name])
+            restore_ops.append(a)
 
-            v.load(restore_dict["variables"][v.name], self.sess)
+        self.sess.run(restore_ops)
+
+        # restore_dict = json.load(open(restore_file_path, 'r'))
+        # for v in tf.compat.v1.trainable_variables():
+        #     print("Restoring: %s" % v.name)
+        #
+        #     v.load(restore_dict["variables"][v.name], self.sess)
 
         return None
 
